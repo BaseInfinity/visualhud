@@ -1,0 +1,271 @@
+#!/bin/bash
+# Repo-local VisualHUD CLI.
+
+set -euo pipefail
+
+ROOT_DIR="${VISUALHUD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+THEMES_DIR="${VISUALHUD_THEMES_DIR:-$ROOT_DIR/themes}"
+ACTIVE_THEME_FILE="${VISUALHUD_THEME_FILE:-$ROOT_DIR/theme}"
+DEFAULT_THEME="${VISUALHUD_DEFAULT_THEME:-pokemon}"
+
+usage() {
+    cat <<'EOF'
+Usage:
+  visualhud theme list
+  visualhud theme current
+  visualhud theme set <name>
+  visualhud theme reset
+  visualhud theme calibrate [name] [--json|--live] [--delay seconds] [--pause] [--limit n]
+EOF
+}
+
+theme_exists() {
+    local theme="$1"
+    [ -f "$THEMES_DIR/$theme/theme.json" ]
+}
+
+active_theme() {
+    if [ -n "${VISUALHUD_THEME:-}" ]; then
+        printf '%s\n' "$VISUALHUD_THEME"
+    elif [ -f "$ACTIVE_THEME_FILE" ]; then
+        tr -d '[:space:]' < "$ACTIVE_THEME_FILE"
+        printf '\n'
+    else
+        printf '%s\n' "$DEFAULT_THEME"
+    fi
+}
+
+theme_display_name() {
+    local theme="$1"
+    jq -r --arg fallback "$theme" '.name // $fallback' "$THEMES_DIR/$theme/theme.json" 2>/dev/null || printf '%s\n' "$theme"
+}
+
+list_themes() {
+    local current theme theme_json marker display_name
+    current=$(active_theme)
+
+    if [ ! -d "$THEMES_DIR" ]; then
+        printf 'No themes directory: %s\n' "$THEMES_DIR" >&2
+        return 1
+    fi
+
+    shopt -s nullglob
+    for theme_json in "$THEMES_DIR"/*/theme.json; do
+        theme=$(basename "$(dirname "$theme_json")")
+        marker=" "
+        if [ "$theme" = "$current" ]; then
+            marker="*"
+        fi
+        display_name=$(theme_display_name "$theme")
+        printf '%s %s\t%s\n' "$marker" "$theme" "$display_name"
+    done
+}
+
+set_theme() {
+    local theme="$1"
+    if ! theme_exists "$theme"; then
+        printf 'Unknown theme: %s\n' "$theme" >&2
+        printf 'Run visualhud theme list to see available themes.\n' >&2
+        return 1
+    fi
+
+    mkdir -p "$(dirname "$ACTIVE_THEME_FILE")"
+    printf '%s\n' "$theme" > "$ACTIVE_THEME_FILE"
+    printf 'Active theme: %s\n' "$theme"
+}
+
+reset_theme() {
+    rm -f "$ACTIVE_THEME_FILE"
+    printf 'Active theme reset to default: %s\n' "$DEFAULT_THEME"
+}
+
+calibration_counter_file() {
+    local session_key
+    session_key=$(printf '%s' "${ITERM_SESSION_ID:-}" | tr ':/' '__')
+    printf '/private/tmp/claude-cooking-counter_%s' "$session_key"
+}
+
+render_calibration_step() {
+    local theme="$1" step_json="$2"
+    local kind count counter_file payload percent
+
+    if [ -z "${ITERM_SESSION_ID:-}" ]; then
+        printf 'Live calibration requires ITERM_SESSION_ID from a real terminal pane.\n' >&2
+        return 1
+    fi
+
+    kind=$(printf '%s' "$step_json" | jq -r '.kind')
+    counter_file=$(calibration_counter_file)
+
+    case "$kind" in
+        stage|stage-shade)
+            count=$(printf '%s' "$step_json" | jq -r '.trigger_count')
+            printf '%s' "$((count - 1))" > "$counter_file"
+            payload=$(jq -nc '{hook_event_name:"PreToolUse", tool_name:"Calibration", session_id:"visualhud-calibration"}')
+            ;;
+        context)
+            count=$(printf '%s' "$step_json" | jq -r '.trigger_count')
+            percent=$(printf '%s' "$step_json" | jq -r '.context_percent')
+            printf '%s' "$((count - 1))" > "$counter_file"
+            payload=$(jq -nc --argjson percent "$percent" '{hook_event_name:"PreToolUse", tool_name:"Calibration", session_id:"visualhud-calibration", context_used_percent:$percent}')
+            ;;
+        blocked)
+            payload=$(jq -nc '{hook_event_name:"Notification", notification_type:"permission_prompt", message:"VisualHUD calibration", session_id:"visualhud-calibration"}')
+            ;;
+        done)
+            payload=$(jq -nc '{hook_event_name:"Stop", session_id:"visualhud-calibration"}')
+            ;;
+        idle)
+            payload=$(jq -nc '{hook_event_name:"Notification", notification_type:"idle_prompt", session_id:"visualhud-calibration"}')
+            ;;
+        error)
+            payload=$(jq -nc '{hook_event_name:"StopFailure", session_id:"visualhud-calibration"}')
+            ;;
+        *)
+            printf 'Unknown calibration step kind: %s\n' "$kind" >&2
+            return 1
+            ;;
+    esac
+
+    printf '%s\n' "$payload" | VISUALHUD_THEME="$theme" VISUALHUD_THEMES_DIR="$THEMES_DIR" bash "$ROOT_DIR/engine.sh" >/dev/null
+}
+
+calibration_label() {
+    local step_json="$1"
+    printf '%s' "$step_json" | jq -r '
+      def color_text: .color | join("-");
+      "[\(.step | tostring | if length == 1 then "0" + . else . end)/\(.total | tostring | if length == 1 then "0" + . else . end)] "
+      + ((.badge // "-") + " " + .name)
+      + " | kind=" + .kind
+      + " | progress=" + (.progress_bar // "")
+      + " | sprite=" + (.sprite // "")
+      + " | color=" + color_text
+      + (if .trigger_count then " | count=" + (.trigger_count | tostring) else "" end)
+      + (if .kind == "context" then " | context overlay " + (.context_percent | tostring) + "%" else "" end)
+    '
+}
+
+calibrate_theme() {
+    local theme="${1:-}" output_format="text" live="0" delay="0.8" pause="0" limit="0"
+    local theme_file step_json label
+
+    if [ -z "$theme" ] || [[ "$theme" == --* ]]; then
+        theme=$(active_theme)
+    else
+        shift
+    fi
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --json)
+                output_format="json"
+                ;;
+            --live)
+                live="1"
+                ;;
+            --delay)
+                delay="${2:-}"
+                if [ -z "$delay" ]; then
+                    printf 'Missing --delay value.\n' >&2
+                    return 2
+                fi
+                shift
+                ;;
+            --pause)
+                pause="1"
+                ;;
+            --limit)
+                limit="${2:-}"
+                if [ -z "$limit" ]; then
+                    printf 'Missing --limit value.\n' >&2
+                    return 2
+                fi
+                shift
+                ;;
+            *)
+                printf 'Unknown calibrate option: %s\n' "$1" >&2
+                usage >&2
+                return 2
+                ;;
+        esac
+        shift
+    done
+
+    if ! theme_exists "$theme"; then
+        printf 'Unknown theme: %s\n' "$theme" >&2
+        printf 'Run visualhud theme list to see available themes.\n' >&2
+        return 1
+    fi
+
+    theme_file="$THEMES_DIR/$theme/theme.json"
+    if [ "$live" != "1" ]; then
+        python3 "$ROOT_DIR/scripts/theme-calibration-steps.py" \
+            --theme "$theme_file" \
+            --theme-name "$theme" \
+            --format "$output_format" \
+            --limit "$limit"
+        return
+    fi
+
+    while IFS= read -r step_json; do
+        label=$(calibration_label "$step_json")
+        printf '%s\n' "$label"
+        render_calibration_step "$theme" "$step_json"
+        if [ "$pause" = "1" ]; then
+            printf 'Press Enter for next calibration step, or Ctrl-C to stop... ' >&2
+            IFS= read -r _
+        elif [ "$delay" != "0" ]; then
+            sleep "$delay"
+        fi
+    done < <(
+        python3 "$ROOT_DIR/scripts/theme-calibration-steps.py" \
+            --theme "$theme_file" \
+            --theme-name "$theme" \
+            --format json-lines \
+            --limit "$limit"
+    )
+}
+
+if [ "$#" -lt 1 ]; then
+    usage >&2
+    exit 2
+fi
+
+case "${1:-}" in
+    theme|themes)
+        subcommand="${2:-list}"
+        case "$subcommand" in
+            list)
+                list_themes
+                ;;
+            current)
+                active_theme
+                ;;
+            set)
+                if [ -z "${3:-}" ]; then
+                    printf 'Missing theme name.\n' >&2
+                    usage >&2
+                    exit 2
+                fi
+                set_theme "$3"
+                ;;
+            reset)
+                reset_theme
+                ;;
+            calibrate)
+                shift 2
+                calibrate_theme "$@"
+                ;;
+            *)
+                printf 'Unknown theme command: %s\n' "$subcommand" >&2
+                usage >&2
+                exit 2
+                ;;
+        esac
+        ;;
+    *)
+        printf 'Unknown command: %s\n' "$1" >&2
+        usage >&2
+        exit 2
+        ;;
+esac

@@ -1,0 +1,25 @@
+{
+  "name": "TMNT Character Select",
+  "progress_bar": ["🟥", "🟥", "🟧", "🟨", "🟨", "🟩", "🟩", "🟩", "🟦", "🟦", "🟦"],
+  "stages": [
+    { "max": 2, "sprite": "tmnt-leonardo", "badge": "L", "name": "Leonardo", "color_family": "blue", "color": [25, 105, 255], "shades": [[25, 105, 255], [45, 135, 255]], "shade_sprites": ["tmnt-leonardo", "tmnt-leonardo-blue-2"] },
+    { "max": 5, "sprite": "tmnt-michelangelo", "badge": "M", "name": "Michelangelo", "color_family": "orange", "color": [255, 125, 25], "shades": [[255, 125, 25], [255, 150, 48], [255, 175, 70]], "shade_sprites": ["tmnt-michelangelo", "tmnt-michelangelo-orange-2", "tmnt-michelangelo-orange-3"] },
+    { "max": 12, "sprite": "tmnt-donatello", "badge": "D", "name": "Donatello", "color_family": "purple", "color": [150, 80, 255], "shades": [[150, 80, 255], [170, 100, 255], [125, 60, 220]], "shade_sprites": ["tmnt-donatello", "tmnt-donatello-purple-2", "tmnt-donatello-purple-3"] },
+    { "max": 25, "sprite": "tmnt-raphael", "badge": "R", "name": "Raphael", "color_family": "red", "color": [255, 55, 55], "shades": [[255, 55, 55], [235, 45, 45], [255, 80, 65]], "shade_sprites": ["tmnt-raphael", "tmnt-raphael-red-2", "tmnt-raphael-red-3"] },
+    { "max": 45, "sprite": "tmnt-april", "badge": "A", "name": "April", "color_family": "yellow", "color": [255, 220, 45], "shades": [[255, 220, 45], [255, 235, 90], [235, 200, 35]], "shade_sprites": ["tmnt-april", "tmnt-april-yellow-2", "tmnt-april-yellow-3"] },
+    { "max": 75, "sprite": "tmnt-metalhead", "badge": "MH", "name": "Metalhead", "color_family": "metal", "color": [185, 185, 185], "shades": [[185, 185, 185], [210, 210, 200], [150, 160, 170]], "shade_sprites": ["tmnt-metalhead", "tmnt-metalhead-metal-2", "tmnt-metalhead-metal-3"] },
+    { "max": 120, "sprite": "tmnt-mutagen", "badge": "MU", "name": "Mutagen", "color_family": "green", "color": [40, 220, 90], "shades": [[40, 220, 90], [65, 240, 120], [25, 170, 75]], "shade_sprites": ["tmnt-mutagen", "tmnt-mutagen-green-2", "tmnt-mutagen-green-3"] },
+    { "max": 180, "sprite": "tmnt-splinter", "badge": "S", "name": "Splinter", "color_family": "brown", "color": [130, 95, 65], "shades": [[130, 95, 65], [155, 115, 75], [105, 75, 55]], "shade_sprites": ["tmnt-splinter", "tmnt-splinter-brown-2", "tmnt-splinter-brown-3"] },
+    { "max": 280, "sprite": "tmnt-krang", "badge": "K", "name": "Krang", "color_family": "pink", "color": [255, 95, 190], "shades": [[255, 95, 190], [255, 125, 205], [215, 70, 165]], "shade_sprites": ["tmnt-krang", "tmnt-krang-pink-2", "tmnt-krang-pink-3"] },
+    { "max": 400, "sprite": "tmnt-foot-clan", "badge": "F", "name": "Foot Clan", "color_family": "steel", "color": [95, 85, 120], "shades": [[95, 85, 120], [120, 110, 150], [70, 65, 95]], "shade_sprites": ["tmnt-foot-clan", "tmnt-foot-clan-steel-2", "tmnt-foot-clan-steel-3"] },
+    { "max": 999999, "sprite": "tmnt-turtle-power", "badge": "T", "name": "Turtle Power", "color_family": "green", "color": [20, 185, 85], "shades": [[20, 185, 85], [45, 220, 110], [10, 145, 65]], "shade_sprites": ["tmnt-turtle-power", "tmnt-turtle-power-green-2", "tmnt-turtle-power-green-3"] }
+  ],
+  "blocked": { "sprite": "tmnt-shredder", "badge": "SHREDDER", "name": "Shredder", "color": [80, 75, 95] },
+  "done": { "sprite": "tmnt-pizza", "badge": "PIZZA", "name": "Pizza Party", "stage": 11, "color": [20, 185, 85] },
+  "idle": { "sprite": "tmnt-splinter", "badge": "SPLINTER", "name": "Splinter", "stage": 11, "color": [130, 95, 65] },
+  "error": { "sprite": "tmnt-shredder", "badge": "ERROR", "name": "Shredder", "color": [255, 40, 40] },
+  "context_alerts": {
+    "warning": { "min_percent": 70, "badge": "MUT", "name": "Mutagen Leak", "sprite": "tmnt-mutagen", "color": [40, 220, 90] },
+    "critical": { "min_percent": 85, "badge": "CASEY", "name": "Casey Jones", "sprite": "tmnt-casey-jones", "color": [245, 245, 245] }
+  }
+}

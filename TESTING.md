@@ -1,22 +1,27 @@
 # Testing Guidelines
 
-See `.claude/skills/testing/SKILL.md` for TDD philosophy.
+## Approach: Strict TDD
+
+1. Write failing test FIRST (RED)
+2. Implement feature (GREEN)
+3. Run all tests (PASS)
+4. Never commit with failing tests
 
 ## Test Commands
 
-- All tests: `bash tests/run_all.sh`
-- Specific test: `bash tests/<test_name>.sh`
-- Lint shell scripts: `shellcheck *.sh`
+| Action | Command |
+|--------|---------|
+| Specific test | `bash tests/<test_name>.sh` |
+| Codex adapter test | `bash tests/test-codex-visualhud.sh` |
+| Codex Bash guard test | `bash tests/test-codex-bash-guard.sh` |
+| Theme calibration test | `bash tests/test-theme-calibration.sh` |
+| Lint | `shellcheck *.sh` |
 
 ## Stack
 
-- Shell scripts tested via bash integration tests
+- Shell scripts tested via bash integration tests (custom assertions)
 - Python scripts tested via pytest (when added)
 - iTerm2 API calls are mocked (can't run outside iTerm2)
-
-## Fixtures
-
-Location: `tests/fixtures/`
 
 ## Testing Diamond
 
@@ -33,14 +38,50 @@ Location: `tests/fixtures/`
     \/         <- Few Unit (pure logic: color math, JSON parsing)
 ```
 
+**Integration tests are the primary focus.** They test real shell behavior with temp dirs for isolation. This gives the best bang for buck — if integration tests pass, the feature works.
+
 ## Mocking Rules
 
 | What | Mock? | Why |
 |------|-------|-----|
 | File system | Use temp dirs | Real I/O, isolated |
 | iTerm2 Python API | YES | Can't run in test env |
+| iTerm2 escape sequences | YES | No terminal in test |
 | Shell commands | NO | Run real commands |
 | jq / JSON parsing | NO | Test with real jq |
+
+**Philosophy:** Minimal mocking. Only mock what you truly can't control (iTerm2 API, terminal escape sequences). Everything else should be real.
+
+## Fixtures
+
+Location: `tests/fixtures/`
+
+Use real fixture data for mock shapes — never guess what the data looks like.
+
+## Test File Organization
+
+```
+tests/
+  test-cooking-status.sh    <- Main hook integration tests
+  test-codex-visualhud.sh   <- Codex adapter integration tests
+  test-theme-calibration.sh <- Ordered theme calibration and mocked live walk
+  test-<feature>.sh         <- Per-feature test files
+  fixtures/                 <- Shared test data
+```
+
+## Test Code is First-Class
+
+- Test code gets the same quality standards as app code
+- Existing test patterns are building blocks — copy good ones, improve bad ones
+- Flaky tests are bugs — investigate every failure, don't sweep under the rug
+
+## Test Failure Categories
+
+| Category | Fix |
+|----------|-----|
+| Test code bug | Fix the test (most common) |
+| Application bug | Fix the app — test found a real bug |
+| Environment bug | Fix the setup/teardown |
 
 ## Lessons Learned
 

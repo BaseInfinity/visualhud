@@ -1,15 +1,124 @@
 # VisualHUD
 
-A themeable visual status engine for Claude Code + iTerm2.
+A themeable visual status engine for Claude Code, Codex, and iTerm2.
 
-Watch your terminal transform in real-time as Claude works — colors shift, backgrounds swap, and tab titles update to show exactly where things stand. Ship with themes or build your own.
+Watch your terminal transform in real-time as your agent works — colors shift, backgrounds swap, and tab titles update to show exactly where things stand. Ship with themes or build your own.
+
+## Install
+
+VisualHUD is local-first. This repo carries its own hook config, engine, themes,
+and sprite assets; it does not install a global Codex/Claude hook unless you add
+one yourself.
+
+### 1. Configure iTerm2
+
+Run this once on macOS:
+
+```bash
+./setup-iterm2.sh
+```
+
+If iTerm2 is already open, quit iTerm2 after running the setup and reopen it.
+This enables tab colors, per-pane background images, the iTerm2 Python API, and
+the `hudProgress` tab-title variable.
+
+### 2. Use With Codex
+
+Codex is already wired in this repo through:
+
+```text
+.codex/hooks.json
+.codex/hooks/visualhud-codex.sh
+```
+
+Start or restart Codex from this repo. The Codex adapter defaults to the TMNT
+theme and routes lifecycle events into `engine.sh`.
+
+To switch the repo-local default for future hooks:
+
+```bash
+./visualhud theme list
+./visualhud theme set pokemon
+./visualhud theme current
+```
+
+The selection is written to the repo-local active theme file and is picked up on
+the next hook; no Codex restart is required. `VISUALHUD_THEME=<name>` remains an
+explicit one-process override:
+
+```bash
+VISUALHUD_THEME=pokemon codex
+```
+
+### 3. Use With Claude Code
+
+Claude Code is wired separately through:
+
+```text
+.claude/settings.json
+.claude/hooks/visualhud-claude.sh
+```
+
+Start or restart Claude Code from this repo. The Claude adapter defaults to the
+Pokemon theme and preserves the existing SDLC/TDD hooks.
+
+To use TMNT for this repo, run:
+
+```bash
+./visualhud theme set tmnt
+```
+
+The next hook picks up the selected theme. To override only one Claude process:
+
+```bash
+VISUALHUD_THEME=tmnt claude
+```
+
+### 4. Verify
+
+Run the contract tests before calling an install or theme change done:
+
+```bash
+bash tests/test-visualhud-cli.sh
+bash tests/test-theme-system.sh
+bash tests/test-theme-calibration.sh
+bash tests/test-codex-visualhud.sh
+bash tests/test-claude-visualhud.sh
+bash tests/test-cooking-status.sh
+```
+
+For visual changes, also review a screenshot, generated contact sheet, or a
+calibration walk. Shell tests prove hook output and state transitions; they do
+not prove aesthetics by themselves.
+
+Generate the full ordered calibration list when a theme has too many visual
+states to inspect ad hoc:
+
+```bash
+./visualhud theme calibrate tmnt
+./visualhud theme calibrate tmnt --json
+```
+
+From a real iTerm2 pane, walk the same cycle one step at a time and correct
+specific step numbers:
+
+```bash
+./visualhud theme calibrate tmnt --live --delay 1
+./visualhud theme calibrate tmnt --live --pause
+```
+
+### Windows Status
+
+Windows Terminal and PowerShell are not supported yet. The theme JSON contract is
+portable, but the current background-image renderer uses the iTerm2 Python API,
+so Windows needs a separate terminal renderer instead of reusing `set_bg.py`.
 
 ## How It Works
 
-Claude Code fires hooks on every tool use (`PreToolUse`) and when it stops (`Stop`). VisualHUD intercepts those hooks and drives iTerm2's appearance through a progression of **stages** — each with its own colors, background image, and title.
+Claude Code and Codex fire lifecycle hooks on prompt, tool use, permission request, and stop events. VisualHUD intercepts those hooks and drives iTerm2's appearance through a progression of **stages** — each with its own colors, background image, and title.
 
 ```
-Hook fires → counter increments → stage advances → iTerm2 updates
+Hook fires → adapter normalizes event → counter increments → stage advances → iTerm2 updates
 ```
 
 Each iTerm2 session is isolated via `ITERM_SESSION_ID`, so multiple Claude windows don't stomp each other.
@@ -26,48 +135,68 @@ themes/
       charmander.png
       charmeleon.png
       ...
-  healthbar/
+  tmnt/
     theme.json
-  cyberpunk/
-    theme.json
-    backgrounds/
+    sprites/
+      tmnt-leonardo.png
+      tmnt-michelangelo.png
       ...
+  custom/
+    theme.json
 ```
 
 ### Theme Config (theme.json)
 
-```jsonc
+See [THEMES.md](THEMES.md) for the complete contract and required tests.
+
+```json
 {
-  "name": "Pokemon Evolution",
-  "description": "Fire → Electric → Grass → Water progress bar",
+  "name": "Example Theme",
+  "progress_bar": ["A", "B", "C"],
   "stages": [
     {
-      "name": "Charmander",
-      "at": 1,           // trigger at this tool-call count
-      "color": [255, 60, 60],
-      "title": "Charmander",
-      "badge": "🔥",    // badge emoji shown in bottom-right
-      "image": "sprites/charmander.png"
+      "max": 2,
+      "sprite": "alpha",
+      "badge": "A",
+      "name": "Alpha",
+      "color_family": "blue",
+      "color": [10, 20, 30],
+      "shades": [[10, 20, 30], [20, 35, 55]]
     },
     {
-      "name": "Charmeleon",
-      "at": 4,
-      "color": [255, 100, 50],
-      "title": "Charmeleon",
-      "badge": "🔥",
-      "image": "sprites/charmeleon.png"
+      "max": 5,
+      "sprite": "beta",
+      "badge": "B",
+      "name": "Beta",
+      "color_family": "orange",
+      "color": [40, 50, 60],
+      "shades": [[40, 50, 60], [65, 75, 85], [85, 95, 110]],
+      "shade_sprites": ["beta", "beta-warm", "beta-hot"]
+    },
+    {
+      "max": 999999,
+      "sprite": "gamma",
+      "badge": "C",
+      "name": "Gamma",
+      "color_family": "green",
+      "color": [70, 80, 90],
+      "shades": [[70, 80, 90], [90, 110, 120]]
     }
-    // ...9 more stages
   ],
+  "blocked": { "sprite": "blocked", "badge": "BLOCK", "name": "Blocked", "color": [80, 75, 95] },
   "done": {
-    "name": "Blastoise",
-    "color": [40, 100, 255],
-    "title": "Blastoise",
-    "badge": "💧",
-    "image": "sprites/blastoise.png"
+    "sprite": "done",
+    "badge": "DONE",
+    "name": "Done",
+    "stage": 3,
+    "color": [40, 100, 255]
   },
-  "blend": 0.15,
-  "tint_ratio": 0.3
+  "idle": { "sprite": "idle", "badge": "IDLE", "name": "Idle", "stage": 3, "color": [40, 100, 255] },
+  "error": { "sprite": "error", "badge": "ERROR", "name": "Error", "color": [255, 40, 40] },
+  "context_alerts": {
+    "warning": { "min_percent": 70, "badge": "WARN", "name": "Context High", "color": [255, 190, 40] },
+    "critical": { "min_percent": 85, "badge": "CRIT", "name": "Context Critical", "color": [255, 255, 255] }
+  }
 }
 ```
 
@@ -106,48 +235,34 @@ We researched the space. Nothing does what VisualHUD does.
 
 ## What Works Today
 
-The current implementation lives in `~/.claude/hooks/` and is fully functional:
+VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
 
 **Working:**
-- Tab color changes via iTerm2 escape sequences (`OSC 6;1;bg`) — per-session, no cross-window bleed
-- Background tint color via `OSC 1337;SetColors=bg=` — per-session
-- Cursor color via `OSC 12` — per-session
-- Window/tab title with emoji via `OSC 0` — per-session
-- Background images via iTerm2 Python API (`LocalWriteOnlyProfile`) — per-session
-- Badge emoji matching current stage type (🔥⚡🌿💧) — dynamically positioned at bottom-right based on window size
-- Per-session isolation via `ITERM_SESSION_ID` env var (UUID extraction — `w0t0p0:UUID` → `UUID`)
-- Stage progression (11 stages + done, 3 tool calls each = 33 tool calls to done):
-  - 🔥 Charmander → Charmeleon → Charizard (red → orange → gold)
-  - ⚡ Pikachu → Raichu (yellow → amber)
-  - 🌿 Bulbasaur → Ivysaur → Venusaur (light green → dark green)
-  - 💧 Squirtle → Wartortle → Blastoise/done (light blue → deep blue)
-- Every evolution line is complete — it's a progress bar from red (start) to blue (done)
+- Tab color changes via iTerm2 escape sequences (`OSC 6;1;bg` and `SetColors=tab`) with per-session isolation.
+- Background, selection, cursor, and muted UI surface colors update through `OSC 1337;SetColors`.
+- Window/tab title, badge text, and `hudProgress`/`hudContext` user vars update from hook lifecycle state.
+- Background images update through the iTerm2 Python API (`LocalWriteOnlyProfile`) for the active terminal session.
+- `PreToolUse`, `UserPromptSubmit`, `Notification`, `PermissionRequest`, `Stop`, `StopFailure`, and `SessionStart` are mapped into the engine by repo-local adapters.
+- Theme stages use `color_family` plus `shades`, so a character can keep the same sprite while the terminal chrome advances through multiple color steps.
+- Pokemon and TMNT both ship source-backed sprite packs and theme JSON.
+- Context/token pressure is an ambient overlay: warning and critical label the state while preserving the active stage color/sprite.
 
 **Current hooks:**
-- `PreToolUse` — increments counter, advances stage
-- `Stop` — sets final state (Blastoise), resets counter
-
-**Assets:**
-- 11 static PNGs (512x512, Pokemon HOME 3D renders from PokeAPI) — used as backgrounds, look great on 4K
-- 7 animated GIFs (45-106px, 29-69 frames, 30-40ms timing) — not used (too low-res for backgrounds)
+- `.codex/hooks/visualhud-codex.sh` maps Codex events into `engine.sh` and defaults to TMNT.
+- `.claude/hooks/visualhud-claude.sh` maps Claude Code events into `engine.sh` and defaults to Pokemon.
+- Both adapters set `VISUALHUD_REAPPLY_DELAY=0.12` by default to reapply title/color after TUI repaint.
 
 **Known limitations:**
-- No "needs attention" state (missing `Notification` hook)
-- No snapshot/restore of original terminal state
-- No smooth color blending between stages (hard jumps)
-- Background images are static only (no sprite animation — see Sprite Animation section)
-- iTerm2 only
-- Badge is text/emoji only — no images in badge (iTerm2 limitation)
+- iTerm2 is the only complete renderer today; Windows Terminal/PowerShell needs a separate renderer.
+- Background images are static only; sprite animation is parked until a terminal adapter supports it cleanly.
+- Badge content is text/emoji only because iTerm2 does not support image badges.
+- Snapshot/restore of the original terminal profile is still planned.
 
-**Tested and confirmed (2026-03-22):**
-- Background image per-session isolation works via `ITERM_SESSION_ID` UUID extraction
-- GIF backgrounds do NOT animate in iTerm2 (first frame only)
-- Frame cycling (rapidly swapping PNGs) works smoothly but source GIFs are too low-res (48-133px) for full-screen backgrounds on 4K
-- Badge emoji (🔥⚡🌿💧) works per-stage, dynamically positioned at ~85% window height
-- No high-res animated Pokemon sprites exist in open source (Showdown, PokeAPI, fan projects all cap at ~133px)
-- iTerm2 does NOT support images in badges or corners: badges are text/emoji only, status bar icons max 16x17px, inline images scroll with text
-- AI upscaling (Real-ESRGAN) failed to build; pixel art upscaling (nearest-neighbor, LANCZOS) insufficient for 4K
-- Pokemon HOME sprites (512x512, PokeAPI) look great as static backgrounds on 4K
+**Tested and confirmed:**
+- Background image per-session isolation works via `ITERM_SESSION_ID` UUID extraction.
+- GIF backgrounds do not animate in iTerm2; frame cycling works, but low-res source GIFs are not good enough for full-screen backgrounds.
+- iTerm2 does not support images in badges or corners: badges are text/emoji only, status bar icons are tiny, and inline images scroll with text.
+- Pokemon HOME sprites and source-backed TMNT panel crops work as static backgrounds.
 
 ## Sprite Animation
 
@@ -181,47 +296,87 @@ Test script: `./test-frame-cycling.sh`
 
 ### Theme Config with Animation
 
-```jsonc
+Animation is parked until a terminal adapter supports it cleanly. A future
+theme extension should keep the current stage contract and add animation fields
+beside `"sprite"` instead of replacing the base sprite.
+
+```json
 {
   "stages": [
     {
       "name": "Charmander",
-      "at": 1,
+      "max": 2,
+      "sprite": "charmander",
       "color": [255, 60, 60],
-      "image": "sprites/charmander.png",         // static fallback
-      "animated_image": "sprites/charmander.gif", // animated (if supported)
-      "emoji": "🔥"
+      "badge": "FIRE",
+      "animated_sprite": "charmander-run"
     }
   ]
 }
 ```
 
-Engine picks `animated_image` if the terminal supports it, falls back to `image`.
+Engine support for `animated_sprite` is not implemented yet. Add a failing test
+before making that contract real.
 
-## Color Blending
+## Color Shades
 
-Colors blend smoothly between stages rather than jumping. The engine interpolates RGB values based on tool-call count relative to stage boundaries:
+Theme stages can define multiple `"shades"` for the same character. The engine
+chooses a shade from the current tool-call position inside that stage's range,
+so the sprite stays stable while the terminal chrome visibly advances:
 
 ```
-Stage 1 (at: 1)  color: [255, 60, 60]   Charmander red
-   ↕ smooth blend
-Stage 2 (at: 3)  color: [255, 100, 50]  Charmeleon orange
-   ↕ smooth blend
-Stage 3 (at: 6)  color: [255, 150, 40]  Charizard gold
+Michelangelo (max 5)
+tool 3 -> [255, 125, 25]
+tool 4 -> [255, 150, 48]
+tool 5 -> [255, 175, 70]
 ```
 
-At tool call 2 (halfway between stage 1 and 2), the color would be `[255, 80, 55]` — a blend of Charmander red and Charmeleon orange. Background images still swap at stage boundaries.
+This is deliberate stage-local shading rather than cross-stage interpolation.
+Stages can also define `"shade_sprites"` with one sprite per shade when the art
+should advance with the color. TMNT uses this for character-color variants, and
+future themes such as Batman and Power Rangers should use the same
+JSON-plus-sprites contract instead of changing `engine.sh`.
 
 ## Token Usage Indicator (Separate from Task Progress)
 
 Task completion (stage progression) is the **main visual driver** — background, tab color, images.
 
 Token/context usage is a **separate ambient indicator** that doesn't interfere with the main visual:
-- Badge or small indicator (bottom-right or top-right of terminal)
-- Surfaces only when it matters (warning at 70%+, critical at 85%+)
-- Could use iTerm2 badge (`OSC 1337;SetBadgeFormat=`) or a subtle background tint shift
+- Badge/title suffix surfaces only when it matters (`CTX 70%+` warning, `CTX 85%+` critical)
+- The task stage color, cursor, and sprite stay intact; context labels must not gray-wash or emergency-wash the pane
+- Themes can name those alerts: Pokemon uses Pokemon Center/Nurse Joy, TMNT uses Casey Jones for critical context
+- Codex can derive context percent from hook payload token data or a matching session JSONL token-count event
 
 These are independent axes: you can be on stage 3 (Charizard) with low token usage, or stage 1 (Charmander) with high token usage.
+
+## TMNT Source Art Import
+
+The TMNT skin is only visually complete once real source images exist on disk.
+Chat attachments are not repo files, so place a four-panel character-select
+reference at:
+
+```
+assets/source/tmnt/character-select.png
+```
+
+Then generate source-backed sprite assets:
+
+```
+python3 scripts/import-tmnt-sprites.py \
+  --source assets/source/tmnt/character-select.png \
+  --output-dir themes/tmnt/sprites \
+  --source-label "tmnt-character-select-reference"
+```
+
+The importer writes `tmnt-leonardo.png`, `tmnt-michelangelo.png`,
+`tmnt-donatello.png`, `tmnt-raphael.png`, and `manifest.json` with crop
+provenance. Do not ship generated placeholder TMNT art; source-backed PNGs must
+include the manifest.
+
+For character-focused one-off assets, the importer strips neutral corner mattes
+from source images and renders transparent areas over the matching theme color.
+The generated manifest records that color as `backdrop_color`, which prevents
+yellow April, white Casey, or other stage families from drifting back to gray.
 
 ## Key Bugs We Fixed
 
@@ -239,7 +394,9 @@ Documenting these so we don't repeat them:
 
 ## Status
 
-**Pre-release.** Currently a set of hook scripts in `~/.claude/hooks/`. This README is the blueprint.
+**Pre-release.** Repo-local Codex and Claude Code hook wiring works on iTerm2.
+Windows Terminal/PowerShell support is tracked separately because it needs a
+non-iTerm2 renderer.
 
 ---
 
@@ -282,71 +439,19 @@ Core engine + themeable + works reliably:
 - [x] Confirmed: GIF backgrounds don't animate in iTerm2, frame cycling works but needs hi-res source art
 - [x] Confirmed: iTerm2 badges are text/emoji only, no images
 
-**Next — Build the theme engine (this is the big one):**
+**Current focus — Harden the theme engine:**
 
-The theme engine replaces the hardcoded Pokemon stages in `cooking-status.sh` with a generic engine that reads `theme.json`. This is what makes VisualHUD a real tool instead of a one-off script.
+The theme engine is now data-driven: `engine.sh` reads `theme.json`, advances
+stage counters, applies stage shades, resolves sprite paths, and drives iTerm2.
+Pokemon and TMNT live under `themes/`, and both Codex and Claude use repo-local
+adapters.
 
-1. **Move hook scripts + sprites into this repo** — copy `cooking-status.sh`, `set_bg.py`, and sprites from `~/.claude/hooks/` into `~/visualhud/`. The repo becomes the source of truth.
-
-2. **Theme engine (`engine.sh`)** — a shell script that:
-   - Reads `theme.json` with `jq` (stages, colors, images, badges)
-   - Accepts `cooking` or `cooked` mode (same as current)
-   - Increments counter, looks up current stage from config
-   - Drives iTerm2 escape sequences + Python API (same as current, just data-driven)
-   - This replaces the hardcoded if/elif chain with a config lookup
-
-3. **Pokemon theme (`themes/pokemon/`)** — port current implementation:
-   ```
-   themes/pokemon/
-     theme.json        # 11 stages + done, colors, badge emojis
-     sprites/           # 11 HOME PNGs (512x512)
-       charmander.png
-       charmeleon.png
-       ...
-   ```
-
-4. **Default progress bar theme (`themes/progressbar/`)** — colors only, no images:
-   ```
-   themes/progressbar/
-     theme.json        # stages with colors only, no image field
-   ```
-   Red → yellow → green → blue gradient. Works on any terminal, no Python API needed.
-
-5. **`install.sh`** — symlinks the engine + active theme into `~/.claude/hooks/`:
-   ```bash
-   # Sets active theme and wires up Claude Code hooks
-   visualhud/install.sh pokemon    # or: install.sh progressbar
-   ```
-   Creates symlinks so Claude Code hooks point to the engine, and the engine knows which theme to load.
-
-6. **`theme.json` schema** — finalize the config format:
-   ```jsonc
-   {
-     "name": "Pokemon Evolution",
-     "description": "Fire → Electric → Grass → Water progress bar",
-     "terminal": "iterm2",           // which adapter to use
-     "blend": 0.15,                  // background image opacity
-     "tint_ratio": 0.3,              // how much color tints the background
-     "stages": [
-       {
-         "name": "Charmander",
-         "at": 3,                    // tool calls to trigger this stage
-         "color": [255, 60, 60],
-         "title": "Charmander",
-         "badge": "🔥",
-         "image": "sprites/charmander.png"  // optional
-       }
-       // ...more stages
-     ],
-     "done": {
-       "name": "Blastoise",
-       "color": [40, 100, 255],
-       "title": "Blastoise",
-       "badge": "💧",
-       "image": "sprites/blastoise.png"
-     }
-   }
-   ```
+Next hardening work:
+- Replace any weak TMNT one-off cover-art states with character-focused source art.
+- Add the next branded theme candidates, Batman and Power Rangers, as JSON/sprite packs that prove third-theme parity without engine changes.
+- Add a terminal-renderer abstraction for Windows Terminal/PowerShell, Kitty, WezTerm, and Ghostty.
+- Add snapshot/restore so VisualHUD can return terminal chrome to its original state.
+- Add a CLI installer/doctor once the repo-local contract is stable.
 
 **Then — Polish:**
 - [ ] **Window border integration (JankyBorders)** — colored border around iTerm2 window that changes with stage progression:

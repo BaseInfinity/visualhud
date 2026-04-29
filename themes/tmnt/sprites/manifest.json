@@ -1,0 +1,559 @@
+{
+  "schema": "visualhud-tmnt-sprites-v1",
+  "sprites": {
+    "tmnt-leonardo": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "character-select-four-panel-character-panels",
+      "crop": [
+        30,
+        45,
+        256,
+        504
+      ],
+      "backdrop_color": [
+        25,
+        105,
+        255
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-michelangelo": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "character-select-four-panel-character-panels",
+      "crop": [
+        276,
+        61,
+        498,
+        504
+      ],
+      "backdrop_color": [
+        255,
+        125,
+        25
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-donatello": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "character-select-four-panel-character-panels",
+      "crop": [
+        522,
+        61,
+        747,
+        504
+      ],
+      "backdrop_color": [
+        150,
+        80,
+        255
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-raphael": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "character-select-four-panel-character-panels",
+      "crop": [
+        767,
+        56,
+        992,
+        504
+      ],
+      "backdrop_color": [
+        255,
+        55,
+        55
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-april": {
+      "source": "assets/source/tmnt/april-character-source.jpg",
+      "source_label": "april-character-source-fandom-cc-by-sa",
+      "crop": [
+        0,
+        0,
+        269,
+        582
+      ],
+      "backdrop_color": [
+        255,
+        220,
+        45
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-metalhead": {
+      "source": "assets/source/tmnt/metalhead-character-source.png",
+      "source_label": "metalhead-character-source",
+      "crop": [
+        0,
+        0,
+        340,
+        310
+      ],
+      "backdrop_color": [
+        185,
+        185,
+        185
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-mutagen": {
+      "source": "assets/source/tmnt/mutagen-object-source.jpg",
+      "source_label": "mutagen-object-source",
+      "crop": [
+        0,
+        0,
+        500,
+        375
+      ],
+      "backdrop_color": [
+        40,
+        220,
+        90
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-splinter": {
+      "source": "assets/source/tmnt/splinter-character-source.png",
+      "source_label": "splinter-character-source",
+      "crop": [
+        0,
+        0,
+        414,
+        566
+      ],
+      "backdrop_color": [
+        130,
+        95,
+        65
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-krang": {
+      "source": "assets/source/tmnt/krang-character-source.jpg",
+      "source_label": "krang-character-source",
+      "crop": [
+        0,
+        0,
+        500,
+        282
+      ],
+      "backdrop_color": [
+        255,
+        95,
+        190
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-foot-clan": {
+      "source": "assets/source/tmnt/foot-soldiers-character-source.png",
+      "source_label": "foot-soldiers-character-source",
+      "crop": [
+        0,
+        0,
+        517,
+        586
+      ],
+      "backdrop_color": [
+        95,
+        85,
+        120
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-turtle-power": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "character-select-four-panel-character-panels",
+      "crop": [
+        0,
+        35,
+        1024,
+        520
+      ],
+      "backdrop_color": [
+        20,
+        185,
+        85
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-shredder": {
+      "source": "assets/source/tmnt/shredder-source.png",
+      "source_label": "shredder-character-crop-from-return-of-the-shredder-source",
+      "crop": [
+        250,
+        190,
+        430,
+        430
+      ],
+      "backdrop_color": [
+        255,
+        40,
+        40
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-pizza": {
+      "source": "assets/source/tmnt/pizza-source.png",
+      "source_label": "Teenage Mutant Ninja Turtles - Turtles in Time pizza bonus source",
+      "crop": [
+        0,
+        0,
+        512,
+        675
+      ]
+    },
+    "tmnt-raphael-red-2": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "raphael-character-select-shade-variant",
+      "crop": [
+        785,
+        74,
+        1008,
+        445
+      ],
+      "backdrop_color": [
+        235,
+        45,
+        45
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-raphael-red-3": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "raphael-character-select-shade-variant",
+      "crop": [
+        810,
+        88,
+        1024,
+        355
+      ],
+      "backdrop_color": [
+        255,
+        80,
+        65
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-leonardo-blue-2": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "character-select-four-panel-shade-variants",
+      "crop": [
+        55,
+        35,
+        245,
+        420
+      ],
+      "backdrop_color": [
+        45,
+        135,
+        255
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-michelangelo-orange-2": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "character-select-four-panel-shade-variants",
+      "crop": [
+        294,
+        68,
+        511,
+        455
+      ],
+      "backdrop_color": [
+        255,
+        150,
+        48
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-michelangelo-orange-3": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "character-select-four-panel-shade-variants",
+      "crop": [
+        310,
+        90,
+        522,
+        360
+      ],
+      "backdrop_color": [
+        255,
+        175,
+        70
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-donatello-purple-2": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "character-select-four-panel-shade-variants",
+      "crop": [
+        548,
+        72,
+        760,
+        455
+      ],
+      "backdrop_color": [
+        170,
+        100,
+        255
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-donatello-purple-3": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "character-select-four-panel-shade-variants",
+      "crop": [
+        565,
+        90,
+        770,
+        360
+      ],
+      "backdrop_color": [
+        125,
+        60,
+        220
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-april-yellow-2": {
+      "source": "assets/source/tmnt/april-character-source.jpg",
+      "source_label": "april-character-source-fandom-cc-by-sa",
+      "crop": [
+        0,
+        0,
+        269,
+        470
+      ],
+      "backdrop_color": [
+        255,
+        235,
+        90
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-april-yellow-3": {
+      "source": "assets/source/tmnt/april-character-source.jpg",
+      "source_label": "april-character-source-fandom-cc-by-sa",
+      "crop": [
+        20,
+        20,
+        249,
+        500
+      ],
+      "backdrop_color": [
+        235,
+        200,
+        35
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-metalhead-metal-2": {
+      "source": "assets/source/tmnt/metalhead-character-source.png",
+      "source_label": "metalhead-character-source",
+      "crop": [
+        20,
+        10,
+        320,
+        300
+      ],
+      "backdrop_color": [
+        210,
+        210,
+        200
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-metalhead-metal-3": {
+      "source": "assets/source/tmnt/metalhead-character-source.png",
+      "source_label": "metalhead-character-source",
+      "crop": [
+        45,
+        20,
+        300,
+        285
+      ],
+      "backdrop_color": [
+        150,
+        160,
+        170
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-mutagen-green-2": {
+      "source": "assets/source/tmnt/mutagen-object-source.jpg",
+      "source_label": "mutagen-object-source",
+      "crop": [
+        35,
+        20,
+        465,
+        355
+      ],
+      "backdrop_color": [
+        65,
+        240,
+        120
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-mutagen-green-3": {
+      "source": "assets/source/tmnt/mutagen-object-source.jpg",
+      "source_label": "mutagen-object-source",
+      "crop": [
+        80,
+        40,
+        420,
+        330
+      ],
+      "backdrop_color": [
+        25,
+        170,
+        75
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-splinter-brown-2": {
+      "source": "assets/source/tmnt/splinter-character-source.png",
+      "source_label": "splinter-character-source",
+      "crop": [
+        25,
+        10,
+        390,
+        540
+      ],
+      "backdrop_color": [
+        155,
+        115,
+        75
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-splinter-brown-3": {
+      "source": "assets/source/tmnt/splinter-character-source.png",
+      "source_label": "splinter-character-source",
+      "crop": [
+        65,
+        35,
+        355,
+        500
+      ],
+      "backdrop_color": [
+        105,
+        75,
+        55
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-krang-pink-2": {
+      "source": "assets/source/tmnt/krang-character-source.jpg",
+      "source_label": "krang-character-source",
+      "crop": [
+        40,
+        15,
+        465,
+        270
+      ],
+      "backdrop_color": [
+        255,
+        125,
+        205
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-krang-pink-3": {
+      "source": "assets/source/tmnt/krang-character-source.jpg",
+      "source_label": "krang-character-source",
+      "crop": [
+        80,
+        30,
+        430,
+        260
+      ],
+      "backdrop_color": [
+        215,
+        70,
+        165
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-foot-clan-steel-2": {
+      "source": "assets/source/tmnt/foot-soldiers-character-source.png",
+      "source_label": "foot-soldiers-character-source",
+      "crop": [
+        30,
+        20,
+        490,
+        560
+      ],
+      "backdrop_color": [
+        120,
+        110,
+        150
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-foot-clan-steel-3": {
+      "source": "assets/source/tmnt/foot-soldiers-character-source.png",
+      "source_label": "foot-soldiers-character-source",
+      "crop": [
+        70,
+        45,
+        455,
+        530
+      ],
+      "backdrop_color": [
+        70,
+        65,
+        95
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-turtle-power-green-2": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "character-select-four-panel-character-panels",
+      "crop": [
+        30,
+        45,
+        992,
+        504
+      ],
+      "backdrop_color": [
+        45,
+        220,
+        110
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-turtle-power-green-3": {
+      "source": "assets/source/tmnt/character-select-four-panel.png",
+      "source_label": "character-select-four-panel-character-panels",
+      "crop": [
+        120,
+        60,
+        930,
+        455
+      ],
+      "backdrop_color": [
+        10,
+        145,
+        65
+      ],
+      "composition": "character-focused"
+    },
+    "tmnt-casey-jones": {
+      "source": "assets/source/tmnt/casey-jones-character-source.jpg",
+      "source_label": "casey-jones-character-source",
+      "crop": [
+        0,
+        0,
+        242,
+        170
+      ],
+      "backdrop_color": [
+        245,
+        245,
+        245
+      ],
+      "composition": "character-focused"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "selected_profile": "maximum",
+  "profiles": {
+    "mixed": {
+      "main_model": "gpt-5.4-mini",
+      "main_reasoning": "xhigh",
+      "review_model": "gpt-5.5",
+      "review_reasoning": "xhigh",
+      "tradeoff": "Smaller/faster main model for routine work while keeping xhigh reasoning and maximum-depth review."
+    },
+    "maximum": {
+      "main_model": "gpt-5.5",
+      "main_reasoning": "xhigh",
+      "review_model": "gpt-5.5",
+      "review_reasoning": "xhigh",
+      "tradeoff": "Highest available model profile with higher latency and token usage in exchange for maximum stability and depth."
+    }
+  },
+  "policy": {
+    "high_confidence_threshold_percent": 95,
+    "low_confidence_rule": "Research more first. If confidence stays below 95%, escalate review to xhigh. Use the maximum profile for abstract, complex, or high-blast-radius work."
+  }
+}

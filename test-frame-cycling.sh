@@ -12,7 +12,7 @@ if [ ! -f "$FRAMES_DIR/charmander_000.png" ]; then
     exit 1
 fi
 
-FRAME_COUNT=$(ls "$FRAMES_DIR"/charmander_*.png 2>/dev/null | wc -l | tr -d ' ')
+FRAME_COUNT=$(find "$FRAMES_DIR" -maxdepth 1 -type f -name 'charmander_*.png' | wc -l | tr -d ' ')
 echo "Cycling $FRAME_COUNT frames at ${FRAME_DELAY_MS}ms intervals..."
 echo "Press Ctrl+C to stop."
 echo ""

@@ -15,6 +15,7 @@
     { "max": 999999, "sprite": "tmnt-turtle-power", "badge": "T", "name": "Turtle Power", "color_family": "green", "color": [20, 185, 85], "shades": [[20, 185, 85], [45, 220, 110], [10, 145, 65]], "shade_sprites": ["tmnt-turtle-power", "tmnt-turtle-power-green-2", "tmnt-turtle-power-green-3"] }
   ],
   "blocked": { "sprite": "tmnt-shredder", "badge": "SHREDDER", "name": "Shredder", "color": [80, 75, 95] },
+  "review": { "sprite": "tmnt-splinter", "badge": "REV", "name": "Splinter Review", "stage": 10, "color": [130, 95, 65] },
   "done": { "sprite": "tmnt-pizza", "badge": "PIZZA", "name": "Pizza Party", "stage": 11, "color": [20, 185, 85] },
   "idle": { "sprite": "tmnt-splinter", "badge": "SPLINTER", "name": "Splinter", "stage": 11, "color": [130, 95, 65] },
   "error": { "sprite": "tmnt-shredder", "badge": "ERROR", "name": "Shredder", "color": [255, 40, 40] },

@@ -25,9 +25,10 @@ COUNTER_FILE="/private/tmp/claude-cooking-counter_${SESSION_KEY}"
 STAGE_FILE="/private/tmp/claude-cooking-stage_${SESSION_KEY}"
 ATTENTION_FILE="/private/tmp/claude-cooking-attention_${SESSION_KEY}"
 CONTEXT_FILE="/private/tmp/claude-cooking-context_${SESSION_KEY}"
+REVIEW_FILE="/private/tmp/claude-cooking-review_${SESSION_KEY}"
 
 cleanup() {
-    rm -f "$COUNTER_FILE" "$STAGE_FILE" "$ATTENTION_FILE" "$CONTEXT_FILE" 2>/dev/null
+    rm -f "$COUNTER_FILE" "$STAGE_FILE" "$ATTENTION_FILE" "$CONTEXT_FILE" "$REVIEW_FILE" 2>/dev/null
     unset VISUALHUD_THEME VISUALHUD_SET_BG VISUALHUD_SET_BG_LOG VISUALHUD_SPRITES_DIR
     unset VISUALHUD_TTY VISUALHUD_CONTEXT_USED_PERCENT VISUALHUD_CODEX_SESSION_FILE CODEX_HOME
     unset VISUALHUD_REAPPLY_DELAY
@@ -215,16 +216,44 @@ assert_file_not_exists "Attention file deleted after Stop" "$ATTENTION_FILE"
 assert_eq "Stage file is blastoise after Stop" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
 echo ""
 
+# --- TEST 3b: Review work does not false-advertise done ---
+echo "--- Test 3b: Code review stays in review state until TaskCompleted ---"
+cleanup
+REVIEW_TTY="${TMPDIR:-/tmp}/visualhud-review-state-$$.log"
+export VISUALHUD_TTY="$REVIEW_TTY"
+export VISUALHUD_THEME="pokemon"
+: > "$REVIEW_TTY"
+
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "codex exec -o .reviews/latest-review.md \"Review v1.42.0 before ship\""}, "session_id": "test"}'
+assert_file_exists "Review marker is created for code review work" "$REVIEW_FILE"
+assert_eq "Pokemon review uses Wartortle instead of Blastoise" "wartortle" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_contains "Review title is explicit" "Reviewing" "$(cat "$REVIEW_TTY" 2>/dev/null)"
+
+: > "$REVIEW_TTY"
+run_hook '{"hook_event_name": "Stop", "session_id": "test", "last_assistant_message": "Waiting for code review to finish."}'
+assert_file_exists "Review marker remains after Stop while review is active" "$REVIEW_FILE"
+assert_eq "Stop while reviewing preserves Wartortle" "wartortle" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_contains "Stop while reviewing does not show Your turn" "Reviewing" "$(cat "$REVIEW_TTY" 2>/dev/null)"
+
+: > "$REVIEW_TTY"
+run_hook '{"hook_event_name": "TaskCompleted", "session_id": "test", "task": "code review completed"}'
+assert_file_not_exists "Review marker clears after TaskCompleted" "$REVIEW_FILE"
+assert_eq "TaskCompleted after review can finally show Blastoise" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
+rm -f "$REVIEW_TTY"
+echo ""
+
 # --- TEST 4: UserPromptSubmit resets counter ---
 echo "--- Test 4: UserPromptSubmit resets counter ---"
 cleanup
 printf '100' > "$COUNTER_FILE"
 printf 'ivysaur' > "$STAGE_FILE"
 printf 'blocked' > "$ATTENTION_FILE"
+printf 'review' > "$REVIEW_FILE"
 
 run_hook '{"hook_event_name": "UserPromptSubmit", "prompt": "do something", "session_id": "test"}'
 assert_file_not_exists "Counter file deleted after UserPromptSubmit" "$COUNTER_FILE"
 assert_file_not_exists "Attention file deleted after UserPromptSubmit" "$ATTENTION_FILE"
+assert_file_not_exists "Review marker deleted after UserPromptSubmit" "$REVIEW_FILE"
 echo ""
 
 # --- TEST 5: Notification(permission_prompt) sets BLOCKED ---
@@ -506,6 +535,17 @@ assert_contains "TMNT Stop title uses visual progress blocks instead of initials
 
 run_hook '{"hook_event_name": "Notification", "notification_type": "idle_prompt", "session_id": "test"}'
 assert_eq "TMNT idle uses Splinter sprite" "tmnt-splinter" "$(cat "$STAGE_FILE" 2>/dev/null)"
+
+: > "$TMNT_LIFECYCLE_TTY"
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Task", "tool_input": {"description": "Run code review before shipping"}, "session_id": "test"}'
+assert_file_exists "TMNT review marker is created" "$REVIEW_FILE"
+assert_eq "TMNT review uses Splinter review sprite" "tmnt-splinter" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_contains "TMNT review title is explicit" "Splinter Review" "$(cat "$TMNT_LIFECYCLE_TTY" 2>/dev/null)"
+
+: > "$TMNT_LIFECYCLE_TTY"
+run_hook '{"hook_event_name": "Stop", "session_id": "test"}'
+assert_eq "TMNT Stop while reviewing does not use pizza sprite" "tmnt-splinter" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_contains "TMNT Stop while reviewing keeps review title" "Splinter Review" "$(cat "$TMNT_LIFECYCLE_TTY" 2>/dev/null)"
 rm -f "$TMNT_LIFECYCLE_TTY"
 echo ""
 
@@ -627,7 +667,7 @@ fi
 if [ "$TMNT_SPRITE_COUNT" -gt 0 ]; then
     assert_file_exists "TMNT sprite pack includes source manifest" "$TMNT_SPRITES_DIR/manifest.json"
     TMNT_THEME_SPRITES=$(jq -r '
-      [.stages[].sprite, .stages[].shade_sprites[]?, .blocked.sprite, .done.sprite, .idle.sprite, .error.sprite, .context_alerts[].sprite?]
+      [.stages[].sprite, .stages[].shade_sprites[]?, .blocked.sprite, .review.sprite, .done.sprite, .idle.sprite, .error.sprite, .context_alerts[].sprite?]
       | unique
       | map(select(. != ""))
       | sort
@@ -963,7 +1003,7 @@ python3 "$ROOT_DIR/scripts/render-theme-contact-sheet.py" \
 assert_file_exists "Visual smoke writes contact sheet" "$TMNT_CONTACT_SHEET"
 assert_file_exists "Visual smoke writes machine-readable report" "$TMNT_CONTACT_REPORT"
 assert_eq "Visual smoke includes every TMNT stage/lifecycle/context state" \
-    "38" \
+    "39" \
     "$(jq -r '.entries | length' "$TMNT_CONTACT_REPORT")"
 assert_eq "Visual smoke has no missing sprite art for sprite-backed states" \
     "" \
@@ -973,6 +1013,9 @@ assert_contains "Visual smoke covers yellow April state" \
     "$(jq -r '[.entries[] | "\(.kind):\(.name):\(.sprite // ""):\(.color | join("-"))"] | join(",")' "$TMNT_CONTACT_REPORT")"
 assert_contains "Visual smoke covers Pizza Party with green completion color" \
     "done:Pizza Party:tmnt-pizza:20-185-85" \
+    "$(jq -r '[.entries[] | "\(.kind):\(.name):\(.sprite // ""):\(.color | join("-"))"] | join(",")' "$TMNT_CONTACT_REPORT")"
+assert_contains "Visual smoke covers Splinter review state" \
+    "review:Splinter Review:tmnt-splinter:130-95-65" \
     "$(jq -r '[.entries[] | "\(.kind):\(.name):\(.sprite // ""):\(.color | join("-"))"] | join(",")' "$TMNT_CONTACT_REPORT")"
 assert_not_contains "Visual smoke does not render Pizza Party as April yellow" \
     "done:Pizza Party:tmnt-pizza:255-205-75" \

@@ -49,7 +49,7 @@ def theme_entries(theme: dict[str, Any]) -> list[dict[str, Any]]:
                 }
             )
 
-    for key in ("blocked", "done", "idle", "error"):
+    for key in ("blocked", "review", "done", "idle", "error"):
         state = theme.get(key)
         if state:
             entries.append(

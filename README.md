@@ -161,7 +161,13 @@ Claude Code and Codex fire lifecycle hooks on prompt, tool use, permission reque
 Hook fires → adapter normalizes event → counter increments → stage advances → iTerm2 updates
 ```
 
-Each iTerm2 session is isolated via `ITERM_SESSION_ID`, so multiple Claude windows don't stomp each other.
+Each iTerm2 session is isolated via `ITERM_SESSION_ID`, so multiple Claude
+windows don't stomp each other.
+
+Review work is a separate lifecycle state from done. If a Codex/Claude code
+review or background verification task is still running, VisualHUD shows the
+theme's `review` state and keeps `done`/Blastoise/Pizza Party reserved for when
+that review task completes.
 
 ## Themes
 
@@ -224,6 +230,7 @@ See [THEMES.md](THEMES.md) for the complete contract and required tests.
     }
   ],
   "blocked": { "sprite": "blocked", "badge": "BLOCK", "name": "Blocked", "color": [80, 75, 95] },
+  "review": { "sprite": "review", "badge": "REV", "name": "Reviewing", "stage": 2, "color": [80, 120, 200] },
   "done": {
     "sprite": "done",
     "badge": "DONE",

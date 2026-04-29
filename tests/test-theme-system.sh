@@ -127,6 +127,7 @@ assert_contains "Theme docs define shade sprite variants" '"shade_sprites"' "$TH
 assert_contains "Theme docs define progress bar as shared visual status strip" "shared visual progress strip" "$THEMES_DOC"
 assert_contains "Theme docs define theme-colored sprite backdrops" "backdrop_color" "$THEMES_DOC"
 assert_contains "Theme docs define lifecycle colors as semantic terminal states" "Lifecycle colors are semantic terminal states" "$THEMES_DOC"
+assert_contains "Theme docs define review as non-done lifecycle state" "review is not done" "$THEMES_DOC"
 assert_contains "Theme docs forbid neutral matte leaks" "neutral corner mattes" "$THEMES_DOC"
 assert_contains "Theme docs include TDD acceptance gates" "TDD" "$THEMES_DOC"
 assert_contains "Theme docs require Claude adapter proof" "bash tests/test-claude-visualhud.sh" "$THEMES_DOC"
@@ -203,7 +204,7 @@ while IFS= read -r theme_file; do
     # shellcheck disable=SC2016
     assert_jq "$theme_name has lifecycle states" "$theme_file" '
       . as $theme
-      | all(["blocked", "done", "idle", "error"][]; . as $state |
+      | all(["blocked", "review", "done", "idle", "error"][]; . as $state |
         ($theme[$state].name | type == "string")
         and ($theme[$state].badge | type == "string")
         and ($theme[$state].sprite | type == "string")
@@ -214,6 +215,7 @@ while IFS= read -r theme_file; do
       [
         .stages[].color[],
         .blocked.color[],
+        .review.color[],
         .done.color[],
         .idle.color[],
         .error.color[],
@@ -283,6 +285,7 @@ cat > "$THIRD_THEME/theme.json" <<'JSON'
     { "max": 999999, "sprite": "gamma", "badge": "G", "name": "Gamma", "color": [70, 80, 90] }
   ],
   "blocked": { "sprite": "blocked", "badge": "BLOCK", "name": "Blocked", "color": [90, 80, 70] },
+  "review": { "sprite": "review", "badge": "REV", "name": "Reviewing", "stage": 2, "color": [80, 120, 200] },
   "done": { "sprite": "done", "badge": "DONE", "name": "Done", "stage": 3, "color": [20, 180, 90] },
   "idle": { "sprite": "idle", "badge": "IDLE", "name": "Idle", "stage": 3, "color": [45, 120, 160] },
   "error": { "sprite": "error", "badge": "ERR", "name": "Error", "color": [255, 20, 20] },
@@ -304,6 +307,7 @@ colors = {
     "beta": (40, 50, 60),
     "gamma": (70, 80, 90),
     "blocked": (90, 80, 70),
+    "review": (80, 120, 200),
     "done": (20, 180, 90),
     "idle": (45, 120, 160),
     "error": (255, 20, 20),
@@ -363,6 +367,11 @@ assert_not_contains "Third theme critical context does not emergency-wash the pa
 run_hook '{"hook_event_name": "Stop", "session_id": "third-theme"}'
 assert_eq "Third theme Stop uses Done sprite" "done" "$(cat "$STAGE_FILE" 2>/dev/null)"
 assert_contains "Third theme Stop title uses Done name" "Done" "$(cat "$TTY_LOG" 2>/dev/null)"
+
+: > "$TTY_LOG"
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Task", "tool_input": {"description": "code review fixture"}, "session_id": "third-theme"}'
+assert_eq "Third theme code review uses Review sprite" "review" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_contains "Third theme review title uses Review name" "Reviewing" "$(cat "$TTY_LOG" 2>/dev/null)"
 echo ""
 
 echo "--- Test 4: Visual smoke can render the third theme contact sheet ---"
@@ -377,7 +386,7 @@ python3 "$ROOT_DIR/scripts/render-theme-contact-sheet.py" \
 assert_file_exists "Third theme visual smoke writes contact sheet" "$CONTACT_SHEET"
 assert_file_exists "Third theme visual smoke writes report" "$CONTACT_REPORT"
 assert_eq "Third theme visual smoke covers stages/lifecycle/context" \
-    "9" \
+    "10" \
     "$(jq -r '.entries | length' "$CONTACT_REPORT")"
 assert_eq "Third theme visual smoke has no missing sprite-backed states" \
     "" \
@@ -387,6 +396,9 @@ assert_contains "Third theme visual smoke covers Beta" \
     "$(jq -r '[.entries[] | "\(.kind):\(.name):\(.sprite // ""):\(.color | join("-"))"] | join(",")' "$CONTACT_REPORT")"
 assert_contains "Third theme visual smoke covers Critical Mass" \
     "context:Critical Mass::255-255-255" \
+    "$(jq -r '[.entries[] | "\(.kind):\(.name):\(.sprite // ""):\(.color | join("-"))"] | join(",")' "$CONTACT_REPORT")"
+assert_contains "Third theme visual smoke covers review lifecycle" \
+    "review:Reviewing:review:80-120-200" \
     "$(jq -r '[.entries[] | "\(.kind):\(.name):\(.sprite // ""):\(.color | join("-"))"] | join(",")' "$CONTACT_REPORT")"
 echo ""
 

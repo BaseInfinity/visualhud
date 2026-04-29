@@ -81,7 +81,11 @@ because the current background-image bridge uses the iTerm2 Python API.
 - `"shade_sprites"` is optional. When present, it must have the same length as `"shades"` and lets a stage swap sprite art per shade while keeping one character family.
 - `progress_bar` is the shared visual progress strip shown in the terminal title. Keep it a compact health/progress-style visual sequence; do not use character initials there. Theme identity belongs in stage badges, names, sprites, colors, and optional `shade_sprites`.
 - Use `"color_family_singleton": true` only for a deliberate one-color stage; do not use it as a shortcut for branded character themes.
-- `blocked`, `done`, `idle`, and `error` are mandatory lifecycle states.
+- `blocked`, `review`, `done`, `idle`, and `error` are mandatory lifecycle states.
+- review is not done: use it for code review/background verification that is
+  still running after the main answer appears complete. It must have its own
+  non-final title/color/sprite so `done` remains reserved for work that is
+  actually ready for the user's next action.
 - Lifecycle colors are semantic terminal states. They may reuse lifecycle sprite
   identity, but their terminal color should communicate state clearly and avoid
   accidental overlap with an unrelated progress band. For example, TMNT can use

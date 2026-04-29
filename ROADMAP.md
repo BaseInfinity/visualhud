@@ -52,6 +52,7 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 
 ## HUD Features
 - [x] **Codex TMNT identity skin** — Codex hook adapter routes events into the theme engine with TMNT selected: TMNT roster while working, Shredder when blocked, Pizza Party when done, and Splinter on session idle
+- [x] **Code review lifecycle state** — review/background verification no longer false-advertises done while a review task is still active
 - [x] **Compact iTerm badge payloads** — keep badge text short so configured bottom-right badges do not dominate the terminal
 - [ ] **Visual regression proof** — scripted/manual screenshot checklist for badge size, color contrast, title text, and background behavior
 - [ ] **TDLC: Terminal Development Life Cycle** — if terminal UI testing keeps exceeding normal shell/contact-sheet proof, define a dedicated lifecycle for terminal apps: captured pane screenshots, OCR/color sampling, host-terminal fixture runs, and explicit human-visible acceptance gates.

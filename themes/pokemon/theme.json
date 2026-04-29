@@ -18,6 +18,7 @@
     { "max": 999999, "sprite": "gengar", "badge": "👻", "name": "Gengar", "color_family": "ghost", "color": [80, 35, 155], "shades": [[80, 35, 155], [100, 55, 180], [60, 25, 125]] }
   ],
   "blocked": { "sprite": "snorlax", "badge": "😴", "name": "BLOCKED", "color": [40, 40, 50] },
+  "review": { "sprite": "wartortle", "badge": "REV", "name": "Reviewing", "stage": 10, "color": [50, 130, 240] },
   "done": { "sprite": "blastoise", "badge": "💧", "name": "Your turn", "stage": 11, "color": [40, 100, 255] },
   "idle": { "sprite": "blastoise", "badge": "💧", "name": "Your turn", "stage": 11, "color": [40, 100, 255] },
   "error": { "sprite": "", "badge": "⚠️", "name": "Error", "color": [255, 40, 40] },

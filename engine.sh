@@ -39,6 +39,7 @@ COUNTER_FILE="/private/tmp/claude-cooking-counter_${SESSION_KEY}"
 STAGE_FILE="/private/tmp/claude-cooking-stage_${SESSION_KEY}"
 ATTENTION_FILE="/private/tmp/claude-cooking-attention_${SESSION_KEY}"
 CONTEXT_FILE="/private/tmp/claude-cooking-context_${SESSION_KEY}"
+REVIEW_FILE="/private/tmp/claude-cooking-review_${SESSION_KEY}"
 SPRITES_DIR="${VISUALHUD_SPRITES_DIR:-$SCRIPT_DIR/sprites}"
 SET_BG="${VISUALHUD_SET_BG:-$SCRIPT_DIR/set_bg.py}"
 TTY_TARGET="${VISUALHUD_TTY:-/dev/tty}"
@@ -123,6 +124,35 @@ theme_state_json() {
             jq -c --arg state "$state" '.[$state]' "$THEME_FILE"
             ;;
     esac
+}
+
+is_review_payload() {
+    local json="$1"
+    printf '%s' "$json" | jq -e '
+      def text_values:
+        [
+          .tool_name?,
+          .tool_input.command?,
+          .tool_input.description?,
+          .tool_input.prompt?,
+          .tool_input.task?,
+          .description?,
+          .prompt?,
+          .message?,
+          .last_assistant_message?,
+          .task?,
+          .title?
+        ]
+        | map(select(type == "string"))
+        | join(" ");
+
+      (text_values) as $text
+      | (
+          ($text | test("(?i)(code[- ]?review|coder[- ]?review|/code-review|reviewing[ +]+shipping|review[ +]+ship|codex review|claude review|cross-model review|pull request review|pr review|review deliverables|review round|ship review|reviewer|review v[0-9])"))
+          or ((((.tool_name? // "") | ascii_downcase) == "task") and ($text | test("(?i)review")))
+          or ((((.tool_name? // "") | ascii_downcase) == "bash") and ($text | test("(?i)((codex|claude)[^\n]{0,240}review|review[^\n]{0,240}(codex|claude))")))
+        )
+    ' >/dev/null 2>&1
 }
 
 sprite_path_for() {
@@ -357,7 +387,7 @@ CONTEXT_ALERT_JSON=$(context_alert_json "$CONTEXT_PERCENT")
 
 case "$EVENT" in
     UserPromptSubmit)
-        rm -f "$COUNTER_FILE" "$ATTENTION_FILE" 2>/dev/null
+        rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$REVIEW_FILE" 2>/dev/null
         exit 0
         ;;
     Notification)
@@ -367,25 +397,45 @@ case "$EVENT" in
             set_named_state "blocked"
         elif [ "$NOTIF_TYPE" = "idle_prompt" ]; then
             rm -f "$COUNTER_FILE" "$ATTENTION_FILE" 2>/dev/null
-            set_named_state "idle"
+            if [ -f "$REVIEW_FILE" ]; then
+                set_named_state "review"
+            else
+                set_named_state "idle"
+            fi
         fi
         exit 0
         ;;
     StopFailure)
         printf 'error' > "$ATTENTION_FILE" 2>/dev/null
+        rm -f "$REVIEW_FILE" 2>/dev/null
         set_named_state "error"
         exit 0
         ;;
     TaskCompleted)
+        if [ -f "$REVIEW_FILE" ] || is_review_payload "$INPUT"; then
+            rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$REVIEW_FILE" 2>/dev/null
+            set_named_state "done"
+        fi
         exit 0
         ;;
     Stop)
         rm -f "$COUNTER_FILE" "$ATTENTION_FILE" 2>/dev/null
-        set_named_state "done"
+        if [ -f "$REVIEW_FILE" ] || is_review_payload "$INPUT"; then
+            printf 'review' > "$REVIEW_FILE" 2>/dev/null
+            set_named_state "review"
+        else
+            rm -f "$REVIEW_FILE" 2>/dev/null
+            set_named_state "done"
+        fi
         exit 0
         ;;
     PreToolUse|*)
         rm -f "$ATTENTION_FILE" 2>/dev/null
+        if is_review_payload "$INPUT"; then
+            printf 'review' > "$REVIEW_FILE" 2>/dev/null
+            set_named_state "review"
+            exit 0
+        fi
         ;;
 esac
 

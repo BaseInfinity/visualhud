@@ -72,6 +72,7 @@
 - Tool call counter: `/private/tmp/claude-cooking-counter_${SESSION_KEY}`
 - Current stage/sprite marker: `/private/tmp/claude-cooking-stage_${SESSION_KEY}`
 - Context/token alert marker: `/private/tmp/claude-cooking-context_${SESSION_KEY}`
+- Active code-review/background-verification marker: `/private/tmp/claude-cooking-review_${SESSION_KEY}`
 
 ## 11-Stage Progression (Logarithmic)
 
@@ -96,6 +97,7 @@ The default Pokemon theme preserves the original progression:
 | State | Trigger | Sprite | Visual |
 |-------|---------|--------|--------|
 | BLOCKED | `permission_prompt` notification | Snorlax | Dark/muted colors |
+| REVIEW | Code-review/background-verification task starts | Wartortle | Non-final review state |
 | ERROR | `StopFailure` event | Warning | Red warning |
 | DONE | `Stop` or `idle_prompt` | Blastoise | Blue done state |
 
@@ -106,7 +108,7 @@ The Codex TMNT theme uses the same stage thresholds with a wider character/color
 spectrum: Leonardo blue, Michelangelo orange, Donatello purple, Raphael red,
 April yellow, Metalhead gray, Mutagen green, Splinter brown, Krang pink, Foot
 Clan steel-purple, and Turtle Power green. BLOCKED maps to Shredder, DONE maps
-to Pizza Party, and idle maps to Splinter.
+to Pizza Party, REVIEW maps to Splinter Review, and idle maps to Splinter.
 
 ## Context Alerts
 

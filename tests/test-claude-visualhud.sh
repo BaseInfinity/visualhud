@@ -107,12 +107,19 @@ assert_eq "Claude adapter keeps Pokemon as default while explicit override is ac
 unset VISUALHUD_THEME
 echo ""
 
-echo "--- Test 3: Claude project settings register VisualHUD without removing SDLC hooks ---"
+echo "--- Test 3: Claude adapter forwards review completion events ---"
+run_adapter '{"hook_event_name":"TaskCompleted","session_id":"claude-session","task":"code review finished"}' >"$OUT_FILE"
+assert_eq "Claude TaskCompleted is forwarded" "TaskCompleted" "$(last_event_field '.hook_event_name')"
+assert_eq "Claude TaskCompleted keeps Pokemon default theme" "pokemon" "$(last_event_field '.visualhud_default_theme')"
+echo ""
+
+echo "--- Test 4: Claude project settings register VisualHUD without removing SDLC hooks ---"
 assert_eq "PreToolUse VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.PreToolUse[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$SETTINGS_JSON")"
 assert_eq "Notification VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.Notification[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$SETTINGS_JSON")"
 assert_eq "UserPromptSubmit VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.UserPromptSubmit[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$SETTINGS_JSON")"
 assert_eq "Stop VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.Stop[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$SETTINGS_JSON")"
 assert_eq "StopFailure VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.StopFailure[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$SETTINGS_JSON")"
+assert_eq "TaskCompleted VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.TaskCompleted[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$SETTINGS_JSON")"
 assert_eq "Existing SDLC prompt hook preserved" "true" "$(jq -r 'any(.hooks.UserPromptSubmit[]?.hooks[]?; .command | contains("sdlc-prompt-check.sh"))' "$SETTINGS_JSON")"
 assert_eq "Existing TDD pretool hook preserved" "true" "$(jq -r 'any(.hooks.PreToolUse[]?.hooks[]?; .command | contains("tdd-pretool-check.sh"))' "$SETTINGS_JSON")"
 echo ""

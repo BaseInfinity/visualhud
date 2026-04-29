@@ -47,7 +47,7 @@ echo "--- Test 1: Calibration JSON covers every reviewable TMNT state ---"
 CALIBRATION_JSON="$TMP_ROOT/tmnt-calibration.json"
 "$CLI" theme calibrate tmnt --json > "$CALIBRATION_JSON"
 assert_eq "TMNT calibration includes stage/shade/lifecycle/context entries" \
-    "38" \
+    "39" \
     "$(jq -r '.entries | length' "$CALIBRATION_JSON")"
 assert_eq "First calibration entry is Leonardo with progress bar" \
     "1:🟥:Leonardo:tmnt-leonardo:25-105-255" \
@@ -58,6 +58,9 @@ assert_contains "Calibration includes April yellow shade correction point" \
 assert_contains "Calibration includes green Pizza Party done state" \
     "done:Pizza Party:tmnt-pizza:20-185-85" \
     "$(jq -r '[.entries[] | "\(.kind):\(.name):\(.sprite):\(.color | join("-"))"] | join(",")' "$CALIBRATION_JSON")"
+assert_contains "Calibration includes Splinter review state" \
+    "review:Splinter Review:tmnt-splinter:130-95-65" \
+    "$(jq -r '[.entries[] | "\(.kind):\(.name):\(.sprite):\(.color | join("-"))"] | join(",")' "$CALIBRATION_JSON")"
 assert_contains "Calibration includes Casey context review state" \
     "context:Casey Jones:tmnt-casey-jones:245-245-245" \
     "$(jq -r '[.entries[] | "\(.kind):\(.name):\(.sprite):\(.color | join("-"))"] | join(",")' "$CALIBRATION_JSON")"
@@ -65,7 +68,7 @@ echo ""
 
 echo "--- Test 2: Calibration text is human-reviewable ---"
 CALIBRATION_TEXT=$("$CLI" theme calibrate tmnt)
-assert_contains "Calibration text starts with step count" "[01/38]" "$CALIBRATION_TEXT"
+assert_contains "Calibration text starts with step count" "[01/39]" "$CALIBRATION_TEXT"
 assert_contains "Calibration text shows progress bar" "progress=🟥" "$CALIBRATION_TEXT"
 assert_contains "Calibration text shows Pizza Party done state" "PIZZA Pizza Party" "$CALIBRATION_TEXT"
 assert_contains "Calibration text shows context overlay caveat" "context overlay" "$CALIBRATION_TEXT"
@@ -92,8 +95,8 @@ for _ in 1 2 3 4 5; do
     [ -f "$VISUALHUD_TTY" ] && break
     sleep 0.1
 done
-assert_contains "Live calibration prints first step" "[01/38]" "$LIVE_OUTPUT"
-assert_contains "Live calibration prints second step" "[02/38]" "$LIVE_OUTPUT"
+assert_contains "Live calibration prints first step" "[01/39]" "$LIVE_OUTPUT"
+assert_contains "Live calibration prints second step" "[02/39]" "$LIVE_OUTPUT"
 assert_contains "Live calibration emits Leonardo tab color" "SetColors=tab=1969ff" "$(cat "$VISUALHUD_TTY" 2>/dev/null)"
 assert_contains "Live calibration reaches Leonardo shade 2" "Leonardo" "$(cat "$VISUALHUD_TTY" 2>/dev/null)"
 echo ""

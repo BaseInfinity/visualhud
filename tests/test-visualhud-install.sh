@@ -95,6 +95,7 @@ assert_eq "PreToolUse hook registered" "true" "$(jq -r 'any(.hooks.PreToolUse[]?
 assert_eq "PermissionRequest hook registered" "true" "$(jq -r 'any(.hooks.PermissionRequest[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
 assert_eq "UserPromptSubmit hook registered" "true" "$(jq -r 'any(.hooks.UserPromptSubmit[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
 assert_eq "Stop hook registered" "true" "$(jq -r 'any(.hooks.Stop[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
+assert_eq "TaskCompleted hook registered" "true" "$(jq -r 'any(.hooks.TaskCompleted[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
 assert_eq "SessionStart hook registered" "true" "$(jq -r 'any(.hooks.SessionStart[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
 echo ""
 
@@ -122,6 +123,7 @@ JSON
 "$CLI" install codex --target "$target" --platform macos --theme pokemon >/dev/null
 assert_eq "Existing hook is preserved" "true" "$(jq -r 'any(.hooks.PreToolUse[]?.hooks[]?; .command == "bash .codex/hooks/existing.sh")' "$target/.codex/hooks.json")"
 assert_eq "VisualHUD hook is not duplicated" "1" "$(jq -r '[.hooks.PreToolUse[]?.hooks[]? | select(.command | contains("visualhud-codex.sh"))] | length' "$target/.codex/hooks.json")"
+assert_eq "TaskCompleted hook is not duplicated" "1" "$(jq -r '[.hooks.TaskCompleted[]?.hooks[]? | select(.command | contains("visualhud-codex.sh"))] | length' "$target/.codex/hooks.json")"
 assert_eq "Reinstall can switch active theme" "pokemon" "$(cat "$target/.visualhud/theme")"
 echo ""
 

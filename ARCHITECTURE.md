@@ -5,7 +5,7 @@
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ Claude Code / Codex                                      │
-│  ├── Hook Events (PreToolUse, Stop, UserPromptSubmit)   │
+│  ├── Hook Events (PreToolUse, Stop, TaskCompleted, etc.)│
 │  ├── Permission events                                   │
 │  └── settings.json / .codex/hooks.json                   │
 └──────────────┬──────────────────────────────────────────┘
@@ -101,8 +101,10 @@ The default Pokemon theme preserves the original progression:
 | ERROR | `StopFailure` event | Warning | Red warning |
 | DONE | `Stop` or `idle_prompt` | Blastoise | Blue done state |
 
-Codex maps `PermissionRequest` to the `permission_prompt` notification and maps
-`SessionStart` to the done state so a new Codex session starts idle.
+Codex maps `PermissionRequest` to the `permission_prompt` notification, maps
+`SessionStart` to the done state so a new Codex session starts idle, and
+forwards `TaskCompleted` so review/background-verification work can leave the
+non-final review state only when the task actually completes.
 
 The Codex TMNT theme uses the same stage thresholds with a wider character/color
 spectrum: Leonardo blue, Michelangelo orange, Donatello purple, Raphael red,

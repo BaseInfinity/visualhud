@@ -176,6 +176,7 @@ install_codex_hooks_json() {
       | add_matcher("PermissionRequest")
       | add_plain("UserPromptSubmit")
       | add_plain("Stop")
+      | add_plain("TaskCompleted")
       | add_matcher("SessionStart")
     ' "$hooks_json" > "$tmp"
     mv "$tmp" "$hooks_json"

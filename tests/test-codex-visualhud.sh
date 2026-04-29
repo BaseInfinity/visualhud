@@ -97,18 +97,25 @@ assert_eq "Stop preserves last assistant message" "done" "$(last_event_field '.l
 assert_eq "Stop keeps Codex default theme" "tmnt" "$(last_event_field '.visualhud_default_theme')"
 echo ""
 
-echo "--- Test 5: SessionStart initializes idle state ---"
+echo "--- Test 5: TaskCompleted forwards review completion ---"
+run_adapter '{"hook_event_name":"TaskCompleted","session_id":"codex-session","task":"code review finished"}' >"$OUT_FILE"
+assert_eq "TaskCompleted event is forwarded" "TaskCompleted" "$(last_event_field '.hook_event_name')"
+assert_eq "TaskCompleted keeps Codex default theme" "tmnt" "$(last_event_field '.visualhud_default_theme')"
+echo ""
+
+echo "--- Test 6: SessionStart initializes idle state ---"
 run_adapter '{"hook_event_name":"SessionStart","session_id":"codex-session","source":"startup"}' >"$OUT_FILE"
 assert_eq "SessionStart maps to done state" "Stop" "$(last_event_field '.hook_event_name')"
 assert_eq "SessionStart source is preserved" "startup" "$(last_event_field '.start_source')"
 assert_eq "SessionStart keeps Codex default theme" "tmnt" "$(last_event_field '.visualhud_default_theme')"
 echo ""
 
-echo "--- Test 6: Codex hooks register VisualHUD lifecycle events ---"
+echo "--- Test 7: Codex hooks register VisualHUD lifecycle events ---"
 assert_eq "PreToolUse VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.PreToolUse[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$HOOKS_JSON")"
 assert_eq "PermissionRequest VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.PermissionRequest[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$HOOKS_JSON")"
 assert_eq "UserPromptSubmit VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.UserPromptSubmit[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$HOOKS_JSON")"
 assert_eq "Stop VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.Stop[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$HOOKS_JSON")"
+assert_eq "TaskCompleted VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.TaskCompleted[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$HOOKS_JSON")"
 assert_eq "SessionStart VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.SessionStart[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$HOOKS_JSON")"
 echo ""
 

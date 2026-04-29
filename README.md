@@ -289,7 +289,7 @@ VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
 - Background, selection, cursor, and muted UI surface colors update through `OSC 1337;SetColors`.
 - Window/tab title, badge text, and `hudProgress`/`hudContext` user vars update from hook lifecycle state.
 - Background images update through the iTerm2 Python API (`LocalWriteOnlyProfile`) for the active terminal session.
-- `PreToolUse`, `UserPromptSubmit`, `Notification`, `PermissionRequest`, `Stop`, `StopFailure`, and `SessionStart` are mapped into the engine by repo-local adapters.
+- `PreToolUse`, `UserPromptSubmit`, `Notification`, `PermissionRequest`, `Stop`, `StopFailure`, `TaskCompleted`, and `SessionStart` are mapped into the engine by repo-local adapters.
 - Theme stages use `color_family` plus `shades`, so a character can keep the same sprite while the terminal chrome advances through multiple color steps.
 - Pokemon and TMNT both ship source-backed sprite packs and theme JSON.
 - Context/token pressure is an ambient overlay: warning and critical label the state while preserving the active stage color/sprite.

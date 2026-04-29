@@ -18,7 +18,7 @@ export VISUALHUD_DEFAULT_THEME="${VISUALHUD_DEFAULT_THEME:-tmnt}"
 export VISUALHUD_REAPPLY_DELAY="${VISUALHUD_REAPPLY_DELAY:-0.12}"
 
 case "$EVENT" in
-  PreToolUse|UserPromptSubmit|Stop)
+  PreToolUse|UserPromptSubmit|Stop|TaskCompleted)
     PAYLOAD="$INPUT"
     ;;
   SessionStart)

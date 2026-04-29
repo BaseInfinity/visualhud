@@ -14,6 +14,7 @@
 | Specific test | `bash tests/<test_name>.sh` |
 | Codex adapter test | `bash tests/test-codex-visualhud.sh` |
 | Codex Bash guard test | `bash tests/test-codex-bash-guard.sh` |
+| Target install test | `bash tests/test-visualhud-install.sh` |
 | Theme calibration test | `bash tests/test-theme-calibration.sh` |
 | Lint | `shellcheck *.sh` |
 

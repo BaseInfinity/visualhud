@@ -50,7 +50,44 @@ explicit one-process override:
 VISUALHUD_THEME=pokemon codex
 ```
 
-### 3. Use With Claude Code
+### 3. Install Into Another Codex Repo On macOS
+
+From this VisualHUD repo, install a repo-local copy into any other Git worktree:
+
+```bash
+./visualhud install codex --target /path/to/other-repo --theme tmnt
+```
+
+The installer writes a hidden runtime under the target repo:
+
+```text
+/path/to/other-repo/
+  .codex/hooks.json
+  .codex/hooks/visualhud-codex.sh
+  .visualhud/
+    engine.sh
+    set_bg.py
+    visualhud
+    themes/
+```
+
+Existing Codex hooks are preserved; the VisualHUD hook is appended once and
+reinstalling is idempotent. Restart Codex in the target repo after first install.
+
+Switch themes inside the installed repo with the copied runtime CLI:
+
+```bash
+cd /path/to/other-repo
+./.visualhud/visualhud theme list
+./.visualhud/visualhud theme set pokemon
+./.visualhud/visualhud theme set tmnt
+```
+
+Pokemon and TMNT are bundled first-party themes in the installed runtime. Sonic
+is parked as a future first-party theme candidate after the installer and
+Windows renderer tracks are stable.
+
+### 4. Use With Claude Code
 
 Claude Code is wired separately through:
 
@@ -74,12 +111,13 @@ The next hook picks up the selected theme. To override only one Claude process:
 VISUALHUD_THEME=tmnt claude
 ```
 
-### 4. Verify
+### 5. Verify
 
 Run the contract tests before calling an install or theme change done:
 
 ```bash
 bash tests/test-visualhud-cli.sh
+bash tests/test-visualhud-install.sh
 bash tests/test-theme-system.sh
 bash tests/test-theme-calibration.sh
 bash tests/test-codex-visualhud.sh
@@ -109,9 +147,11 @@ specific step numbers:
 
 ### Windows Status
 
-Windows Terminal and PowerShell are not supported yet. The theme JSON contract is
-portable, but the current background-image renderer uses the iTerm2 Python API,
-so Windows needs a separate terminal renderer instead of reusing `set_bg.py`.
+Windows Terminal/PowerShell renderer is not supported yet. The theme JSON
+contract is portable, but the current background-image renderer uses the iTerm2
+Python API, so Windows needs a separate terminal renderer instead of reusing
+`set_bg.py`. The Codex installer fails explicitly on `--platform windows` until
+that renderer exists.
 
 ## How It Works
 

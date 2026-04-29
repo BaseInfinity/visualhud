@@ -14,6 +14,7 @@ Batman, Power Rangers, or any other skin.
 - [ ] Replace any remaining weak one-off art crops found during the live visual pass with better source-backed crops.
 - [ ] **Batman** (parked) — next branded theme candidate after TMNT hardening is visually accepted.
 - [ ] **Power Rangers** (parked) — future color-team theme candidate after TMNT hardening and third-theme scaffolding are stable.
+- [ ] **Sonic** (parked) — future speed/progress theme candidate after TMNT hardening, installer, and Windows renderer tracks are stable.
 - [ ] Windows Terminal/PowerShell stays a separate renderer track; do not mix that portability work into TMNT theme quality.
 
 ## Theme Engine
@@ -29,16 +30,17 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 - [x] Add source-backed TMNT turtle sprite importer for four-panel character-select references
 - [x] Add actual source-backed TMNT sprite PNG assets under `themes/tmnt/sprites/` with `manifest.json` provenance
 - [x] Extend TMNT source imports beyond the four turtles: April, Metalhead, Mutagen, Splinter, Krang, Foot Clan, Turtle Power, Shredder, Pizza
-- [ ] `install.sh` to symlink active theme into hooks
+- [x] Codex macOS repo install — `visualhud install codex --target <repo>` copies a local runtime and preserves existing hooks
 
 ## Themes
-- [x] **Pokemon** — port hardcoded impl to theme format
-- [x] **TMNT** — character-select spectrum: Leonardo blue, Michelangelo orange, Donatello purple, Raphael red, April yellow, Metalhead gray, Mutagen green, Splinter brown, Krang pink, Foot Clan steel-purple, Turtle Power green
+- [x] **Pokemon** — shipped first-party theme and Claude default
+- [x] **TMNT** — shipped first-party theme and Codex default: Leonardo blue, Michelangelo orange, Donatello purple, Raphael red, April yellow, Metalhead gray, Mutagen green, Splinter brown, Krang pink, Foot Clan steel-purple, Turtle Power green
 - [ ] **Otter Pop** — 6 popsicle flavors by color (Strawberry Short Kook, Sir Isaac Lime, Alexander the Grape, Little Orphan Orange, Louie-Bloo Raspberry, Poncho Punch)
 - [x] **TMNT sprite pack** — actual background PNGs for all TMNT stage/lifecycle sprite names
 - [ ] **MISSINGNO error sprite** — glitch Pokemon for ERROR/StopFailure state
 - [ ] **Batman** (parked) — do after TMNT hardening, not before
 - [ ] **Power Rangers** (parked) — color-team theme candidate after TMNT hardening and theme authoring docs are stable
+- [ ] **Sonic** (parked) — speed/progress theme candidate after the bundled-theme install path is boring and repeatable
 
 ## Theme System Features
 - [ ] **TMNT roster packs** — support selectable packs inside one theme, e.g. `heroes`, `villains`, or `arcade` under `tmnt` instead of separate `tmnt-heroes`/`tmnt-villains` themes
@@ -63,7 +65,8 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 
 ## Distribution
 - [ ] **One-command install** — `npx visualhud` sets up hooks, sprites, iTerm2 config
-- [ ] **CLI tool** — theme switching exists; `visualhud install/doctor/preview` still pending
+- [x] **CLI install for Codex on macOS** — repo-local runtime copy, hook merge, theme selection
+- [ ] **CLI tool** — theme switching/install exists; `visualhud doctor/preview` still pending
 - [ ] **Codex on Windows install path** — document supported install targets and build a Windows adapter instead of reusing the iTerm2-only background API
 - [ ] Auto-configure Claude Code hooks in `settings.json`
 

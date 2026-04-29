@@ -11,6 +11,7 @@ DEFAULT_THEME="${VISUALHUD_DEFAULT_THEME:-pokemon}"
 usage() {
     cat <<'EOF'
 Usage:
+  visualhud install codex --target <repo> [--theme <name>] [--platform macos]
   visualhud theme list
   visualhud theme current
   visualhud theme set <name>
@@ -77,6 +78,179 @@ set_theme() {
 reset_theme() {
     rm -f "$ACTIVE_THEME_FILE"
     printf 'Active theme reset to default: %s\n' "$DEFAULT_THEME"
+}
+
+detect_platform() {
+    local system
+    system=$(uname -s 2>/dev/null || printf unknown)
+    case "$system" in
+        Darwin)
+            printf 'macos\n'
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            printf 'windows\n'
+            ;;
+        *)
+            printf '%s\n' "$system" | tr '[:upper:]' '[:lower:]'
+            ;;
+    esac
+}
+
+target_repo_root() {
+    local target="$1"
+    if [ ! -d "$target" ]; then
+        printf 'Target directory does not exist: %s\n' "$target" >&2
+        return 1
+    fi
+    git -C "$target" rev-parse --show-toplevel 2>/dev/null || {
+        printf 'Target is not a Git worktree: %s\n' "$target" >&2
+        return 1
+    }
+}
+
+copy_runtime_dir() {
+    local source="$1" destination="$2"
+    rm -rf "$destination"
+    mkdir -p "$(dirname "$destination")"
+    cp -R "$source" "$destination"
+}
+
+copy_codex_runtime() {
+    local target_root="$1"
+    local runtime_dir="$target_root/.visualhud"
+
+    mkdir -p "$runtime_dir/.codex/hooks" "$target_root/.codex/hooks"
+    cp "$ROOT_DIR/engine.sh" "$runtime_dir/engine.sh"
+    cp "$ROOT_DIR/set_bg.py" "$runtime_dir/set_bg.py"
+    cp "$ROOT_DIR/visualhud" "$runtime_dir/visualhud"
+    cp "$ROOT_DIR/.codex/hooks/visualhud-codex.sh" "$runtime_dir/.codex/hooks/visualhud-codex.sh"
+    copy_runtime_dir "$ROOT_DIR/themes" "$runtime_dir/themes"
+    copy_runtime_dir "$ROOT_DIR/scripts" "$runtime_dir/scripts"
+    chmod +x "$runtime_dir/visualhud" "$runtime_dir/.codex/hooks/visualhud-codex.sh"
+}
+
+write_codex_hook_wrapper() {
+    local target_root="$1"
+    local wrapper="$target_root/.codex/hooks/visualhud-codex.sh"
+    cat > "$wrapper" <<'EOF'
+#!/bin/bash
+# VisualHUD installed Codex hook wrapper.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+VISUALHUD_ROOT="$REPO_ROOT/.visualhud"
+
+export VISUALHUD_ENGINE="$VISUALHUD_ROOT/engine.sh"
+export VISUALHUD_THEMES_DIR="$VISUALHUD_ROOT/themes"
+export VISUALHUD_SET_BG="$VISUALHUD_ROOT/set_bg.py"
+
+exec bash "$VISUALHUD_ROOT/.codex/hooks/visualhud-codex.sh"
+EOF
+    chmod +x "$wrapper"
+}
+
+install_codex_hooks_json() {
+    local target_root="$1"
+    local hooks_json="$target_root/.codex/hooks.json" tmp command
+    command="bash \"\$(git rev-parse --show-toplevel)/.codex/hooks/visualhud-codex.sh\""
+    mkdir -p "$(dirname "$hooks_json")"
+    if [ ! -f "$hooks_json" ]; then
+        printf '{"hooks":{}}\n' > "$hooks_json"
+    fi
+    tmp="${hooks_json}.tmp.$$"
+    jq --arg cmd "$command" '
+      def hook: {"type": "command", "command": $cmd};
+      def has_visualhud($name):
+        any((.hooks[$name] // [])[]?.hooks[]?; (.command // "") | contains("visualhud-codex.sh"));
+      def add_matcher($name):
+        if has_visualhud($name) then .
+        else .hooks[$name] = ((.hooks[$name] // []) + [{"matcher": "*", "hooks": [hook]}])
+        end;
+      def add_plain($name):
+        if has_visualhud($name) then .
+        else .hooks[$name] = ((.hooks[$name] // []) + [{"hooks": [hook]}])
+        end;
+      .hooks = (.hooks // {})
+      | add_matcher("PreToolUse")
+      | add_matcher("PermissionRequest")
+      | add_plain("UserPromptSubmit")
+      | add_plain("Stop")
+      | add_matcher("SessionStart")
+    ' "$hooks_json" > "$tmp"
+    mv "$tmp" "$hooks_json"
+}
+
+install_codex() {
+    local target="" theme="tmnt" platform="" target_root runtime_dir
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --target)
+                target="${2:-}"
+                if [ -z "$target" ]; then
+                    printf 'Missing --target value.\n' >&2
+                    return 2
+                fi
+                shift
+                ;;
+            --theme)
+                theme="${2:-}"
+                if [ -z "$theme" ]; then
+                    printf 'Missing --theme value.\n' >&2
+                    return 2
+                fi
+                shift
+                ;;
+            --platform)
+                platform="${2:-}"
+                if [ -z "$platform" ]; then
+                    printf 'Missing --platform value.\n' >&2
+                    return 2
+                fi
+                shift
+                ;;
+            *)
+                printf 'Unknown install option: %s\n' "$1" >&2
+                usage >&2
+                return 2
+                ;;
+        esac
+        shift
+    done
+
+    target="${target:-.}"
+    platform="${platform:-$(detect_platform)}"
+    case "$platform" in
+        macos|darwin)
+            ;;
+        windows|win32|powershell)
+            printf 'Windows Terminal/PowerShell renderer is not supported yet; install is macOS/iTerm2-only for now.\n' >&2
+            return 1
+            ;;
+        *)
+            printf 'VisualHUD Codex install is macOS/iTerm2-only for now; detected platform: %s\n' "$platform" >&2
+            return 1
+            ;;
+    esac
+
+    if ! theme_exists "$theme"; then
+        printf 'Unknown theme: %s\n' "$theme" >&2
+        printf 'Run visualhud theme list to see available themes.\n' >&2
+        return 1
+    fi
+
+    target_root=$(target_repo_root "$target")
+    runtime_dir="$target_root/.visualhud"
+    copy_codex_runtime "$target_root"
+    printf '%s\n' "$theme" > "$runtime_dir/theme"
+    write_codex_hook_wrapper "$target_root"
+    install_codex_hooks_json "$target_root"
+
+    printf 'Installed VisualHUD Codex hooks in: %s\n' "$target_root"
+    printf 'Active theme: %s\n' "$theme"
+    printf 'Runtime: %s\n' "$runtime_dir"
+    printf 'Restart Codex in the target repo, or wait for the next hook if Codex is already running.\n'
 }
 
 calibration_counter_file() {
@@ -232,6 +406,20 @@ if [ "$#" -lt 1 ]; then
 fi
 
 case "${1:-}" in
+    install)
+        subcommand="${2:-}"
+        case "$subcommand" in
+            codex)
+                shift 2
+                install_codex "$@"
+                ;;
+            *)
+                printf 'Unknown install command: %s\n' "$subcommand" >&2
+                usage >&2
+                exit 2
+                ;;
+        esac
+        ;;
     theme|themes)
         subcommand="${2:-list}"
         case "$subcommand" in

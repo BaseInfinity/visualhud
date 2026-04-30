@@ -211,6 +211,15 @@ while IFS= read -r theme_file; do
         and ($theme[$state].color | type == "array" and length == 3)
       )
     '
+    missing_sprites=$(
+      jq -r '[.stages[].sprite, .stages[].shade_sprites[]?, .blocked.sprite, .done.sprite, .idle.sprite, .review.sprite, .context_alerts[].sprite?] | map(select(. != null and . != "")) | unique | .[]' "$theme_file" \
+        | while IFS= read -r sprite_name; do
+            if [ ! -f "$ROOT_DIR/themes/$theme_name/sprites/$sprite_name.png" ]; then
+                printf '%s\n' "$sprite_name"
+            fi
+        done
+    )
+    assert_eq "$theme_name ships theme-local sprites for every referenced sprite" "" "$missing_sprites"
     assert_jq "$theme_name RGB values stay in terminal-safe range" "$theme_file" '
       [
         .stages[].color[],

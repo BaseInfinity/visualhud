@@ -1,6 +1,6 @@
 {
   "name": "Pokemon Evolution",
-  "progress_bar": ["🟥", "🟥", "🟧", "🟨", "🟨", "🟩", "🟩", "🟩", "🟦", "🟦", "🟦", "🟪", "🟪", "🟪"],
+  "progress_bar": ["🟥", "🟥", "🟧", "🟨", "🟨", "🟩", "🟩", "🟩", "🟦", "🟦", "🟦"],
   "stages": [
     { "max": 2, "sprite": "charmander", "badge": "🔥", "name": "Charmander", "color_family": "fire", "color": [255, 60, 60], "shades": [[255, 60, 60], [255, 80, 55]] },
     { "max": 5, "sprite": "charmeleon", "badge": "🔥", "name": "Charmeleon", "color_family": "fire", "color": [255, 100, 50], "shades": [[255, 90, 50], [255, 100, 50], [255, 115, 45]] },
@@ -12,10 +12,7 @@
     { "max": 180, "sprite": "venusaur", "badge": "🌿", "name": "Venusaur", "color_family": "grass", "color": [60, 170, 80], "shades": [[60, 170, 80], [75, 190, 95], [45, 145, 70]] },
     { "max": 280, "sprite": "squirtle", "badge": "💧", "name": "Squirtle", "color_family": "water", "color": [70, 160, 230], "shades": [[70, 160, 230], [90, 180, 245], [55, 135, 210]] },
     { "max": 400, "sprite": "wartortle", "badge": "💧", "name": "Wartortle", "color_family": "water", "color": [50, 130, 240], "shades": [[50, 130, 240], [65, 150, 255], [35, 105, 220]] },
-    { "max": 520, "sprite": "blastoise", "badge": "💧", "name": "Blastoise", "color_family": "water", "color": [40, 100, 255], "shades": [[40, 100, 255], [60, 125, 255], [25, 80, 225]] },
-    { "max": 700, "sprite": "gastly", "badge": "👻", "name": "Gastly", "color_family": "ghost", "color": [130, 80, 210], "shades": [[130, 80, 210], [150, 100, 230], [110, 60, 190]] },
-    { "max": 900, "sprite": "haunter", "badge": "👻", "name": "Haunter", "color_family": "ghost", "color": [105, 55, 190], "shades": [[105, 55, 190], [125, 75, 210], [85, 40, 165]] },
-    { "max": 999999, "sprite": "gengar", "badge": "👻", "name": "Gengar", "color_family": "ghost", "color": [80, 35, 155], "shades": [[80, 35, 155], [100, 55, 180], [60, 25, 125]] }
+    { "max": 999999, "sprite": "blastoise", "badge": "💧", "name": "Blastoise", "color_family": "water", "color": [40, 100, 255], "shades": [[40, 100, 255], [60, 125, 255], [25, 80, 225]] }
   ],
   "blocked": { "sprite": "snorlax", "badge": "😴", "name": "BLOCKED", "color": [40, 40, 50] },
   "review": { "sprite": "wartortle", "badge": "REV", "name": "Reviewing", "stage": 10, "color": [50, 130, 240] },

@@ -178,29 +178,19 @@ printf '280' > "$COUNTER_FILE"
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
 assert_eq "Stage file is wartortle at count 281" "wartortle" "$(cat "$STAGE_FILE" 2>/dev/null)"
 
-# Fast-forward to count 401 (stage 11: Blastoise, range 401-520)
+# Fast-forward to count 401 (stage 11: Blastoise, overflow)
 printf '400' > "$COUNTER_FILE"
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
 assert_eq "Stage file is blastoise at count 401" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
 
-# Fast-forward to count 521 (stage 12: Gastly, purple begins)
+# Past 520: Blastoise remains the shipped Pokemon overflow until ghost art exists.
 printf '520' > "$COUNTER_FILE"
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
-assert_eq "Stage file is gastly at count 521" "gastly" "$(cat "$STAGE_FILE" 2>/dev/null)"
-
-# Fast-forward to count 701 (stage 13: Haunter)
-printf '700' > "$COUNTER_FILE"
-run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
-assert_eq "Stage file is haunter at count 701" "haunter" "$(cat "$STAGE_FILE" 2>/dev/null)"
-
-# Past 900: Gengar owns the overflow instead of duplicating Wartortle
-printf '500' > "$COUNTER_FILE"
-run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
-assert_eq "Stage file is blastoise at count 501" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Stage file is blastoise at count 521" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
 
 printf '900' > "$COUNTER_FILE"
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
-assert_eq "Stage file is gengar at count 901 (overflow)" "gengar" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Stage file is blastoise at count 901 (overflow)" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
 echo ""
 
 # --- TEST 3: Stop event sets done state and clears counter ---
@@ -391,7 +381,7 @@ eval "$(sed -n '/^progress_bar()/,/^}/p' "$SCRIPT_UNDER_TEST")"
 assert_eq "Progress bar stage 1" "🟥" "$(progress_bar 1)"
 assert_eq "Progress bar stage 6" "🟥🟥🟧🟨🟨🟩" "$(progress_bar 6)"
 assert_eq "Progress bar stage 11 (full)" "🟥🟥🟧🟨🟨🟩🟩🟩🟦🟦🟦" "$(progress_bar 11)"
-assert_eq "Progress bar stage 14 includes ghost purple tail" "🟥🟥🟧🟨🟨🟩🟩🟩🟦🟦🟦🟪🟪🟪" "$(progress_bar 14)"
+assert_eq "Progress bar stage beyond Pokemon sprite pack stays capped" "🟥🟥🟧🟨🟨🟩🟩🟩🟦🟦🟦" "$(progress_bar 14)"
 assert_eq "Progress bar stage 0 (empty)" "" "$(progress_bar 0)"
 
 export THEME_FILE="$ROOT_DIR/themes/tmnt/theme.json"

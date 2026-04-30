@@ -38,6 +38,7 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 - [ ] **Otter Pop** — 6 popsicle flavors by color (Strawberry Short Kook, Sir Isaac Lime, Alexander the Grape, Little Orphan Orange, Louie-Bloo Raspberry, Poncho Punch)
 - [x] **TMNT sprite pack** — actual background PNGs for all TMNT stage/lifecycle sprite names
 - [ ] **MISSINGNO error sprite** — glitch Pokemon for ERROR/StopFailure state
+- [ ] **Pokemon ghost-line extension** — add Gastly/Haunter/Gengar purple overflow only after real theme-local sprites are available; do not ship missing-art references
 - [ ] **Batman** (parked) — do after TMNT hardening, not before
 - [ ] **Power Rangers** (parked) — color-team theme candidate after TMNT hardening and theme authoring docs are stable
 - [ ] **Sonic** (parked) — speed/progress theme candidate after the bundled-theme install path is boring and repeatable

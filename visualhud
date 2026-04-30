@@ -110,9 +110,30 @@ target_repo_root() {
 
 copy_runtime_dir() {
     local source="$1" destination="$2"
+    if [ -d "$source" ] && [ -d "$destination" ]; then
+        local source_real destination_real
+        source_real=$(cd "$source" && pwd -P)
+        destination_real=$(cd "$destination" && pwd -P)
+        if [ "$source_real" = "$destination_real" ]; then
+            return 0
+        fi
+    fi
     rm -rf "$destination"
     mkdir -p "$(dirname "$destination")"
     cp -R "$source" "$destination"
+}
+
+copy_runtime_file() {
+    local source="$1" destination="$2"
+    if [ -f "$source" ] && [ -f "$destination" ]; then
+        local source_dir destination_dir
+        source_dir=$(cd "$(dirname "$source")" && pwd -P)
+        destination_dir=$(cd "$(dirname "$destination")" && pwd -P)
+        if [ "$source_dir/$(basename "$source")" = "$destination_dir/$(basename "$destination")" ]; then
+            return 0
+        fi
+    fi
+    cp "$source" "$destination"
 }
 
 copy_codex_runtime() {
@@ -120,13 +141,33 @@ copy_codex_runtime() {
     local runtime_dir="$target_root/.visualhud"
 
     mkdir -p "$runtime_dir/.codex/hooks" "$target_root/.codex/hooks"
-    cp "$ROOT_DIR/engine.sh" "$runtime_dir/engine.sh"
-    cp "$ROOT_DIR/set_bg.py" "$runtime_dir/set_bg.py"
-    cp "$ROOT_DIR/visualhud" "$runtime_dir/visualhud"
-    cp "$ROOT_DIR/.codex/hooks/visualhud-codex.sh" "$runtime_dir/.codex/hooks/visualhud-codex.sh"
+    copy_runtime_file "$ROOT_DIR/engine.sh" "$runtime_dir/engine.sh"
+    copy_runtime_file "$ROOT_DIR/set_bg.py" "$runtime_dir/set_bg.py"
+    copy_runtime_file "$ROOT_DIR/visualhud" "$runtime_dir/visualhud"
+    copy_runtime_file "$ROOT_DIR/.codex/hooks/visualhud-codex.sh" "$runtime_dir/.codex/hooks/visualhud-codex.sh"
     copy_runtime_dir "$ROOT_DIR/themes" "$runtime_dir/themes"
     copy_runtime_dir "$ROOT_DIR/scripts" "$runtime_dir/scripts"
+    copy_runtime_dir "$ROOT_DIR/skills" "$runtime_dir/skills"
     chmod +x "$runtime_dir/visualhud" "$runtime_dir/.codex/hooks/visualhud-codex.sh"
+}
+
+install_codex_skills() {
+    local target_root="$1"
+    local skills_source="$ROOT_DIR/skills"
+    local skills_target="$target_root/.agents/skills"
+    local skill_dir skill_name
+
+    if [ ! -d "$skills_source" ]; then
+        return 0
+    fi
+
+    mkdir -p "$skills_target"
+    shopt -s nullglob
+    for skill_dir in "$skills_source"/visualhud-*; do
+        skill_name=$(basename "$skill_dir")
+        copy_runtime_dir "$skill_dir" "$skills_target/$skill_name"
+    done
+    shopt -u nullglob
 }
 
 write_codex_hook_wrapper() {
@@ -183,7 +224,7 @@ install_codex_hooks_json() {
 }
 
 install_codex() {
-    local target="" theme="tmnt" platform="" target_root runtime_dir
+    local target="" theme="pokemon" platform="" target_root runtime_dir
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -245,6 +286,7 @@ install_codex() {
     runtime_dir="$target_root/.visualhud"
     copy_codex_runtime "$target_root"
     printf '%s\n' "$theme" > "$runtime_dir/theme"
+    install_codex_skills "$target_root"
     write_codex_hook_wrapper "$target_root"
     install_codex_hooks_json "$target_root"
 

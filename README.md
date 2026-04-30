@@ -55,7 +55,7 @@ VISUALHUD_THEME=pokemon codex
 From this VisualHUD repo, install a repo-local copy into any other Git worktree:
 
 ```bash
-./visualhud install codex --target /path/to/other-repo --theme tmnt
+./visualhud install codex --target /path/to/other-repo
 ```
 
 The installer writes a hidden runtime under the target repo:
@@ -71,8 +71,28 @@ The installer writes a hidden runtime under the target repo:
     themes/
 ```
 
-Existing Codex hooks are preserved; the VisualHUD hook is appended once and
-reinstalling is idempotent. Restart Codex in the target repo after first install.
+Clean Codex installs default to Pokemon. Use `--theme tmnt` if you want TMNT
+instead:
+
+```bash
+./visualhud install codex --target /path/to/other-repo --theme tmnt
+```
+
+Existing Codex hooks and existing `.agents/skills/*` entries are preserved; the
+VisualHUD hook is appended once and reinstalling is idempotent. Restart Codex in
+the target repo after first install.
+
+The installer also adds four repo-local skills for Codex discovery:
+
+```text
+.agents/skills/visualhud-setup
+.agents/skills/visualhud-update
+.agents/skills/visualhud-theme
+.agents/skills/visualhud-feedback
+```
+
+Those skills document setup, runtime refresh, theme switching/calibration, and
+privacy-first feedback capture from inside the consuming repo.
 
 Switch themes inside the installed repo with the copied runtime CLI:
 
@@ -119,6 +139,7 @@ Run the contract tests before calling an install or theme change done:
 bash tests/test-visualhud-cli.sh
 bash tests/test-visualhud-install.sh
 bash tests/test-theme-system.sh
+bash tests/test-visualhud-skills.sh
 bash tests/test-theme-calibration.sh
 bash tests/test-codex-visualhud.sh
 bash tests/test-claude-visualhud.sh
@@ -295,7 +316,7 @@ VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
 - Context/token pressure is an ambient overlay: warning and critical label the state while preserving the active stage color/sprite.
 
 **Current hooks:**
-- `.codex/hooks/visualhud-codex.sh` maps Codex events into `engine.sh` and defaults to TMNT.
+- `.codex/hooks/visualhud-codex.sh` maps Codex events into `engine.sh` and falls back to TMNT when no active theme file exists. Clean installs into other Codex repos write Pokemon as the active theme by default.
 - `.claude/hooks/visualhud-claude.sh` maps Claude Code events into `engine.sh` and defaults to Pokemon.
 - Both adapters set `VISUALHUD_REAPPLY_DELAY=0.12` by default to reapply title/color after TUI repaint.
 

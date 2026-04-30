@@ -15,6 +15,7 @@
 | Codex adapter test | `bash tests/test-codex-visualhud.sh` |
 | Codex Bash guard test | `bash tests/test-codex-bash-guard.sh` |
 | Target install test | `bash tests/test-visualhud-install.sh` |
+| Skill packaging test | `bash tests/test-visualhud-skills.sh` |
 | Theme calibration test | `bash tests/test-theme-calibration.sh` |
 | Lint | `shellcheck *.sh` |
 
@@ -65,6 +66,7 @@ Use real fixture data for mock shapes — never guess what the data looks like.
 tests/
   test-cooking-status.sh    <- Main hook integration tests
   test-codex-visualhud.sh   <- Codex adapter integration tests
+  test-visualhud-skills.sh  <- Packaged skill docs + install discovery tests
   test-theme-calibration.sh <- Ordered theme calibration and mocked live walk
   test-<feature>.sh         <- Per-feature test files
   fixtures/                 <- Shared test data

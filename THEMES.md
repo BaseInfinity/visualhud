@@ -17,10 +17,11 @@ counters or current sprite markers.
 
 Theme selection is repo-local by default. `./visualhud theme set <name>` writes
 the repo-local active theme file, and `./visualhud theme current` reports that
-active override when one exists. Without an active file, adapters may supply
-their own default theme: Codex defaults to TMNT, Claude defaults to Pokemon, and
-the bare CLI falls back to Pokemon. Use `VISUALHUD_THEME=<name>` only when you
-want an explicit one-process override.
+active override when one exists. Clean installs into other Codex repos write
+Pokemon as the active theme by default. Without an active file, adapters may
+supply their own fallback theme: this repo's Codex adapter falls back to TMNT,
+Claude falls back to Pokemon, and the bare CLI falls back to Pokemon. Use
+`VISUALHUD_THEME=<name>` only when you want an explicit one-process override.
 
 Windows Codex support is a separate portability track. The theme JSON contract
 should stay reusable, but Windows Terminal/PowerShell needs a different renderer

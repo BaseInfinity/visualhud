@@ -77,9 +77,9 @@ echo ""
 
 echo "--- Test 1: Codex macOS install creates a repo-local VisualHUD runtime ---"
 target="$(make_repo mac-codex)"
-output="$("$CLI" install codex --target "$target" --platform macos --theme tmnt 2>&1)"
+output="$("$CLI" install codex --target "$target" --platform macos 2>&1)"
 assert_contains "Install reports target" "Installed VisualHUD Codex hooks in:" "$output"
-assert_contains "Install reports active theme" "Active theme: tmnt" "$output"
+assert_contains "Install reports active theme" "Active theme: pokemon" "$output"
 assert_file_exists "Target Codex hook wrapper exists" "$target/.codex/hooks/visualhud-codex.sh"
 assert_executable "Target Codex hook wrapper is executable" "$target/.codex/hooks/visualhud-codex.sh"
 assert_file_exists "Target Codex hooks.json exists" "$target/.codex/hooks.json"
@@ -91,8 +91,14 @@ assert_file_exists "Pokemon Charmander sprite ships in installed runtime" "$targ
 assert_file_exists "Pokemon Blastoise sprite ships in installed runtime" "$target/.visualhud/themes/pokemon/sprites/blastoise.png"
 assert_file_exists "TMNT ships in installed runtime" "$target/.visualhud/themes/tmnt/theme.json"
 assert_file_exists "TMNT sprite pack ships in installed runtime" "$target/.visualhud/themes/tmnt/sprites/tmnt-leonardo.png"
-assert_eq "Installed active theme is TMNT" "tmnt" "$(cat "$target/.visualhud/theme")"
-assert_eq "Installed runtime CLI reads active theme" "tmnt" "$("$target/.visualhud/visualhud" theme current)"
+assert_eq "Installed active theme defaults to Pokemon" "pokemon" "$(cat "$target/.visualhud/theme")"
+assert_eq "Installed runtime CLI reads active theme" "pokemon" "$("$target/.visualhud/visualhud" theme current)"
+assert_file_exists "Setup skill is installed for Codex discovery" "$target/.agents/skills/visualhud-setup/SKILL.md"
+assert_file_exists "Update skill is installed for Codex discovery" "$target/.agents/skills/visualhud-update/SKILL.md"
+assert_file_exists "Theme skill is installed for Codex discovery" "$target/.agents/skills/visualhud-theme/SKILL.md"
+assert_file_exists "Feedback skill is installed for Codex discovery" "$target/.agents/skills/visualhud-feedback/SKILL.md"
+assert_contains "Setup skill points at installed runtime CLI" ".visualhud/visualhud install codex" "$(cat "$target/.agents/skills/visualhud-setup/SKILL.md")"
+assert_contains "Theme skill points at installed runtime CLI" ".visualhud/visualhud theme set" "$(cat "$target/.agents/skills/visualhud-theme/SKILL.md")"
 assert_eq "PreToolUse hook registered" "true" "$(jq -r 'any(.hooks.PreToolUse[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
 assert_eq "PermissionRequest hook registered" "true" "$(jq -r 'any(.hooks.PermissionRequest[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
 assert_eq "UserPromptSubmit hook registered" "true" "$(jq -r 'any(.hooks.UserPromptSubmit[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
@@ -103,7 +109,7 @@ echo ""
 
 echo "--- Test 2: Codex install preserves existing hooks and is idempotent ---"
 target="$(make_repo existing-hooks)"
-mkdir -p "$target/.codex"
+mkdir -p "$target/.codex" "$target/.agents/skills/existing-skill"
 cat > "$target/.codex/hooks.json" <<'JSON'
 {
   "hooks": {
@@ -121,12 +127,18 @@ cat > "$target/.codex/hooks.json" <<'JSON'
   }
 }
 JSON
+printf -- '---\nname: existing-skill\ndescription: keep me\n---\n' > "$target/.agents/skills/existing-skill/SKILL.md"
 "$CLI" install codex --target "$target" --platform macos --theme pokemon >/dev/null
 "$CLI" install codex --target "$target" --platform macos --theme pokemon >/dev/null
 assert_eq "Existing hook is preserved" "true" "$(jq -r 'any(.hooks.PreToolUse[]?.hooks[]?; .command == "bash .codex/hooks/existing.sh")' "$target/.codex/hooks.json")"
 assert_eq "VisualHUD hook is not duplicated" "1" "$(jq -r '[.hooks.PreToolUse[]?.hooks[]? | select(.command | contains("visualhud-codex.sh"))] | length' "$target/.codex/hooks.json")"
 assert_eq "TaskCompleted hook is not duplicated" "1" "$(jq -r '[.hooks.TaskCompleted[]?.hooks[]? | select(.command | contains("visualhud-codex.sh"))] | length' "$target/.codex/hooks.json")"
 assert_eq "Reinstall can switch active theme" "pokemon" "$(cat "$target/.visualhud/theme")"
+assert_file_exists "Existing repo skill is preserved" "$target/.agents/skills/existing-skill/SKILL.md"
+"$target/.visualhud/visualhud" install codex --target "$target" --platform macos --theme tmnt >/dev/null
+assert_file_exists "Installed runtime self-repair keeps Pokemon sprites" "$target/.visualhud/themes/pokemon/sprites/charmander.png"
+assert_file_exists "Installed runtime self-repair keeps VisualHUD skills" "$target/.agents/skills/visualhud-update/SKILL.md"
+assert_eq "Installed runtime self-repair can switch theme" "tmnt" "$(cat "$target/.visualhud/theme")"
 echo ""
 
 echo "--- Test 3: Windows Codex install is explicit until a renderer exists ---"

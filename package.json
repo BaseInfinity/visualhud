@@ -21,7 +21,10 @@
     "ARCHITECTURE.md"
   ],
   "scripts": {
-    "test": "bash tests/test-visualhud-install.sh && bash tests/test-visualhud-skills.sh && bash tests/test-npm-package.sh"
+    "test": "bash tests/run-all.sh",
+    "test:e2e": "bash tests/test-npm-package.sh",
+    "pack:local": "npm pack",
+    "prepublishOnly": "npm test"
   },
   "keywords": [
     "codex",

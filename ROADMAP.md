@@ -66,7 +66,9 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 - [ ] **Sound effects** — optional theme-matched sounds on state changes (Pokemon cries, etc.)
 
 ## Distribution
-- [ ] **One-command install** — `npx visualhud` sets up hooks, sprites, iTerm2 config
+- [x] **One-command Codex repo install** — `npx -y visualhud@latest install codex` installs repo-local hooks, runtime, themes, sprites, and skills
+- [ ] **npm publish** — publish or reserve the `visualhud` package after final metadata/license decision
+- [ ] **iTerm2 setup via CLI** — expose `visualhud setup iterm2` so the npm CLI can configure iTerm2 instead of requiring `./setup-iterm2.sh`
 - [x] **CLI install for Codex on macOS** — repo-local runtime copy, hook merge, theme selection
 - [ ] **CLI tool** — theme switching/install exists; `visualhud doctor/preview` still pending
 - [ ] **Codex on Windows install path** — document supported install targets and build a Windows adapter instead of reusing the iTerm2-only background API

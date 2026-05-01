@@ -11,6 +11,7 @@
 
 | Action | Command |
 |--------|---------|
+| Full suite / publish gate | `npm test` |
 | Specific test | `bash tests/<test_name>.sh` |
 | Codex adapter test | `bash tests/test-codex-visualhud.sh` |
 | Codex Bash guard test | `bash tests/test-codex-bash-guard.sh` |
@@ -65,6 +66,7 @@ Use real fixture data for mock shapes — never guess what the data looks like.
 
 ```
 tests/
+  run-all.sh                 <- Full local/publish verification suite
   test-cooking-status.sh    <- Main hook integration tests
   test-codex-visualhud.sh   <- Codex adapter integration tests
   test-visualhud-skills.sh  <- Packaged skill docs + install discovery tests

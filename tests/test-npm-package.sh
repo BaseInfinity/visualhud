@@ -60,20 +60,27 @@ echo ""
 
 echo "--- Test 1: package metadata exposes the VisualHUD CLI ---"
 README_DOC="$(cat "$ROOT_DIR/README.md")"
+RUN_ALL_DOC="$(cat "$ROOT_DIR/tests/run-all.sh" 2>/dev/null || true)"
 assert_file_exists "package.json exists" "$ROOT_DIR/package.json"
+assert_file_exists "Full suite runner exists" "$ROOT_DIR/tests/run-all.sh"
 if [ -f "$ROOT_DIR/package.json" ]; then
     assert_eq "Package name is visualhud" "visualhud" "$(jq -r '.name' "$ROOT_DIR/package.json")"
     assert_eq "Package bin exposes visualhud" "./visualhud" "$(jq -r '.bin.visualhud' "$ROOT_DIR/package.json")"
     assert_contains "Package files include themes" '"themes"' "$(jq -c '.files' "$ROOT_DIR/package.json")"
     assert_contains "Package files include skills" '"skills"' "$(jq -c '.files' "$ROOT_DIR/package.json")"
+    assert_eq "Package test script runs full suite" "bash tests/run-all.sh" "$(jq -r '.scripts.test' "$ROOT_DIR/package.json")"
+    assert_eq "Package exposes package E2E script" "bash tests/test-npm-package.sh" "$(jq -r '.scripts["test:e2e"]' "$ROOT_DIR/package.json")"
+    assert_eq "Package publish gate runs tests" "npm test" "$(jq -r '.scripts.prepublishOnly' "$ROOT_DIR/package.json")"
 fi
+assert_contains "Full suite runner includes lifecycle suite" "tests/test-cooking-status.sh" "$RUN_ALL_DOC"
 assert_contains "README documents npx consumer install" "npx -y visualhud@latest install codex --target" "$README_DOC"
+assert_contains "README documents one-command cwd install" "npx -y visualhud@latest install codex" "$README_DOC"
 assert_contains "README documents local tarball npx proof" "npx -y --package ./visualhud-" "$README_DOC"
 echo ""
 
 echo "--- Test 2: npm pack includes install runtime assets ---"
 set +e
-pack_output="$(NPM_CONFIG_CACHE="$TMP_ROOT/npm-cache" npm pack --json --pack-destination "$TMP_ROOT" 2>&1)"
+pack_output="$(NPM_CONFIG_CACHE="$TMP_ROOT/npm-cache" npm_config_cache="$TMP_ROOT/npm-cache" npm pack --json --pack-destination "$TMP_ROOT" 2>&1)"
 pack_status=$?
 set -e
 assert_eq "npm pack succeeds" "0" "$pack_status"
@@ -96,7 +103,7 @@ mkdir -p "$target"
 git -C "$target" init -q
 if [ -n "$tarball" ]; then
     set +e
-    npx_output="$(NPM_CONFIG_CACHE="$TMP_ROOT/npm-cache" npx --yes --package "$tarball" visualhud install codex --target "$target" --platform macos 2>&1)"
+    npx_output="$(NPM_CONFIG_CACHE="$TMP_ROOT/npm-cache" npm_config_cache="$TMP_ROOT/npm-cache" npx --yes --package "$tarball" visualhud install codex --target "$target" --platform macos 2>&1)"
     npx_status=$?
     set -e
     assert_eq "npx install succeeds" "0" "$npx_status"
@@ -107,6 +114,24 @@ if [ -n "$tarball" ]; then
     assert_file_exists "npx install writes setup skill" "$target/.agents/skills/visualhud-setup/SKILL.md"
 else
     assert_eq "npx install has tarball input" "present" "missing"
+fi
+echo ""
+
+echo "--- Test 4: npx tarball install defaults target to the current repo ---"
+cwd_target="$TMP_ROOT/consumer-cwd"
+mkdir -p "$cwd_target"
+git -C "$cwd_target" init -q
+if [ -n "$tarball" ]; then
+    set +e
+    cwd_npx_output="$(cd "$cwd_target" && NPM_CONFIG_CACHE="$TMP_ROOT/npm-cache" npm_config_cache="$TMP_ROOT/npm-cache" npx --yes --package "$tarball" visualhud install codex --platform macos 2>&1)"
+    cwd_npx_status=$?
+    set -e
+    assert_eq "npx cwd install succeeds" "0" "$cwd_npx_status"
+    assert_contains "npx cwd install reports target" "Installed VisualHUD Codex hooks in:" "$cwd_npx_output"
+    assert_eq "npx cwd install defaults to Pokemon" "pokemon" "$(cat "$cwd_target/.visualhud/theme" 2>/dev/null || true)"
+    assert_file_exists "npx cwd install writes setup skill" "$cwd_target/.agents/skills/visualhud-setup/SKILL.md"
+else
+    assert_eq "npx cwd install has tarball input" "present" "missing"
 fi
 echo ""
 

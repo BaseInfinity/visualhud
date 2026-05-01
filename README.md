@@ -55,6 +55,13 @@ VISUALHUD_THEME=pokemon codex
 Consumer install, once the npm package is published:
 
 ```bash
+cd /path/to/other-repo
+npx -y visualhud@latest install codex
+```
+
+You can also install into a specific target from anywhere:
+
+```bash
 npx -y visualhud@latest install codex --target /path/to/other-repo
 ```
 
@@ -62,6 +69,13 @@ Pre-publish local package proof from this VisualHUD repo:
 
 ```bash
 npm pack
+cd /path/to/other-repo
+npx -y --package /path/to/visualhud/visualhud-0.1.0.tgz visualhud install codex
+```
+
+Or stay in this repo and pass a target explicitly:
+
+```bash
 npx -y --package ./visualhud-0.1.0.tgz visualhud install codex --target /path/to/other-repo
 ```
 

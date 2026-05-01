@@ -65,7 +65,7 @@ assert_file_exists "package.json exists" "$ROOT_DIR/package.json"
 assert_file_exists "Full suite runner exists" "$ROOT_DIR/tests/run-all.sh"
 if [ -f "$ROOT_DIR/package.json" ]; then
     assert_eq "Package name is visualhud" "visualhud" "$(jq -r '.name' "$ROOT_DIR/package.json")"
-    assert_eq "Package bin exposes visualhud" "./visualhud" "$(jq -r '.bin.visualhud' "$ROOT_DIR/package.json")"
+    assert_eq "Package bin exposes npm-normalized visualhud command" "visualhud" "$(jq -r '.bin.visualhud' "$ROOT_DIR/package.json")"
     assert_contains "Package files include themes" '"themes"' "$(jq -c '.files' "$ROOT_DIR/package.json")"
     assert_contains "Package files include skills" '"skills"' "$(jq -c '.files' "$ROOT_DIR/package.json")"
     assert_eq "Package test script runs full suite" "bash tests/run-all.sh" "$(jq -r '.scripts.test' "$ROOT_DIR/package.json")"
@@ -79,14 +79,18 @@ assert_contains "README documents local tarball npx proof" "npx -y --package ./v
 echo ""
 
 echo "--- Test 2: npm pack includes install runtime assets ---"
+pack_json="$TMP_ROOT/npm-pack.json"
+pack_err="$TMP_ROOT/npm-pack.stderr"
 set +e
-pack_output="$(NPM_CONFIG_CACHE="$TMP_ROOT/npm-cache" npm_config_cache="$TMP_ROOT/npm-cache" npm pack --json --pack-destination "$TMP_ROOT" 2>&1)"
+NPM_CONFIG_CACHE="$TMP_ROOT/npm-cache" npm_config_cache="$TMP_ROOT/npm-cache" \
+    NPM_CONFIG_DRY_RUN=false npm_config_dry_run=false \
+    npm pack --json --pack-destination "$TMP_ROOT" >"$pack_json" 2>"$pack_err"
 pack_status=$?
 set -e
 assert_eq "npm pack succeeds" "0" "$pack_status"
 tarball=""
 if [ "$pack_status" -eq 0 ]; then
-    tarball="$TMP_ROOT/$(printf '%s' "$pack_output" | jq -r '.[0].filename')"
+    tarball="$TMP_ROOT/$(jq -r '.[0].filename' "$pack_json")"
     assert_file_exists "npm pack writes tarball" "$tarball"
     tar_contents="$(tar -tzf "$tarball")"
     assert_contains "Tarball includes CLI" "package/visualhud" "$tar_contents"
@@ -103,7 +107,7 @@ mkdir -p "$target"
 git -C "$target" init -q
 if [ -n "$tarball" ]; then
     set +e
-    npx_output="$(NPM_CONFIG_CACHE="$TMP_ROOT/npm-cache" npm_config_cache="$TMP_ROOT/npm-cache" npx --yes --package "$tarball" visualhud install codex --target "$target" --platform macos 2>&1)"
+    npx_output="$(NPM_CONFIG_CACHE="$TMP_ROOT/npm-cache" npm_config_cache="$TMP_ROOT/npm-cache" NPM_CONFIG_DRY_RUN=false npm_config_dry_run=false npx --yes --package "$tarball" visualhud install codex --target "$target" --platform macos 2>&1)"
     npx_status=$?
     set -e
     assert_eq "npx install succeeds" "0" "$npx_status"
@@ -123,7 +127,7 @@ mkdir -p "$cwd_target"
 git -C "$cwd_target" init -q
 if [ -n "$tarball" ]; then
     set +e
-    cwd_npx_output="$(cd "$cwd_target" && NPM_CONFIG_CACHE="$TMP_ROOT/npm-cache" npm_config_cache="$TMP_ROOT/npm-cache" npx --yes --package "$tarball" visualhud install codex --platform macos 2>&1)"
+    cwd_npx_output="$(cd "$cwd_target" && NPM_CONFIG_CACHE="$TMP_ROOT/npm-cache" npm_config_cache="$TMP_ROOT/npm-cache" NPM_CONFIG_DRY_RUN=false npm_config_dry_run=false npx --yes --package "$tarball" visualhud install codex --platform macos 2>&1)"
     cwd_npx_status=$?
     set -e
     assert_eq "npx cwd install succeeds" "0" "$cwd_npx_status"

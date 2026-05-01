@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Themeable visual status HUD for Codex, Claude Code, and iTerm2.",
   "bin": {
-    "visualhud": "./visualhud"
+    "visualhud": "visualhud"
   },
   "files": [
     "visualhud",

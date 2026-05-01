@@ -52,11 +52,27 @@ VISUALHUD_THEME=pokemon codex
 
 ### 3. Install Into Another Codex Repo On macOS
 
+Consumer install, once the npm package is published:
+
+```bash
+npx -y visualhud@latest install codex --target /path/to/other-repo
+```
+
+Pre-publish local package proof from this VisualHUD repo:
+
+```bash
+npm pack
+npx -y --package ./visualhud-0.1.0.tgz visualhud install codex --target /path/to/other-repo
+```
+
 From this VisualHUD repo, install a repo-local copy into any other Git worktree:
 
 ```bash
 ./visualhud install codex --target /path/to/other-repo
 ```
+
+That source checkout command is for development and local iteration; the `npx`
+path above is the intended consumer install flow.
 
 The installer writes a hidden runtime under the target repo:
 

@@ -16,6 +16,7 @@
 | Codex Bash guard test | `bash tests/test-codex-bash-guard.sh` |
 | Target install test | `bash tests/test-visualhud-install.sh` |
 | Skill packaging test | `bash tests/test-visualhud-skills.sh` |
+| npm/npx package install test | `bash tests/test-npm-package.sh` |
 | Theme calibration test | `bash tests/test-theme-calibration.sh` |
 | Lint | `shellcheck *.sh` |
 
@@ -67,6 +68,7 @@ tests/
   test-cooking-status.sh    <- Main hook integration tests
   test-codex-visualhud.sh   <- Codex adapter integration tests
   test-visualhud-skills.sh  <- Packaged skill docs + install discovery tests
+  test-npm-package.sh       <- npm pack + npx tarball consumer install test
   test-theme-calibration.sh <- Ordered theme calibration and mocked live walk
   test-<feature>.sh         <- Per-feature test files
   fixtures/                 <- Shared test data

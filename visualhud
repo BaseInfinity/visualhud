@@ -3,7 +3,15 @@
 
 set -euo pipefail
 
-ROOT_DIR="${VISUALHUD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+SCRIPT_SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SCRIPT_SOURCE" ]; do
+    SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_SOURCE")" && pwd)"
+    SCRIPT_SOURCE="$(readlink "$SCRIPT_SOURCE")"
+    if [[ "$SCRIPT_SOURCE" != /* ]]; then
+        SCRIPT_SOURCE="$SCRIPT_DIR/$SCRIPT_SOURCE"
+    fi
+done
+ROOT_DIR="${VISUALHUD_ROOT:-$(cd -P "$(dirname "$SCRIPT_SOURCE")" && pwd)}"
 THEMES_DIR="${VISUALHUD_THEMES_DIR:-$ROOT_DIR/themes}"
 ACTIVE_THEME_FILE="${VISUALHUD_THEME_FILE:-$ROOT_DIR/theme}"
 DEFAULT_THEME="${VISUALHUD_DEFAULT_THEME:-pokemon}"

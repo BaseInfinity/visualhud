@@ -1,0 +1,35 @@
+{
+  "name": "visualhud",
+  "version": "0.1.0",
+  "description": "Themeable visual status HUD for Codex, Claude Code, and iTerm2.",
+  "bin": {
+    "visualhud": "./visualhud"
+  },
+  "files": [
+    "visualhud",
+    "engine.sh",
+    "set_bg.py",
+    "setup-iterm2.sh",
+    "scripts",
+    "themes",
+    "skills",
+    ".codex/hooks/visualhud-codex.sh",
+    ".claude/hooks/visualhud-claude.sh",
+    "README.md",
+    "THEMES.md",
+    "TESTING.md",
+    "ARCHITECTURE.md"
+  ],
+  "scripts": {
+    "test": "bash tests/test-visualhud-install.sh && bash tests/test-visualhud-skills.sh && bash tests/test-npm-package.sh"
+  },
+  "keywords": [
+    "codex",
+    "claude-code",
+    "iterm2",
+    "terminal",
+    "theme",
+    "hud"
+  ],
+  "license": "UNLICENSED"
+}

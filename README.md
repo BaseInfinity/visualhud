@@ -101,6 +101,27 @@ The installer writes a hidden runtime under the target repo:
     themes/
 ```
 
+### 4. Release To npm
+
+Release from a clean VisualHUD worktree only:
+
+```bash
+scripts/release-npm.sh --dry-run
+```
+
+That command checks npm auth, runs the full test suite, and runs
+`npm publish --dry-run` without publishing.
+
+Publish only after the dry-run is clean and npm auth is active:
+
+```bash
+scripts/release-npm.sh --publish
+```
+
+The publish path repeats the full test gate, repeats the npm dry-run, publishes,
+then verifies the exact package version on the registry. If `npm whoami` fails,
+run `npm login` in your shell and retry.
+
 Clean Codex installs default to Pokemon. Use `--theme tmnt` if you want TMNT
 instead:
 

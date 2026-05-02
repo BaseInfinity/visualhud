@@ -24,6 +24,8 @@
     "test": "bash tests/run-all.sh",
     "test:e2e": "bash tests/test-npm-package.sh",
     "pack:local": "npm pack",
+    "release:dry-run": "bash scripts/release-npm.sh --dry-run",
+    "release:publish": "bash scripts/release-npm.sh --publish",
     "prepublishOnly": "npm test"
   },
   "keywords": [

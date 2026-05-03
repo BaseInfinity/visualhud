@@ -112,6 +112,9 @@ case "$*" in
     "view visualhud@0.1.0 version")
         printf '0.1.0\n'
         ;;
+    "trust github --file publish.yml --repo BaseInfinity/visualhud --yes")
+        printf 'trusted publisher linked\n'
+        ;;
     *)
         printf 'unexpected npm command: %s\n' "$*" >&2
         exit 64
@@ -194,6 +197,7 @@ assert_contains "README documents dry-run release" "scripts/release-npm.sh --dry
 assert_contains "README documents real publish release" "scripts/release-npm.sh --publish" "$README_DOC"
 assert_contains "README documents one-time npm bootstrap auth" "First publish bootstrap:" "$README_DOC"
 assert_contains "README documents Trusted Publishing follow-up" "Trusted Publishing" "$README_DOC"
+assert_contains "README documents npm trust CLI automation" "npm run release:trust" "$README_DOC"
 assert_contains "Testing docs include release suite" "tests/test-npm-release.sh" "$TESTING_DOC"
 echo ""
 
@@ -210,6 +214,26 @@ if [ -f "$workflow" ]; then
     assert_contains "Workflow publishes package" "npm publish" "$workflow_doc"
     assert_not_contains "Workflow does not require long-lived npm token" "NPM_TOKEN" "$workflow_doc"
 fi
+echo ""
+
+echo "--- Test 7: Trusted Publishing setup is CLI-automated ---"
+if [ -f "$ROOT_DIR/package.json" ]; then
+    assert_eq "Package exposes Trusted Publishing setup script" \
+        "npm trust github --file publish.yml --repo BaseInfinity/visualhud --yes" \
+        "$(jq -r '.scripts["release:trust"]' "$ROOT_DIR/package.json")"
+fi
+write_fake_tools
+trust_command="$(jq -r '.scripts["release:trust"]' "$ROOT_DIR/package.json")"
+set +e
+trust_output="$(cd "$ROOT_DIR" && PATH="$FAKE_BIN:$PATH" VISUALHUD_RELEASE_CALL_LOG="$CALL_LOG" bash -c "$trust_command" 2>&1)"
+trust_status=$?
+set -e
+trust_log="$(cat "$CALL_LOG")"
+assert_eq "Trusted Publishing setup exits cleanly" "0" "$trust_status"
+assert_contains "Trusted Publishing setup uses npm trust github" \
+    "npm|trust github --file publish.yml --repo BaseInfinity/visualhud --yes" \
+    "$trust_log"
+assert_contains "Trusted Publishing setup reports linked publisher" "trusted publisher linked" "$trust_output"
 echo ""
 
 echo "=== Results: $PASS/$TOTAL passed, $FAIL failed ==="

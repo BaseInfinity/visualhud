@@ -137,11 +137,11 @@ First publish bootstrap: npm requires account authentication for the initial
 package publish. If your npm account requires two-factor auth, the first
 `scripts/release-npm.sh --publish` may ask for an OTP or npm web auth.
 
-After the package exists on npm, configure npm Trusted Publishing for:
+After the package exists on npm, configure npm Trusted Publishing from this
+repo with:
 
-```text
-owner/repo: BaseInfinity/visualhud
-workflow: .github/workflows/publish.yml
+```bash
+npm run release:trust
 ```
 
 That workflow publishes on version tags with GitHub OIDC (`id-token: write`) and

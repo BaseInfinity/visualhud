@@ -27,6 +27,7 @@
     "pack:local": "npm pack",
     "release:dry-run": "bash scripts/release-npm.sh --dry-run",
     "release:publish": "bash scripts/release-npm.sh --publish",
+    "release:trust": "npm trust github --file publish.yml --repo BaseInfinity/visualhud --yes",
     "prepublishOnly": "npm test"
   },
   "keywords": [

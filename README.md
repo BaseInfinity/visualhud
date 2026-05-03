@@ -4,6 +4,17 @@ A themeable visual status engine for Claude Code, Codex, and iTerm2.
 
 Watch your terminal transform in real-time as your agent works — colors shift, backgrounds swap, and tab titles update to show exactly where things stand. Ship with themes or build your own.
 
+## Screenshots
+
+Pokemon is the polished default for clean consumer installs:
+
+![Pokemon VisualHUD contact sheet](docs/screenshots/pokemon-contact-sheet.png)
+
+TMNT ships as the Codex-first character theme with expanded color/state
+coverage:
+
+![TMNT VisualHUD contact sheet](docs/screenshots/tmnt-contact-sheet.png)
+
 ## Install
 
 VisualHUD is local-first. This repo carries its own hook config, engine, themes,

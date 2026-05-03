@@ -11,6 +11,7 @@
     "set_bg.py",
     "setup-iterm2.sh",
     "scripts",
+    "docs/screenshots",
     "themes",
     "skills",
     ".codex/hooks/visualhud-codex.sh",

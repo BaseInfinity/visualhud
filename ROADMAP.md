@@ -51,6 +51,7 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 - [x] **Easy theme swapping** — `visualhud theme list/current/set/reset`
 - [ ] **Theme marketplace** — browse, preview, install community themes (`@visualhud/theme-*`)
 - [ ] Per-theme demo scripts with proper sprite art credits
+- [ ] **Animated demo asset** — generate a GIF/video of a realistic Codex or Claude task sped up through the default theme's full color/progress cycle for README/npm/GitHub preview
 
 ## HUD Features
 - [x] **Codex TMNT identity skin** — Codex hook adapter routes events into the theme engine with TMNT selected: TMNT roster while working, Shredder when blocked, Pizza Party when done, and Splinter on session idle

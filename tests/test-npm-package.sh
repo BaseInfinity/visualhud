@@ -70,6 +70,7 @@ if [ -f "$ROOT_DIR/package.json" ]; then
     assert_eq "Package repository points at public GitHub repo" "git+https://github.com/BaseInfinity/visualhud.git" "$(jq -r '.repository.url' "$ROOT_DIR/package.json")"
     assert_eq "Package bin exposes npm-normalized visualhud command" "visualhud" "$(jq -r '.bin.visualhud' "$ROOT_DIR/package.json")"
     assert_contains "Package files include themes" '"themes"' "$(jq -c '.files' "$ROOT_DIR/package.json")"
+    assert_contains "Package files include screenshots" '"docs/screenshots"' "$(jq -c '.files' "$ROOT_DIR/package.json")"
     assert_contains "Package files include skills" '"skills"' "$(jq -c '.files' "$ROOT_DIR/package.json")"
     assert_eq "Package test script runs full suite" "bash tests/run-all.sh" "$(jq -r '.scripts.test' "$ROOT_DIR/package.json")"
     assert_eq "Package exposes package E2E script" "bash tests/test-npm-package.sh" "$(jq -r '.scripts["test:e2e"]' "$ROOT_DIR/package.json")"
@@ -100,6 +101,8 @@ if [ "$pack_status" -eq 0 ]; then
     assert_contains "Tarball includes engine" "package/engine.sh" "$tar_contents"
     assert_contains "Tarball includes Codex adapter" "package/.codex/hooks/visualhud-codex.sh" "$tar_contents"
     assert_contains "Tarball includes Pokemon sprites" "package/themes/pokemon/sprites/charmander.png" "$tar_contents"
+    assert_contains "Tarball includes Pokemon screenshot" "package/docs/screenshots/pokemon-contact-sheet.png" "$tar_contents"
+    assert_contains "Tarball includes TMNT screenshot" "package/docs/screenshots/tmnt-contact-sheet.png" "$tar_contents"
     assert_contains "Tarball includes VisualHUD skills" "package/skills/visualhud-setup/SKILL.md" "$tar_contents"
 fi
 echo ""

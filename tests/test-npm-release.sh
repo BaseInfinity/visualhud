@@ -57,6 +57,16 @@ assert_not_contains() {
     fi
 }
 
+assert_file_exists() {
+    local label="$1" filepath="$2"
+    TOTAL=$((TOTAL + 1))
+    if [ -f "$filepath" ]; then
+        pass "$label"
+    else
+        fail "$label (missing file: $filepath)"
+    fi
+}
+
 write_fake_tools() {
     rm -rf "$FAKE_BIN"
     mkdir -p "$FAKE_BIN"
@@ -182,7 +192,24 @@ README_DOC="$(cat "$ROOT_DIR/README.md")"
 TESTING_DOC="$(cat "$ROOT_DIR/TESTING.md")"
 assert_contains "README documents dry-run release" "scripts/release-npm.sh --dry-run" "$README_DOC"
 assert_contains "README documents real publish release" "scripts/release-npm.sh --publish" "$README_DOC"
+assert_contains "README documents one-time npm bootstrap auth" "First publish bootstrap:" "$README_DOC"
+assert_contains "README documents Trusted Publishing follow-up" "Trusted Publishing" "$README_DOC"
 assert_contains "Testing docs include release suite" "tests/test-npm-release.sh" "$TESTING_DOC"
+echo ""
+
+echo "--- Test 6: GitHub Actions release uses npm Trusted Publishing ---"
+workflow="$ROOT_DIR/.github/workflows/publish.yml"
+assert_file_exists "Trusted publish workflow exists" "$workflow"
+if [ -f "$workflow" ]; then
+    workflow_doc="$(cat "$workflow")"
+    assert_contains "Workflow publishes on version tags" "tags:" "$workflow_doc"
+    assert_contains "Workflow matches v-tags" "- 'v*'" "$workflow_doc"
+    assert_contains "Workflow has OIDC permission" "id-token: write" "$workflow_doc"
+    assert_contains "Workflow uses npm registry" "registry-url: 'https://registry.npmjs.org'" "$workflow_doc"
+    assert_contains "Workflow runs full test gate" "npm test" "$workflow_doc"
+    assert_contains "Workflow publishes package" "npm publish" "$workflow_doc"
+    assert_not_contains "Workflow does not require long-lived npm token" "NPM_TOKEN" "$workflow_doc"
+fi
 echo ""
 
 echo "=== Results: $PASS/$TOTAL passed, $FAIL failed ==="

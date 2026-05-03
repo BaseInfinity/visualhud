@@ -133,6 +133,22 @@ The publish path repeats the full test gate, repeats the npm dry-run, publishes,
 then verifies the exact package version on the registry. If `npm whoami` fails,
 run `npm login` in your shell and retry.
 
+First publish bootstrap: npm requires account authentication for the initial
+package publish. If your npm account requires two-factor auth, the first
+`scripts/release-npm.sh --publish` may ask for an OTP or npm web auth.
+
+After the package exists on npm, configure npm Trusted Publishing for:
+
+```text
+owner/repo: BaseInfinity/visualhud
+workflow: .github/workflows/publish.yml
+```
+
+That workflow publishes on version tags with GitHub OIDC (`id-token: write`) and
+does not use `NPM_TOKEN`. Normal future releases should be version-bump, test,
+commit, tag, and push the `v*` tag; the workflow runs `npm ci`, `npm test`, and
+`npm publish --access public`.
+
 Clean Codex installs default to Pokemon. Use `--theme tmnt` if you want TMNT
 instead:
 

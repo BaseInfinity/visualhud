@@ -36,5 +36,9 @@
     "theme",
     "hud"
   ],
-  "license": "UNLICENSED"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BaseInfinity/visualhud.git"
+  }
 }

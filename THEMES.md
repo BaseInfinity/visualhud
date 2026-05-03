@@ -79,7 +79,7 @@ because the current background-image bridge uses the iTerm2 Python API.
 - `stages` are ordered by ascending `"max"` thresholds.
 - Each stage needs `"sprite"`, `"badge"`, `"name"`, `"color_family"`, RGB `"color"`, and either `"shades"` or `"color_family_singleton": true`.
 - `"shades"` is the within-stage color ramp. The engine chooses a shade from the current tool-call position inside that stage range, so a character can keep the same sprite while the terminal color breathes across multiple calls.
-- `"shade_sprites"` is optional. When present, it must have the same length as `"shades"` and lets a stage swap sprite art per shade while keeping one character family.
+- `"shade_sprites"` is optional. When present, it must have the same length as `"shades"` and lets a stage swap sprite art per shade while keeping one character family. For branded character themes, shade sprites should be distinct portraits or clearly different source-backed poses, not just crop-only zooms of the same art.
 - `progress_bar` is the shared visual progress strip shown in the terminal title. Keep it a compact health/progress-style visual sequence; do not use character initials there. Theme identity belongs in stage badges, names, sprites, colors, and optional `shade_sprites`.
 - Use `"color_family_singleton": true` only for a deliberate one-color stage; do not use it as a shortcut for branded character themes.
 - `blocked`, `review`, `done`, `idle`, and `error` are mandatory lifecycle states.

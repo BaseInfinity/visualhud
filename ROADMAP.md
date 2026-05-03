@@ -10,6 +10,7 @@ Batman, Power Rangers, or any other skin.
 - [x] TMNT importer strips neutral source mattes and records theme-derived `backdrop_color` so yellow/white/gray stages do not drift to stale neutral panes.
 - [x] Generated TMNT contact sheet covers every color/state and reports zero missing sprites.
 - [ ] Live visual pass across all TMNT bands: Leo, Mikey, Donnie, Raph, April, Metalhead, Mutagen, Splinter, Krang, Foot Clan, Turtle Power, Shredder, Pizza, Casey.
+- [ ] **TMNT per-shade portrait variants** — replace crop-only shade variants with distinct source-backed portraits/poses for bands like Michelangelo orange, Raphael red, Donatello purple, and April yellow.
 - [ ] Codex TMNT title/badge/progress presentation should match the clarity of the Claude Pokemon panes, including visible progress state instead of a plain `visualhud (codex)` title when the host permits it.
 - [ ] Replace any remaining weak one-off art crops found during the live visual pass with better source-backed crops.
 - [ ] **Batman** (parked) — next branded theme candidate after TMNT hardening is visually accepted.

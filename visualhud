@@ -18,7 +18,13 @@ DEFAULT_THEME="${VISUALHUD_DEFAULT_THEME:-pokemon}"
 
 usage() {
     cat <<'EOF'
+Quick start:
+  cd /path/to/repo
+  npx -y visualhud@latest
+  codex --full-auto
+
 Usage:
+  visualhud [--theme <name>] [--platform macos]
   visualhud install codex --target <repo> [--theme <name>] [--platform macos]
   visualhud theme list
   visualhud theme current
@@ -151,12 +157,13 @@ copy_codex_runtime() {
     mkdir -p "$runtime_dir/.codex/hooks" "$target_root/.codex/hooks"
     copy_runtime_file "$ROOT_DIR/engine.sh" "$runtime_dir/engine.sh"
     copy_runtime_file "$ROOT_DIR/set_bg.py" "$runtime_dir/set_bg.py"
+    copy_runtime_file "$ROOT_DIR/setup-iterm2.sh" "$runtime_dir/setup-iterm2.sh"
     copy_runtime_file "$ROOT_DIR/visualhud" "$runtime_dir/visualhud"
     copy_runtime_file "$ROOT_DIR/.codex/hooks/visualhud-codex.sh" "$runtime_dir/.codex/hooks/visualhud-codex.sh"
     copy_runtime_dir "$ROOT_DIR/themes" "$runtime_dir/themes"
     copy_runtime_dir "$ROOT_DIR/scripts" "$runtime_dir/scripts"
     copy_runtime_dir "$ROOT_DIR/skills" "$runtime_dir/skills"
-    chmod +x "$runtime_dir/visualhud" "$runtime_dir/.codex/hooks/visualhud-codex.sh"
+    chmod +x "$runtime_dir/visualhud" "$runtime_dir/setup-iterm2.sh" "$runtime_dir/.codex/hooks/visualhud-codex.sh"
 }
 
 install_codex_skills() {
@@ -301,7 +308,8 @@ install_codex() {
     printf 'Installed VisualHUD Codex hooks in: %s\n' "$target_root"
     printf 'Active theme: %s\n' "$theme"
     printf 'Runtime: %s\n' "$runtime_dir"
-    printf 'Restart Codex in the target repo, or wait for the next hook if Codex is already running.\n'
+    printf 'If iTerm2 visuals are not enabled yet, run: %s/setup-iterm2.sh\n' "$runtime_dir"
+    printf 'Then start Codex in the target repo: codex --full-auto\n'
 }
 
 calibration_counter_file() {
@@ -452,11 +460,17 @@ calibrate_theme() {
 }
 
 if [ "$#" -lt 1 ]; then
-    usage >&2
-    exit 2
+    install_codex
+    exit
 fi
 
 case "${1:-}" in
+    -h|--help|help)
+        usage
+        ;;
+    --target|--theme|--platform)
+        install_codex "$@"
+        ;;
     install)
         subcommand="${2:-}"
         case "$subcommand" in

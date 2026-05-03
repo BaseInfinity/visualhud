@@ -77,9 +77,9 @@ if [ -f "$ROOT_DIR/package.json" ]; then
     assert_eq "Package publish gate runs tests" "npm test" "$(jq -r '.scripts.prepublishOnly' "$ROOT_DIR/package.json")"
 fi
 assert_contains "Full suite runner includes lifecycle suite" "tests/test-cooking-status.sh" "$RUN_ALL_DOC"
-assert_contains "README documents npx consumer install" "npx -y visualhud@latest install codex --target" "$README_DOC"
-assert_contains "README documents one-command cwd install" "npx -y visualhud@latest install codex" "$README_DOC"
-assert_contains "README documents local tarball npx proof" "npx -y --package ./visualhud-" "$README_DOC"
+assert_contains "README documents one-command npx install" "npx -y visualhud@latest" "$README_DOC"
+assert_contains "README documents Codex restart after install" "codex --full-auto" "$README_DOC"
+assert_contains "README documents target repo install" "npx -y visualhud@latest install codex --target" "$README_DOC"
 echo ""
 
 echo "--- Test 2: npm pack includes install runtime assets ---"
@@ -99,6 +99,7 @@ if [ "$pack_status" -eq 0 ]; then
     tar_contents="$(tar -tzf "$tarball")"
     assert_contains "Tarball includes CLI" "package/visualhud" "$tar_contents"
     assert_contains "Tarball includes engine" "package/engine.sh" "$tar_contents"
+    assert_contains "Tarball includes iTerm2 setup helper" "package/setup-iterm2.sh" "$tar_contents"
     assert_contains "Tarball includes Codex adapter" "package/.codex/hooks/visualhud-codex.sh" "$tar_contents"
     assert_contains "Tarball includes Pokemon sprites" "package/themes/pokemon/sprites/charmander.png" "$tar_contents"
     assert_contains "Tarball includes Pokemon screenshot" "package/docs/screenshots/pokemon-contact-sheet.png" "$tar_contents"
@@ -127,13 +128,13 @@ else
 fi
 echo ""
 
-echo "--- Test 4: npx tarball install defaults target to the current repo ---"
+echo "--- Test 4: npx tarball bare command installs the current repo ---"
 cwd_target="$TMP_ROOT/consumer-cwd"
 mkdir -p "$cwd_target"
 git -C "$cwd_target" init -q
 if [ -n "$tarball" ]; then
     set +e
-    cwd_npx_output="$(cd "$cwd_target" && NPM_CONFIG_CACHE="$TMP_ROOT/npm-cache" npm_config_cache="$TMP_ROOT/npm-cache" NPM_CONFIG_DRY_RUN=false npm_config_dry_run=false npx --yes --package "$tarball" visualhud install codex --platform macos 2>&1)"
+    cwd_npx_output="$(cd "$cwd_target" && NPM_CONFIG_CACHE="$TMP_ROOT/npm-cache" npm_config_cache="$TMP_ROOT/npm-cache" NPM_CONFIG_DRY_RUN=false npm_config_dry_run=false npx --yes --package "$tarball" visualhud --platform macos 2>&1)"
     cwd_npx_status=$?
     set -e
     assert_eq "npx cwd install succeeds" "0" "$cwd_npx_status"

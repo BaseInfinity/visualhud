@@ -90,7 +90,17 @@ chmod +x "$VISUALHUD_SET_BG"
 echo "=== Test Suite: visualhud CLI ==="
 echo ""
 
-echo "--- Test 1: Theme CLI lists, sets, and reports repo-local theme ---"
+echo "--- Test 1: Help exits cleanly for consumer CLI discovery ---"
+set +e
+help_output=$("$CLI" --help 2>&1)
+help_status=$?
+set -e
+assert_eq "Help exits zero" "0" "$help_status"
+assert_contains "Help shows bare npx install command" "npx -y visualhud@latest" "$help_output"
+assert_contains "Help shows Codex start command" "codex --full-auto" "$help_output"
+echo ""
+
+echo "--- Test 2: Theme CLI lists, sets, and reports repo-local theme ---"
 assert_file_exists "VisualHUD CLI exists" "$CLI"
 list_output=$("$CLI" theme list 2>&1 || true)
 assert_contains "Theme list includes pokemon" "pokemon" "$list_output"
@@ -103,13 +113,13 @@ assert_eq "Theme file stores selected theme" "tmnt" "$(cat "$VISUALHUD_THEME_FIL
 assert_eq "Theme current reads selected theme" "tmnt" "$("$CLI" theme current 2>/dev/null || true)"
 echo ""
 
-echo "--- Test 2: Invalid theme names are rejected without changing active theme ---"
+echo "--- Test 3: Invalid theme names are rejected without changing active theme ---"
 invalid_output=$("$CLI" theme set missingno 2>&1 >/dev/null || true)
 assert_contains "Invalid theme reports available-themes hint" "Unknown theme: missingno" "$invalid_output"
 assert_eq "Invalid theme leaves active theme unchanged" "tmnt" "$(cat "$VISUALHUD_THEME_FILE" 2>/dev/null)"
 echo ""
 
-echo "--- Test 3: Active theme file hot-swaps on the next hook ---"
+echo "--- Test 4: Active theme file hot-swaps on the next hook ---"
 cleanup_stage() {
     rm -f "$COUNTER_FILE" "$STAGE_FILE" "$ATTENTION_FILE" "$CONTEXT_FILE" 2>/dev/null
     : > "$VISUALHUD_TTY"

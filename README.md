@@ -4,117 +4,99 @@ A themeable visual status engine for Claude Code, Codex, and iTerm2.
 
 Watch your terminal transform in real-time as your agent works — colors shift, backgrounds swap, and tab titles update to show exactly where things stand. Ship with themes or build your own.
 
+## Install
+
+Codex on macOS/iTerm2, from the repo you want to skin:
+
+```bash
+npx -y visualhud@latest
+codex --full-auto
+```
+
+That installs VisualHUD into the current Git repo only. It writes `.codex/`,
+`.visualhud/`, and `.agents/skills/visualhud-*` in that repo; it does not install
+a global Codex or Claude hook.
+
+If iTerm2 has not been configured for tab colors and pane background images yet,
+run this once after install, then quit and reopen iTerm2:
+
+```bash
+./.visualhud/setup-iterm2.sh
+```
+
+When developing from this source checkout, the equivalent local command is
+`./setup-iterm2.sh`.
+
 ## Screenshots
 
 Pokemon is the polished default for clean consumer installs:
 
 ![Pokemon VisualHUD contact sheet](docs/screenshots/pokemon-contact-sheet.png)
 
-TMNT ships as the Codex-first character theme with expanded color/state
-coverage:
+## Common Commands
 
-![TMNT VisualHUD contact sheet](docs/screenshots/tmnt-contact-sheet.png)
-
-## Install
-
-VisualHUD is local-first. This repo carries its own hook config, engine, themes,
-and sprite assets; it does not install a global Codex/Claude hook unless you add
-one yourself.
-
-### 1. Configure iTerm2
-
-Run this once on macOS:
-
-```bash
-./setup-iterm2.sh
-```
-
-If iTerm2 is already open, quit iTerm2 after running the setup and reopen it.
-This enables tab colors, per-pane background images, the iTerm2 Python API, and
-the `hudProgress` tab-title variable.
-
-### 2. Use With Codex
-
-Codex is already wired in this repo through:
-
-```text
-.codex/hooks.json
-.codex/hooks/visualhud-codex.sh
-```
-
-Start or restart Codex from this repo. The Codex adapter defaults to the TMNT
-theme and routes lifecycle events into `engine.sh`.
-
-To switch the repo-local default for future hooks:
-
-```bash
-./visualhud theme list
-./visualhud theme set pokemon
-./visualhud theme current
-```
-
-The selection is written to the repo-local active theme file and is picked up on
-the next hook; no Codex restart is required. `VISUALHUD_THEME=<name>` remains an
-explicit one-process override:
-
-```bash
-VISUALHUD_THEME=pokemon codex
-```
-
-### 3. Install Into Another Codex Repo On macOS
-
-Consumer install, once the npm package is published:
-
-```bash
-cd /path/to/other-repo
-npx -y visualhud@latest install codex
-```
-
-You can also install into a specific target from anywhere:
+Install into a specific repo from anywhere:
 
 ```bash
 npx -y visualhud@latest install codex --target /path/to/other-repo
 ```
 
-Pre-publish local package proof from this VisualHUD repo:
+Choose TMNT during install:
 
 ```bash
-npm pack
-cd /path/to/other-repo
-npx -y --package /path/to/visualhud/visualhud-0.1.0.tgz visualhud install codex
+npx -y visualhud@latest --theme tmnt
 ```
 
-Or stay in this repo and pass a target explicitly:
+Switch themes after install; the next hook picks it up without restarting Codex:
 
 ```bash
-npx -y --package ./visualhud-0.1.0.tgz visualhud install codex --target /path/to/other-repo
+./.visualhud/visualhud theme list
+./.visualhud/visualhud theme set pokemon
+./.visualhud/visualhud theme set tmnt
+./.visualhud/visualhud theme current
 ```
 
-From this VisualHUD repo, install a repo-local copy into any other Git worktree:
+Calibrate a theme:
+
+```bash
+./.visualhud/visualhud theme calibrate tmnt
+./.visualhud/visualhud theme calibrate tmnt --live --delay 1
+```
+
+Development checkout install:
 
 ```bash
 ./visualhud install codex --target /path/to/other-repo
 ```
 
-That source checkout command is for development and local iteration; the `npx`
-path above is the intended consumer install flow.
-
-The installer writes a hidden runtime under the target repo:
+The installer writes:
 
 ```text
-/path/to/other-repo/
+/path/to/repo/
   .codex/hooks.json
   .codex/hooks/visualhud-codex.sh
   .visualhud/
     engine.sh
     set_bg.py
+    setup-iterm2.sh
     visualhud
     themes/
+  .agents/skills/
+    visualhud-setup/
+    visualhud-update/
+    visualhud-theme/
+    visualhud-feedback/
 ```
 
-### 4. Release To npm
+Claude support is repo-local and separate from Codex. Claude projects wire
+`.claude/settings.json` to `.claude/hooks/visualhud-claude.sh`; Codex projects
+wire `.codex/hooks.json` to `.codex/hooks/visualhud-codex.sh`.
 
-Release from a clean VisualHUD worktree only:
+Windows Terminal/PowerShell is parked as a separate renderer track. The current
+installer is macOS/iTerm2-only until Windows has a tested background/title/color
+adapter.
+
+## Release To npm
 
 ```bash
 scripts/release-npm.sh --dry-run
@@ -148,42 +130,6 @@ That workflow publishes on version tags with GitHub OIDC (`id-token: write`) and
 does not use `NPM_TOKEN`. Normal future releases should be version-bump, test,
 commit, tag, and push the `v*` tag; the workflow runs `npm ci`, `npm test`, and
 `npm publish --access public`.
-
-Clean Codex installs default to Pokemon. Use `--theme tmnt` if you want TMNT
-instead:
-
-```bash
-./visualhud install codex --target /path/to/other-repo --theme tmnt
-```
-
-Existing Codex hooks and existing `.agents/skills/*` entries are preserved; the
-VisualHUD hook is appended once and reinstalling is idempotent. Restart Codex in
-the target repo after first install.
-
-The installer also adds four repo-local skills for Codex discovery:
-
-```text
-.agents/skills/visualhud-setup
-.agents/skills/visualhud-update
-.agents/skills/visualhud-theme
-.agents/skills/visualhud-feedback
-```
-
-Those skills document setup, runtime refresh, theme switching/calibration, and
-privacy-first feedback capture from inside the consuming repo.
-
-Switch themes inside the installed repo with the copied runtime CLI:
-
-```bash
-cd /path/to/other-repo
-./.visualhud/visualhud theme list
-./.visualhud/visualhud theme set pokemon
-./.visualhud/visualhud theme set tmnt
-```
-
-Pokemon and TMNT are bundled first-party themes in the installed runtime. Sonic
-is parked as a future first-party theme candidate after the installer and
-Windows renderer tracks are stable.
 
 ## Create A Theme
 

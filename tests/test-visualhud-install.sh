@@ -75,7 +75,19 @@ make_repo() {
 echo "=== Test Suite: visualhud install ==="
 echo ""
 
-echo "--- Test 1: Codex macOS install creates a repo-local VisualHUD runtime ---"
+echo "--- Test 1: Bare CLI installs Codex hooks in the current repo ---"
+target="$(make_repo bare-current-repo)"
+pushd "$target" >/dev/null
+output="$("$CLI" --platform macos 2>&1)"
+popd >/dev/null
+assert_contains "Bare install reports target" "Installed VisualHUD Codex hooks in:" "$output"
+assert_file_exists "Bare install writes Codex hooks" "$target/.codex/hooks.json"
+assert_file_exists "Bare install writes runtime CLI" "$target/.visualhud/visualhud"
+assert_file_exists "Bare install writes iTerm2 setup helper" "$target/.visualhud/setup-iterm2.sh"
+assert_eq "Bare install defaults to Pokemon" "pokemon" "$(cat "$target/.visualhud/theme")"
+echo ""
+
+echo "--- Test 2: Codex macOS install creates a repo-local VisualHUD runtime ---"
 target="$(make_repo mac-codex)"
 output="$("$CLI" install codex --target "$target" --platform macos 2>&1)"
 assert_contains "Install reports target" "Installed VisualHUD Codex hooks in:" "$output"
@@ -86,6 +98,7 @@ assert_file_exists "Target Codex hooks.json exists" "$target/.codex/hooks.json"
 assert_file_exists "Runtime engine is copied" "$target/.visualhud/engine.sh"
 assert_file_exists "Runtime background helper is copied" "$target/.visualhud/set_bg.py"
 assert_file_exists "Runtime CLI is copied" "$target/.visualhud/visualhud"
+assert_file_exists "Runtime iTerm2 setup helper is copied" "$target/.visualhud/setup-iterm2.sh"
 assert_file_exists "Pokemon ships in installed runtime" "$target/.visualhud/themes/pokemon/theme.json"
 assert_file_exists "Pokemon Charmander sprite ships in installed runtime" "$target/.visualhud/themes/pokemon/sprites/charmander.png"
 assert_file_exists "Pokemon Blastoise sprite ships in installed runtime" "$target/.visualhud/themes/pokemon/sprites/blastoise.png"
@@ -107,7 +120,7 @@ assert_eq "TaskCompleted hook registered" "true" "$(jq -r 'any(.hooks.TaskComple
 assert_eq "SessionStart hook registered" "true" "$(jq -r 'any(.hooks.SessionStart[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
 echo ""
 
-echo "--- Test 2: Codex install preserves existing hooks and is idempotent ---"
+echo "--- Test 3: Codex install preserves existing hooks and is idempotent ---"
 target="$(make_repo existing-hooks)"
 mkdir -p "$target/.codex" "$target/.agents/skills/existing-skill"
 cat > "$target/.codex/hooks.json" <<'JSON'
@@ -141,7 +154,7 @@ assert_file_exists "Installed runtime self-repair keeps VisualHUD skills" "$targ
 assert_eq "Installed runtime self-repair can switch theme" "tmnt" "$(cat "$target/.visualhud/theme")"
 echo ""
 
-echo "--- Test 3: Windows Codex install is explicit until a renderer exists ---"
+echo "--- Test 4: Windows Codex install is explicit until a renderer exists ---"
 target="$(make_repo windows-codex)"
 set +e
 windows_output="$("$CLI" install codex --target "$target" --platform windows --theme tmnt 2>&1)"

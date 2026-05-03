@@ -45,6 +45,7 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 
 ## Theme System Features
 - [ ] **TMNT roster packs** — support selectable packs inside one theme, e.g. `heroes`, `villains`, or `arcade` under `tmnt` instead of separate `tmnt-heroes`/`tmnt-villains` themes
+- [ ] **Theme creator workflow** — add a guided `/theme`/`visualhud theme create` flow that scaffolds `themes/<name>/theme.json`, sprite folders, calibration/contact-sheet proof, and agent instructions from `THEMES.md`
 - [ ] **Mix & match colors** — random palette selection from color pools across themes
 - [ ] **Sprite pools** — don't hardcode evolution lines; define pools per color/stage category, random pick each session
 - [x] **Easy theme swapping** — `visualhud theme list/current/set/reset`

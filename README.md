@@ -158,7 +158,41 @@ Pokemon and TMNT are bundled first-party themes in the installed runtime. Sonic
 is parked as a future first-party theme candidate after the installer and
 Windows renderer tracks are stable.
 
-### 4. Use With Claude Code
+## Create A Theme
+
+Themes are data packs. A normal new theme should not require editing
+`engine.sh`.
+
+Tell your agent to follow `THEMES.md` and keep the work under this shape:
+
+```text
+themes/<name>/theme.json
+themes/<name>/sprites/
+```
+
+Minimum workflow:
+
+```bash
+mkdir -p themes/<name>/sprites
+$EDITOR themes/<name>/theme.json
+./visualhud theme set <name>
+./visualhud theme calibrate <name>
+bash tests/test-theme-system.sh
+bash tests/test-theme-calibration.sh
+```
+
+For branded/character themes, add real source-backed sprite assets and a
+contact-sheet proof. Do not ship generated placeholders as final art. If adding
+a theme requires engine changes, treat that as a theme-system contract change:
+write the failing test first, update the JSON contract deliberately, then run
+the full proof set in `THEMES.md`.
+
+Future work: a dedicated theme creator workflow should scaffold the JSON,
+sprite folders, calibration sheet, and TODO checklist automatically. Until that
+exists, `THEMES.md` is the source of truth for agents and humans creating
+Batman, Sonic, Power Rangers, or any third-party theme.
+
+### 5. Use With Claude Code
 
 Claude Code is wired separately through:
 

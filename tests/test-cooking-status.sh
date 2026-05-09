@@ -436,7 +436,7 @@ echo ""
 
 # --- TEST 16: setup-iterm2.sh enables per-pane title bars ---
 echo "--- Test 16: setup-iterm2.sh includes ShowPaneTitles ---"
-SETUP_SCRIPT="$HOME/visualhud/setup-iterm2.sh"
+SETUP_SCRIPT="$ROOT_DIR/setup-iterm2.sh"
 if grep -q 'ShowPaneTitles' "$SETUP_SCRIPT"; then
     TOTAL=$((TOTAL + 1))
     PASS=$((PASS + 1))

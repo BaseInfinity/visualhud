@@ -39,6 +39,15 @@ matches=$(
 )
 assert_eq "Shell tests avoid macOS-only /private/tmp state paths" "" "$matches"
 
+matches=$(
+    # shellcheck disable=SC2016
+    grep -R -n '\$HOME/visualhud' "$ROOT_DIR/tests" \
+        --include='*.sh' \
+        --exclude='test-state-dir-portability.sh' \
+        || true
+)
+assert_eq "Shell tests avoid hard-coded home checkout paths" "" "$matches"
+
 echo ""
 echo "=== Results: $PASS/$TOTAL passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then

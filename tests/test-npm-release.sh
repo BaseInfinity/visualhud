@@ -122,6 +122,22 @@ case "$*" in
 esac
 EOF
     chmod +x "$FAKE_BIN/npm"
+
+    cat > "$FAKE_BIN/npx" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+printf 'npx|%s\n' "$*" >> "$VISUALHUD_RELEASE_CALL_LOG"
+case "$*" in
+    "--yes npm@11.14.1 trust github visualhud --file publish.yml --repo BaseInfinity/visualhud --yes")
+        printf 'trusted publisher linked\n'
+        ;;
+    *)
+        printf 'unexpected npx command: %s\n' "$*" >&2
+        exit 64
+        ;;
+esac
+EOF
+    chmod +x "$FAKE_BIN/npx"
 }
 
 release_with_fakes() {
@@ -220,7 +236,7 @@ echo ""
 echo "--- Test 7: Trusted Publishing setup is CLI-automated ---"
 if [ -f "$ROOT_DIR/package.json" ]; then
     assert_eq "Package exposes Trusted Publishing setup script" \
-        "npm trust github --file publish.yml --repo BaseInfinity/visualhud --yes" \
+        "npx --yes npm@11.14.1 trust github visualhud --file publish.yml --repo BaseInfinity/visualhud --yes" \
         "$(jq -r '.scripts["release:trust"]' "$ROOT_DIR/package.json")"
 fi
 write_fake_tools
@@ -232,7 +248,7 @@ set -e
 trust_log="$(cat "$CALL_LOG")"
 assert_eq "Trusted Publishing setup exits cleanly" "0" "$trust_status"
 assert_contains "Trusted Publishing setup uses npm trust github" \
-    "npm|trust github --file publish.yml --repo BaseInfinity/visualhud --yes" \
+    "npx|--yes npm@11.14.1 trust github visualhud --file publish.yml --repo BaseInfinity/visualhud --yes" \
     "$trust_log"
 assert_contains "Trusted Publishing setup reports linked publisher" "trusted publisher linked" "$trust_output"
 echo ""

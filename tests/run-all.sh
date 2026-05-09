@@ -8,6 +8,8 @@ cd "$ROOT_DIR"
 
 bash tests/test-visualhud-cli.sh
 bash tests/test-visualhud-install.sh
+bash tests/test-windows-runtime-no-jq.sh
+bash tests/test-wezterm-renderer.sh
 bash tests/test-visualhud-skills.sh
 bash tests/test-npm-package.sh
 bash tests/test-npm-release.sh

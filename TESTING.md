@@ -53,7 +53,7 @@
 | iTerm2 Python API | YES | Can't run in test env |
 | iTerm2 escape sequences | YES | No terminal in test |
 | Shell commands | NO | Run real commands |
-| jq / JSON parsing | NO | Test with real jq |
+| JSON parsing | NO | Test with bundled Node JSON helper |
 
 **Philosophy:** Minimal mocking. Only mock what you truly can't control (iTerm2 API, terminal escape sequences). Everything else should be real.
 

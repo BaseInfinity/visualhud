@@ -74,11 +74,12 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 - [ ] **iTerm2 setup via CLI** — expose `visualhud setup iterm2` so the npm CLI can configure iTerm2 instead of requiring `./setup-iterm2.sh`
 - [x] **CLI install for Codex on macOS** — repo-local runtime copy, hook merge, theme selection
 - [ ] **CLI tool** — theme switching/install exists; `visualhud doctor/preview` still pending
-- [ ] **Codex on Windows install path** — document supported install targets and build a Windows adapter instead of reusing the iTerm2-only background API
+- [x] **Codex on Windows install path** — document supported install targets and ship a title/progress Windows adapter instead of reusing the iTerm2-only background API
 - [ ] Auto-configure Claude Code hooks in `settings.json`
 
 ## Platform Support
 - [ ] **Other agents** — Cursor, Windsurf, Cline, Aider (pluggable event source)
-- [ ] **Other terminals** — Kitty, WezTerm, Ghostty adapters
-- [ ] **Windows terminals** — Windows Terminal/PowerShell/WSL support with a non-iTerm background strategy
+- [x] **WezTerm adapter** — Windows-friendly live title/status/color/background renderer through `SetUserVar` + Lua config overrides
+- [ ] **Other terminals** — Kitty, Ghostty adapters
+- [ ] **Windows terminals** — extend Windows Terminal/PowerShell/WSL beyond title/progress with a non-iTerm background strategy
 - [ ] **Winamp-style theming** — push every visual capability to the max

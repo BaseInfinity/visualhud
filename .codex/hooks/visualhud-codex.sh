@@ -7,43 +7,16 @@ INPUT=$(cat)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ENGINE="${VISUALHUD_ENGINE:-$REPO_ROOT/engine.sh}"
+JSON_HELPER="${VISUALHUD_JSON_HELPER:-$REPO_ROOT/scripts/visualhud-json.js}"
 
 if [ ! -f "$ENGINE" ]; then
   exit 0
 fi
 
-EVENT=$(printf '%s' "$INPUT" | jq -r '.hook_event_name // empty' 2>/dev/null || true)
-PAYLOAD=""
 export VISUALHUD_DEFAULT_THEME="${VISUALHUD_DEFAULT_THEME:-tmnt}"
 export VISUALHUD_REAPPLY_DELAY="${VISUALHUD_REAPPLY_DELAY:-0.12}"
 
-case "$EVENT" in
-  PreToolUse|UserPromptSubmit|Stop|TaskCompleted)
-    PAYLOAD="$INPUT"
-    ;;
-  SessionStart)
-    PAYLOAD=$(printf '%s' "$INPUT" | jq -c '{
-      hook_event_name: "Stop",
-      session_id: (.session_id // ""),
-      source_event: "SessionStart",
-      start_source: (.source // .start_source // "")
-    }' 2>/dev/null || true)
-    ;;
-  PermissionRequest)
-    PAYLOAD=$(printf '%s' "$INPUT" | jq -c '{
-      hook_event_name: "Notification",
-      notification_type: "permission_prompt",
-      message: (.tool_input.description // "Codex is requesting permission"),
-      session_id: (.session_id // ""),
-      turn_id: (.turn_id // ""),
-      tool_name: (.tool_name // ""),
-      tool_input: (.tool_input // {})
-    }' 2>/dev/null || true)
-    ;;
-  *)
-    exit 0
-    ;;
-esac
+PAYLOAD=$(printf '%s' "$INPUT" | node "$JSON_HELPER" codex-payload 2>/dev/null || true)
 
 if [ -z "$PAYLOAD" ]; then
   exit 0

@@ -15,6 +15,11 @@ ROOT_DIR="${VISUALHUD_ROOT:-$(cd -P "$(dirname "$SCRIPT_SOURCE")" && pwd)}"
 THEMES_DIR="${VISUALHUD_THEMES_DIR:-$ROOT_DIR/themes}"
 ACTIVE_THEME_FILE="${VISUALHUD_THEME_FILE:-$ROOT_DIR/theme}"
 DEFAULT_THEME="${VISUALHUD_DEFAULT_THEME:-pokemon}"
+JSON_HELPER="${VISUALHUD_JSON_HELPER:-$ROOT_DIR/scripts/visualhud-json.js}"
+
+json_helper() {
+    node "$JSON_HELPER" "$@"
+}
 
 usage() {
     cat <<'EOF'
@@ -24,8 +29,8 @@ Quick start:
   codex --full-auto
 
 Usage:
-  visualhud [--theme <name>] [--platform macos]
-  visualhud install codex --target <repo> [--theme <name>] [--platform macos]
+  visualhud [--theme <name>] [--platform macos|windows|wezterm]
+  visualhud install codex --target <repo> [--theme <name>] [--platform macos|windows|wezterm]
   visualhud theme list
   visualhud theme current
   visualhud theme set <name>
@@ -52,7 +57,7 @@ active_theme() {
 
 theme_display_name() {
     local theme="$1"
-    jq -r --arg fallback "$theme" '.name // $fallback' "$THEMES_DIR/$theme/theme.json" 2>/dev/null || printf '%s\n' "$theme"
+    json_helper theme-display-name "$THEMES_DIR/$theme/theme.json" "$theme" 2>/dev/null || printf '%s\n' "$theme"
 }
 
 list_themes() {
@@ -158,10 +163,12 @@ copy_codex_runtime() {
     copy_runtime_file "$ROOT_DIR/engine.sh" "$runtime_dir/engine.sh"
     copy_runtime_file "$ROOT_DIR/set_bg.py" "$runtime_dir/set_bg.py"
     copy_runtime_file "$ROOT_DIR/setup-iterm2.sh" "$runtime_dir/setup-iterm2.sh"
+    copy_runtime_file "$ROOT_DIR/setup-wezterm.ps1" "$runtime_dir/setup-wezterm.ps1"
     copy_runtime_file "$ROOT_DIR/visualhud" "$runtime_dir/visualhud"
     copy_runtime_file "$ROOT_DIR/.codex/hooks/visualhud-codex.sh" "$runtime_dir/.codex/hooks/visualhud-codex.sh"
     copy_runtime_dir "$ROOT_DIR/themes" "$runtime_dir/themes"
     copy_runtime_dir "$ROOT_DIR/scripts" "$runtime_dir/scripts"
+    copy_runtime_dir "$ROOT_DIR/wezterm" "$runtime_dir/wezterm"
     copy_runtime_dir "$ROOT_DIR/skills" "$runtime_dir/skills"
     chmod +x "$runtime_dir/visualhud" "$runtime_dir/setup-iterm2.sh" "$runtime_dir/.codex/hooks/visualhud-codex.sh"
 }
@@ -187,8 +194,10 @@ install_codex_skills() {
 
 write_codex_hook_wrapper() {
     local target_root="$1"
+    local renderer="${2:-}"
     local wrapper="$target_root/.codex/hooks/visualhud-codex.sh"
-    cat > "$wrapper" <<'EOF'
+    {
+        cat <<'EOF'
 #!/bin/bash
 # VisualHUD installed Codex hook wrapper.
 
@@ -200,9 +209,15 @@ VISUALHUD_ROOT="$REPO_ROOT/.visualhud"
 export VISUALHUD_ENGINE="$VISUALHUD_ROOT/engine.sh"
 export VISUALHUD_THEMES_DIR="$VISUALHUD_ROOT/themes"
 export VISUALHUD_SET_BG="$VISUALHUD_ROOT/set_bg.py"
+EOF
+        if [ -n "$renderer" ]; then
+            printf 'export VISUALHUD_RENDERER="%s"\n' "$renderer"
+        fi
+        cat <<'EOF'
 
 exec bash "$VISUALHUD_ROOT/.codex/hooks/visualhud-codex.sh"
 EOF
+    } > "$wrapper"
     chmod +x "$wrapper"
 }
 
@@ -215,31 +230,12 @@ install_codex_hooks_json() {
         printf '{"hooks":{}}\n' > "$hooks_json"
     fi
     tmp="${hooks_json}.tmp.$$"
-    jq --arg cmd "$command" '
-      def hook: {"type": "command", "command": $cmd};
-      def has_visualhud($name):
-        any((.hooks[$name] // [])[]?.hooks[]?; (.command // "") | contains("visualhud-codex.sh"));
-      def add_matcher($name):
-        if has_visualhud($name) then .
-        else .hooks[$name] = ((.hooks[$name] // []) + [{"matcher": "*", "hooks": [hook]}])
-        end;
-      def add_plain($name):
-        if has_visualhud($name) then .
-        else .hooks[$name] = ((.hooks[$name] // []) + [{"hooks": [hook]}])
-        end;
-      .hooks = (.hooks // {})
-      | add_matcher("PreToolUse")
-      | add_matcher("PermissionRequest")
-      | add_plain("UserPromptSubmit")
-      | add_plain("Stop")
-      | add_plain("TaskCompleted")
-      | add_matcher("SessionStart")
-    ' "$hooks_json" > "$tmp"
+    json_helper merge-codex-hooks "$hooks_json" "$command" > "$tmp"
     mv "$tmp" "$hooks_json"
 }
 
 install_codex() {
-    local target="" theme="pokemon" platform="" target_root runtime_dir
+    local target="" theme="pokemon" platform="" target_root runtime_dir renderer
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -280,13 +276,16 @@ install_codex() {
     platform="${platform:-$(detect_platform)}"
     case "$platform" in
         macos|darwin)
+            renderer="iterm2"
             ;;
         windows|win32|powershell)
-            printf 'Windows Terminal/PowerShell renderer is not supported yet; install is macOS/iTerm2-only for now.\n' >&2
-            return 1
+            renderer="windows"
+            ;;
+        wezterm|windows-wezterm)
+            renderer="wezterm"
             ;;
         *)
-            printf 'VisualHUD Codex install is macOS/iTerm2-only for now; detected platform: %s\n' "$platform" >&2
+            printf 'VisualHUD Codex install supports macOS/iTerm2 and Windows Terminal/PowerShell for now; detected platform: %s\n' "$platform" >&2
             return 1
             ;;
     esac
@@ -302,80 +301,61 @@ install_codex() {
     copy_codex_runtime "$target_root"
     printf '%s\n' "$theme" > "$runtime_dir/theme"
     install_codex_skills "$target_root"
-    write_codex_hook_wrapper "$target_root"
+    write_codex_hook_wrapper "$target_root" "$renderer"
     install_codex_hooks_json "$target_root"
 
     printf 'Installed VisualHUD Codex hooks in: %s\n' "$target_root"
     printf 'Active theme: %s\n' "$theme"
     printf 'Runtime: %s\n' "$runtime_dir"
-    printf 'If iTerm2 visuals are not enabled yet, run: %s/setup-iterm2.sh\n' "$runtime_dir"
+    case "$renderer" in
+        iterm2)
+            printf 'Renderer: iTerm2\n'
+            printf 'If iTerm2 visuals are not enabled yet, run: %s/setup-iterm2.sh\n' "$runtime_dir"
+            ;;
+        windows)
+            printf 'Renderer: Windows Terminal/PowerShell\n'
+            printf 'Windows renderer updates the tab title and Windows Terminal progress indicator; dynamic background images remain iTerm2-only.\n'
+            ;;
+        wezterm)
+            printf 'Renderer: WezTerm\n'
+            printf 'Run once to enable live WezTerm backgrounds: pwsh -ExecutionPolicy Bypass -File "%s/setup-wezterm.ps1"\n' "$runtime_dir"
+            ;;
+    esac
     printf 'Then start Codex in the target repo: codex --full-auto\n'
 }
 
 calibration_counter_file() {
     local session_key
-    session_key=$(printf '%s' "${ITERM_SESSION_ID:-}" | tr ':/' '__')
-    printf '/private/tmp/claude-cooking-counter_%s' "$session_key"
+    session_key=$(printf '%s' "${ITERM_SESSION_ID:-${WT_SESSION:-visualhud-calibration}}" | tr ':/' '__')
+    printf '%s/claude-cooking-counter_%s' "${VISUALHUD_STATE_DIR:-${TMPDIR:-/tmp}}" "$session_key"
 }
 
 render_calibration_step() {
     local theme="$1" step_json="$2"
-    local kind count counter_file payload percent
+    local kind count counter_file payload fields
 
     if [ -z "${ITERM_SESSION_ID:-}" ]; then
         printf 'Live calibration requires ITERM_SESSION_ID from a real terminal pane.\n' >&2
         return 1
     fi
 
-    kind=$(printf '%s' "$step_json" | jq -r '.kind')
+    fields=$(printf '%s' "$step_json" | json_helper calibration-payload 2>/dev/null || true)
+    if [ -z "$fields" ]; then
+        printf 'Unknown calibration step.\n' >&2
+        return 1
+    fi
+    IFS=$'\t' read -r kind count payload <<< "$fields"
     counter_file=$(calibration_counter_file)
-
-    case "$kind" in
-        stage|stage-shade)
-            count=$(printf '%s' "$step_json" | jq -r '.trigger_count')
-            printf '%s' "$((count - 1))" > "$counter_file"
-            payload=$(jq -nc '{hook_event_name:"PreToolUse", tool_name:"Calibration", session_id:"visualhud-calibration"}')
-            ;;
-        context)
-            count=$(printf '%s' "$step_json" | jq -r '.trigger_count')
-            percent=$(printf '%s' "$step_json" | jq -r '.context_percent')
-            printf '%s' "$((count - 1))" > "$counter_file"
-            payload=$(jq -nc --argjson percent "$percent" '{hook_event_name:"PreToolUse", tool_name:"Calibration", session_id:"visualhud-calibration", context_used_percent:$percent}')
-            ;;
-        blocked)
-            payload=$(jq -nc '{hook_event_name:"Notification", notification_type:"permission_prompt", message:"VisualHUD calibration", session_id:"visualhud-calibration"}')
-            ;;
-        done)
-            payload=$(jq -nc '{hook_event_name:"Stop", session_id:"visualhud-calibration"}')
-            ;;
-        idle)
-            payload=$(jq -nc '{hook_event_name:"Notification", notification_type:"idle_prompt", session_id:"visualhud-calibration"}')
-            ;;
-        error)
-            payload=$(jq -nc '{hook_event_name:"StopFailure", session_id:"visualhud-calibration"}')
-            ;;
-        *)
-            printf 'Unknown calibration step kind: %s\n' "$kind" >&2
-            return 1
-            ;;
-    esac
+    if [ "$kind" = "stage" ] || [ "$kind" = "stage-shade" ] || [ "$kind" = "context" ]; then
+        printf '%s' "$((count - 1))" > "$counter_file"
+    fi
 
     printf '%s\n' "$payload" | VISUALHUD_THEME="$theme" VISUALHUD_THEMES_DIR="$THEMES_DIR" bash "$ROOT_DIR/engine.sh" >/dev/null
 }
 
 calibration_label() {
     local step_json="$1"
-    printf '%s' "$step_json" | jq -r '
-      def color_text: .color | join("-");
-      "[\(.step | tostring | if length == 1 then "0" + . else . end)/\(.total | tostring | if length == 1 then "0" + . else . end)] "
-      + ((.badge // "-") + " " + .name)
-      + " | kind=" + .kind
-      + " | progress=" + (.progress_bar // "")
-      + " | sprite=" + (.sprite // "")
-      + " | color=" + color_text
-      + (if .trigger_count then " | count=" + (.trigger_count | tostring) else "" end)
-      + (if .kind == "context" then " | context overlay " + (.context_percent | tostring) + "%" else "" end)
-    '
+    printf '%s' "$step_json" | json_helper calibration-label
 }
 
 calibrate_theme() {

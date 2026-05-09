@@ -210,6 +210,7 @@ if [ -f "$workflow" ]; then
     assert_contains "Workflow matches v-tags" "- 'v*'" "$workflow_doc"
     assert_contains "Workflow has OIDC permission" "id-token: write" "$workflow_doc"
     assert_contains "Workflow uses npm registry" "registry-url: 'https://registry.npmjs.org'" "$workflow_doc"
+    assert_contains "Workflow installs contact-sheet image dependency" "python3 -m pip install Pillow" "$workflow_doc"
     assert_contains "Workflow runs full test gate" "npm test" "$workflow_doc"
     assert_contains "Workflow publishes package" "npm publish" "$workflow_doc"
     assert_not_contains "Workflow does not require long-lived npm token" "NPM_TOKEN" "$workflow_doc"

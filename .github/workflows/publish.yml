@@ -21,5 +21,6 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - run: npm ci
+      - run: python3 -m pip install Pillow
       - run: npm test
       - run: npm publish --access public

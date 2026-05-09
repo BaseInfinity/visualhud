@@ -17,6 +17,12 @@ That installs VisualHUD into the current Git repo only. It writes `.codex/`,
 `.visualhud/`, and `.agents/skills/visualhud-*` in that repo; it does not install
 a global Codex or Claude hook.
 
+VisualHUD setup/update skills should run platform setup helpers themselves. For
+example, when a Windows repo should use WezTerm for live colors/backgrounds, the
+skill should install with `--platform wezterm`, run `setup-wezterm.ps1`, and
+handle straightforward config merges instead of sending you manual follow-up
+commands.
+
 On macOS/iTerm2, if iTerm2 has not been configured for tab colors and pane
 background images yet, run this once after install, then quit and reopen iTerm2:
 

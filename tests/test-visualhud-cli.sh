@@ -54,6 +54,18 @@ assert_contains() {
     fi
 }
 
+assert_not_contains() {
+    local label="$1" needle="$2" haystack="$3"
+    TOTAL=$((TOTAL + 1))
+    if [[ "$haystack" != *"$needle"* ]]; then
+        PASS=$((PASS + 1))
+        printf "  PASS: %s\n" "$label"
+    else
+        FAIL=$((FAIL + 1))
+        printf "  FAIL: %s (expected output not to contain '%s')\n" "$label" "$needle"
+    fi
+}
+
 assert_file_exists() {
     local label="$1" filepath="$2"
     TOTAL=$((TOTAL + 1))
@@ -100,7 +112,8 @@ help_status=$?
 set -e
 assert_eq "Help exits zero" "0" "$help_status"
 assert_contains "Help shows bare npx install command" "npx -y visualhud@latest" "$help_output"
-assert_contains "Help shows Codex start command" "codex --full-auto" "$help_output"
+assert_contains "Help shows Codex start command" "codex --yolo" "$help_output"
+assert_not_contains "Help does not recommend legacy full-auto flag" "codex --full-auto" "$help_output"
 echo ""
 
 echo "--- Test 2: Theme CLI lists, sets, and reports repo-local theme ---"

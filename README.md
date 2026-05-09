@@ -10,7 +10,7 @@ Codex on macOS/iTerm2, Windows Terminal/PowerShell, or WezTerm, from the repo yo
 
 ```bash
 npx -y visualhud@latest
-codex --full-auto
+codex --yolo
 ```
 
 That installs VisualHUD into the current Git repo only. It writes `.codex/`,

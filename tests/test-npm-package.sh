@@ -45,6 +45,16 @@ assert_contains() {
     fi
 }
 
+assert_not_contains() {
+    local label="$1" needle="$2" haystack="$3"
+    TOTAL=$((TOTAL + 1))
+    if [[ "$haystack" != *"$needle"* ]]; then
+        pass "$label"
+    else
+        fail "$label (expected content not to contain '$needle')"
+    fi
+}
+
 assert_file_exists() {
     local label="$1" filepath="$2"
     TOTAL=$((TOTAL + 1))
@@ -78,7 +88,8 @@ if [ -f "$ROOT_DIR/package.json" ]; then
 fi
 assert_contains "Full suite runner includes lifecycle suite" "tests/test-cooking-status.sh" "$RUN_ALL_DOC"
 assert_contains "README documents one-command npx install" "npx -y visualhud@latest" "$README_DOC"
-assert_contains "README documents Codex restart after install" "codex --full-auto" "$README_DOC"
+assert_contains "README documents Codex restart after install" "codex --yolo" "$README_DOC"
+assert_not_contains "README does not recommend legacy full-auto flag" "codex --full-auto" "$README_DOC"
 assert_contains "README documents target repo install" "npx -y visualhud@latest install codex --target" "$README_DOC"
 echo ""
 

@@ -109,8 +109,8 @@ case "$*" in
     "publish --access public")
         printf 'publish ok\n'
         ;;
-    "view visualhud@0.1.1 version")
-        printf '0.1.1\n'
+    "view visualhud@0.1.2 version")
+        printf '0.1.2\n'
         ;;
     "trust github --file publish.yml --repo BaseInfinity/visualhud --yes")
         printf 'trusted publisher linked\n'
@@ -177,8 +177,8 @@ assert_contains "Publish checks npm auth" "npm|whoami" "$publish_log"
 assert_contains "Publish runs tests" "npm|test" "$publish_log"
 assert_contains "Publish runs dry-run first" "npm|publish --access public --dry-run" "$publish_log"
 assert_contains "Publish runs real npm publish" "npm|publish --access public"$'\n' "$publish_log"
-assert_contains "Publish verifies registry version" "npm|view visualhud@0.1.1 version" "$publish_log"
-assert_contains "Publish output confirms registry version" "Published visualhud@0.1.1." "$publish_output"
+assert_contains "Publish verifies registry version" "npm|view visualhud@0.1.2 version" "$publish_log"
+assert_contains "Publish output confirms registry version" "Published visualhud@0.1.2." "$publish_output"
 echo ""
 
 echo "--- Test 3: dirty worktree blocks release before npm commands ---"

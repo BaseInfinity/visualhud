@@ -26,7 +26,7 @@ usage() {
 Quick start:
   cd /path/to/repo
   npx -y visualhud@latest
-  codex --full-auto
+  codex --yolo
 
 Usage:
   visualhud [--theme <name>] [--platform macos|windows|wezterm]
@@ -321,7 +321,7 @@ install_codex() {
             printf 'Run once to enable live WezTerm backgrounds: pwsh -ExecutionPolicy Bypass -File "%s/setup-wezterm.ps1"\n' "$runtime_dir"
             ;;
     esac
-    printf 'Then start Codex in the target repo: codex --full-auto\n'
+    printf 'Then start Codex in the target repo: codex --yolo\n'
 }
 
 calibration_counter_file() {

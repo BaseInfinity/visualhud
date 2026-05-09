@@ -72,6 +72,51 @@ make_repo() {
     printf '%s\n' "$target"
 }
 
+hook_registered() {
+    local hooks_json="$1" event="$2" needle="$3"
+    node - "$hooks_json" "$event" "$needle" <<'JS'
+const fs = require("fs");
+const [, , hooksJson, event, needle] = process.argv;
+const data = JSON.parse(fs.readFileSync(hooksJson, "utf8"));
+const groups = (data.hooks && data.hooks[event]) || [];
+const found = groups.some((group) =>
+  (group.hooks || []).some((hook) => String(hook.command || "").includes(needle)),
+);
+console.log(found ? "true" : "false");
+JS
+}
+
+hook_command_registered() {
+    local hooks_json="$1" event="$2" command="$3"
+    node - "$hooks_json" "$event" "$command" <<'JS'
+const fs = require("fs");
+const [, , hooksJson, event, command] = process.argv;
+const data = JSON.parse(fs.readFileSync(hooksJson, "utf8"));
+const groups = (data.hooks && data.hooks[event]) || [];
+const found = groups.some((group) =>
+  (group.hooks || []).some((hook) => String(hook.command || "") === command),
+);
+console.log(found ? "true" : "false");
+JS
+}
+
+hook_count() {
+    local hooks_json="$1" event="$2" needle="$3"
+    node - "$hooks_json" "$event" "$needle" <<'JS'
+const fs = require("fs");
+const [, , hooksJson, event, needle] = process.argv;
+const data = JSON.parse(fs.readFileSync(hooksJson, "utf8"));
+const groups = (data.hooks && data.hooks[event]) || [];
+let count = 0;
+for (const group of groups) {
+  for (const hook of group.hooks || []) {
+    if (String(hook.command || "").includes(needle)) count += 1;
+  }
+}
+console.log(String(count));
+JS
+}
+
 echo "=== Test Suite: visualhud install ==="
 echo ""
 
@@ -112,12 +157,12 @@ assert_file_exists "Theme skill is installed for Codex discovery" "$target/.agen
 assert_file_exists "Feedback skill is installed for Codex discovery" "$target/.agents/skills/visualhud-feedback/SKILL.md"
 assert_contains "Setup skill points at installed runtime CLI" ".visualhud/visualhud install codex" "$(cat "$target/.agents/skills/visualhud-setup/SKILL.md")"
 assert_contains "Theme skill points at installed runtime CLI" ".visualhud/visualhud theme set" "$(cat "$target/.agents/skills/visualhud-theme/SKILL.md")"
-assert_eq "PreToolUse hook registered" "true" "$(jq -r 'any(.hooks.PreToolUse[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
-assert_eq "PermissionRequest hook registered" "true" "$(jq -r 'any(.hooks.PermissionRequest[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
-assert_eq "UserPromptSubmit hook registered" "true" "$(jq -r 'any(.hooks.UserPromptSubmit[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
-assert_eq "Stop hook registered" "true" "$(jq -r 'any(.hooks.Stop[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
-assert_eq "TaskCompleted hook registered" "true" "$(jq -r 'any(.hooks.TaskCompleted[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
-assert_eq "SessionStart hook registered" "true" "$(jq -r 'any(.hooks.SessionStart[]?.hooks[]?; .command | contains("visualhud-codex.sh"))' "$target/.codex/hooks.json")"
+assert_eq "PreToolUse hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "PreToolUse" "visualhud-codex.sh")"
+assert_eq "PermissionRequest hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "PermissionRequest" "visualhud-codex.sh")"
+assert_eq "UserPromptSubmit hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "UserPromptSubmit" "visualhud-codex.sh")"
+assert_eq "Stop hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "Stop" "visualhud-codex.sh")"
+assert_eq "TaskCompleted hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "TaskCompleted" "visualhud-codex.sh")"
+assert_eq "SessionStart hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "SessionStart" "visualhud-codex.sh")"
 echo ""
 
 echo "--- Test 3: Codex install preserves existing hooks and is idempotent ---"
@@ -143,9 +188,9 @@ JSON
 printf -- '---\nname: existing-skill\ndescription: keep me\n---\n' > "$target/.agents/skills/existing-skill/SKILL.md"
 "$CLI" install codex --target "$target" --platform macos --theme pokemon >/dev/null
 "$CLI" install codex --target "$target" --platform macos --theme pokemon >/dev/null
-assert_eq "Existing hook is preserved" "true" "$(jq -r 'any(.hooks.PreToolUse[]?.hooks[]?; .command == "bash .codex/hooks/existing.sh")' "$target/.codex/hooks.json")"
-assert_eq "VisualHUD hook is not duplicated" "1" "$(jq -r '[.hooks.PreToolUse[]?.hooks[]? | select(.command | contains("visualhud-codex.sh"))] | length' "$target/.codex/hooks.json")"
-assert_eq "TaskCompleted hook is not duplicated" "1" "$(jq -r '[.hooks.TaskCompleted[]?.hooks[]? | select(.command | contains("visualhud-codex.sh"))] | length' "$target/.codex/hooks.json")"
+assert_eq "Existing hook is preserved" "true" "$(hook_command_registered "$target/.codex/hooks.json" "PreToolUse" "bash .codex/hooks/existing.sh")"
+assert_eq "VisualHUD hook is not duplicated" "1" "$(hook_count "$target/.codex/hooks.json" "PreToolUse" "visualhud-codex.sh")"
+assert_eq "TaskCompleted hook is not duplicated" "1" "$(hook_count "$target/.codex/hooks.json" "TaskCompleted" "visualhud-codex.sh")"
 assert_eq "Reinstall can switch active theme" "pokemon" "$(cat "$target/.visualhud/theme")"
 assert_file_exists "Existing repo skill is preserved" "$target/.agents/skills/existing-skill/SKILL.md"
 "$target/.visualhud/visualhud" install codex --target "$target" --platform macos --theme tmnt >/dev/null
@@ -154,15 +199,16 @@ assert_file_exists "Installed runtime self-repair keeps VisualHUD skills" "$targ
 assert_eq "Installed runtime self-repair can switch theme" "tmnt" "$(cat "$target/.visualhud/theme")"
 echo ""
 
-echo "--- Test 4: Windows Codex install is explicit until a renderer exists ---"
+echo "--- Test 4: Windows Codex install writes the status renderer ---"
 target="$(make_repo windows-codex)"
 set +e
 windows_output="$("$CLI" install codex --target "$target" --platform windows --theme tmnt 2>&1)"
 windows_status=$?
 set -e
-assert_eq "Windows install exits nonzero" "1" "$windows_status"
-assert_contains "Windows install explains renderer gap" "Windows Terminal/PowerShell renderer is not supported yet" "$windows_output"
-assert_eq "Windows install does not write hooks" "false" "$(test -f "$target/.codex/hooks.json" && printf true || printf false)"
+assert_eq "Windows install exits zero" "0" "$windows_status"
+assert_contains "Windows install reports renderer" "Renderer: Windows Terminal/PowerShell" "$windows_output"
+assert_file_exists "Windows install writes hooks" "$target/.codex/hooks.json"
+assert_contains "Windows wrapper pins renderer" 'VISUALHUD_RENDERER="windows"' "$(cat "$target/.codex/hooks/visualhud-codex.sh")"
 echo ""
 
 echo "=== Results: $PASS/$TOTAL passed, $FAIL failed ==="

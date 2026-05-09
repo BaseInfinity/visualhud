@@ -4,7 +4,14 @@
 set -euo pipefail
 
 INPUT=$(cat)
-EVENT=$(printf '%s' "$INPUT" | jq -r '.hook_event_name // empty' 2>/dev/null || true)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+JSON_HELPER="${VISUALHUD_JSON_HELPER:-$SCRIPT_DIR/scripts/visualhud-json.js}"
+
+json_helper() {
+    node "$JSON_HELPER" "$@"
+}
+
+EVENT=$(printf '%s' "$INPUT" | json_helper event-name 2>/dev/null || true)
 
 if [ -z "$EVENT" ]; then
     case "${1:-}" in
@@ -14,7 +21,6 @@ if [ -z "$EVENT" ]; then
     esac
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 THEMES_DIR="${VISUALHUD_THEMES_DIR:-$SCRIPT_DIR/themes}"
 ACTIVE_THEME_FILE="${VISUALHUD_THEME_FILE:-$SCRIPT_DIR/theme}"
 THEME="${VISUALHUD_THEME:-}"
@@ -32,17 +38,36 @@ if [ ! -f "$THEME_FILE" ]; then
     THEME_FILE="$THEMES_DIR/pokemon/theme.json"
 fi
 
-SESSION_ID="${ITERM_SESSION_ID:-}"
+INPUT_SESSION_ID=$(printf '%s' "$INPUT" | json_helper field session_id 2>/dev/null || true)
+SESSION_ID="${ITERM_SESSION_ID:-${WT_SESSION:-${INPUT_SESSION_ID:-visualhud}}}"
 PROJECT_NAME=$(basename "$PWD")
 SESSION_KEY=$(printf '%s' "$SESSION_ID" | tr ':/' '__')
-COUNTER_FILE="/private/tmp/claude-cooking-counter_${SESSION_KEY}"
-STAGE_FILE="/private/tmp/claude-cooking-stage_${SESSION_KEY}"
-ATTENTION_FILE="/private/tmp/claude-cooking-attention_${SESSION_KEY}"
-CONTEXT_FILE="/private/tmp/claude-cooking-context_${SESSION_KEY}"
-REVIEW_FILE="/private/tmp/claude-cooking-review_${SESSION_KEY}"
+VISUALHUD_STATE_ROOT="${VISUALHUD_STATE_DIR:-${TMPDIR:-/tmp}}"
+mkdir -p "$VISUALHUD_STATE_ROOT" 2>/dev/null || true
+COUNTER_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-counter_${SESSION_KEY}"
+STAGE_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-stage_${SESSION_KEY}"
+ATTENTION_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-attention_${SESSION_KEY}"
+CONTEXT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-context_${SESSION_KEY}"
+REVIEW_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-review_${SESSION_KEY}"
 SPRITES_DIR="${VISUALHUD_SPRITES_DIR:-$SCRIPT_DIR/sprites}"
 SET_BG="${VISUALHUD_SET_BG:-$SCRIPT_DIR/set_bg.py}"
 TTY_TARGET="${VISUALHUD_TTY:-/dev/tty}"
+RENDERER="${VISUALHUD_RENDERER:-}"
+
+if [ -z "$RENDERER" ]; then
+    if [ -n "${WEZTERM_PANE:-}" ]; then
+        RENDERER="wezterm"
+    elif [ -n "${ITERM_SESSION_ID:-}" ]; then
+        RENDERER="iterm2"
+    elif [ -n "${WT_SESSION:-}" ]; then
+        RENDERER="windows"
+    else
+        case "$(uname -s 2>/dev/null || printf unknown)" in
+            MINGW*|MSYS*|CYGWIN*) RENDERER="windows" ;;
+            *) RENDERER="iterm2" ;;
+        esac
+    fi
+fi
 
 to_hex() {
     printf '%02x' "$1"
@@ -53,106 +78,18 @@ to_tint() {
 }
 
 progress_bar() {
-    local stage="$1" i bar token limit
-    limit=$(jq -r '(.progress_bar // []) | length' "$THEME_FILE")
-    if [ "$limit" -le 0 ]; then
-        limit="$stage"
-    fi
-    bar=""
-    for ((i=0; i<stage && i<limit; i++)); do
-        token=$(jq -r --argjson idx "$i" '.progress_bar[$idx] // "■"' "$THEME_FILE")
-        bar="${bar}${token}"
-    done
-    printf '%s' "$bar"
+    local stage="$1"
+    json_helper progress-bar "$THEME_FILE" "$stage"
 }
 
 theme_state_json() {
     local state="$1" count="${2:-0}"
-    case "$state" in
-        progress)
-            jq -c --argjson count "$count" '
-              def clamp($value; $min; $max):
-                if $value < $min then $min
-                elif $value > $max then $max
-                else $value
-                end;
-
-              .stages as $stages
-              | (
-                  [$stages | to_entries[] | select(($count <= .value.max) or (.value.max == null))][0]
-                  // ($stages | to_entries | last)
-                ) as $entry
-              | ($entry.key) as $idx
-              | ($entry.value) as $stage
-              | (if $idx == 0 then 1 else (($stages[$idx - 1].max // 0) + 1) end) as $start
-              | ($stage.shades // []) as $shades
-              | if ($shades | length) > 1 then
-                  (
-                    if (($stage.max // 999999) >= 999999) then
-                      (
-                        if $idx == 0 then
-                          (($shades | length) * 20)
-                        else
-                          ($stages[$idx - 1].max // ($start - 1)) as $previous_max
-                          | (if $idx <= 1 then 1 else (($stages[$idx - 2].max // 0) + 1) end) as $previous_start
-                          | (($previous_max - $previous_start + 1) * ($shades | length))
-                        end
-                      ) as $span
-                      | clamp(((($count - $start) * ($shades | length) / $span) | floor); 0; (($shades | length) - 1))
-                    else
-                      ($stage.max - $start + 1) as $span
-                      | clamp(((($count - $start) * ($shades | length) / $span) | floor); 0; (($shades | length) - 1))
-                    end
-                  ) as $shade_index
-                  | (
-                      $stage
-                      + {color: $shades[$shade_index], active_shade: ($shade_index + 1)}
-                      + (
-                          if (($stage.shade_sprites // []) | length) > $shade_index then
-                            {base_sprite: $stage.sprite, sprite: $stage.shade_sprites[$shade_index]}
-                          else
-                            {}
-                          end
-                        )
-                    )
-                else
-                  $stage
-                end
-            ' "$THEME_FILE"
-            ;;
-        *)
-            jq -c --arg state "$state" '.[$state]' "$THEME_FILE"
-            ;;
-    esac
+    json_helper state "$THEME_FILE" "$state" "$count"
 }
 
 is_review_payload() {
     local json="$1"
-    printf '%s' "$json" | jq -e '
-      def text_values:
-        [
-          .tool_name?,
-          .tool_input.command?,
-          .tool_input.description?,
-          .tool_input.prompt?,
-          .tool_input.task?,
-          .description?,
-          .prompt?,
-          .message?,
-          .last_assistant_message?,
-          .task?,
-          .title?
-        ]
-        | map(select(type == "string"))
-        | join(" ");
-
-      (text_values) as $text
-      | (
-          ($text | test("(?i)(code[- ]?review|coder[- ]?review|/code-review|reviewing[ +]+shipping|review[ +]+ship|codex review|claude review|cross-model review|pull request review|pr review|review deliverables|review round|ship review|reviewer|review v[0-9])"))
-          or ((((.tool_name? // "") | ascii_downcase) == "task") and ($text | test("(?i)review")))
-          or ((((.tool_name? // "") | ascii_downcase) == "bash") and ($text | test("(?i)((codex|claude)[^\n]{0,240}review|review[^\n]{0,240}(codex|claude))")))
-        )
-    ' >/dev/null 2>&1
+    printf '%s' "$json" | json_helper review-payload >/dev/null 2>&1
 }
 
 sprite_path_for() {
@@ -175,43 +112,10 @@ badge_text_for() {
 context_percent_from_json() {
     local json="$1" percent
 
-    percent=$(printf '%s' "$json" | jq -r '
-      def num:
-        if type == "number" then .
-        elif type == "string" then (sub("%$"; "") | tonumber?)
-        else empty
-        end;
-      [
-        (.context_used_percent? | num),
-        (.context_percent? | num),
-        (.context.used_percent? | num),
-        (.context.percent_used? | num),
-        (.context_usage.used_percent? | num),
-        (.context_usage.percent_used? | num),
-        (.token_usage.context_used_percent? | num),
-        (.info.context_used_percent? | num),
-        (.payload.info.context_used_percent? | num)
-      ] | map(select(. != null)) | .[0] // empty | floor
-    ' 2>/dev/null || true)
+    percent=$(printf '%s' "$json" | json_helper context-percent-json 2>/dev/null || true)
     if [ -n "$percent" ]; then
         printf '%s' "$percent"
-        return 0
     fi
-
-    printf '%s' "$json" | jq -r '
-      def pct($tokens; $window):
-        if (($tokens | type) == "number" and ($window | type) == "number" and $window > 0)
-        then (($tokens * 100 / $window) | floor)
-        else empty
-        end;
-      [
-        pct(.info.last_token_usage.total_tokens?; .info.model_context_window?),
-        pct(.payload.info.last_token_usage.total_tokens?; .payload.info.model_context_window?),
-        pct(.token_count.info.last_token_usage.total_tokens?; .token_count.info.model_context_window?),
-        pct(.token_usage.last_token_usage.total_tokens?; .token_usage.model_context_window?),
-        pct(.last_token_usage.total_tokens?; .model_context_window?)
-      ] | map(select(. != null)) | .[0] // empty
-    ' 2>/dev/null || true
 }
 
 codex_session_file_for() {
@@ -233,19 +137,14 @@ context_percent_from_session_file() {
     local session_file="$1"
     [ -f "$session_file" ] || return 0
 
-    tail -n 200 "$session_file" 2>/dev/null | jq -r '
-      select(.type == "event_msg" and .payload.type == "token_count" and .payload.info != null)
-      | [.payload.info.last_token_usage.total_tokens, .payload.info.model_context_window]
-      | select(.[0] != null and .[1] != null and .[1] > 0)
-      | ((.[0] * 100 / .[1]) | floor)
-    ' 2>/dev/null | tail -n 1
+    json_helper context-percent-session "$session_file" 2>/dev/null || true
 }
 
 context_percent_from_input() {
     local env_percent="${VISUALHUD_CONTEXT_USED_PERCENT:-}" percent session_id session_file
 
     if [ -n "$env_percent" ]; then
-        jq -n -r --arg value "$env_percent" '$value | sub("%$"; "") | tonumber? | floor' 2>/dev/null || true
+        printf '{"context_used_percent":"%s"}' "$env_percent" | json_helper context-percent-json 2>/dev/null || true
         return 0
     fi
 
@@ -255,7 +154,7 @@ context_percent_from_input() {
         return 0
     fi
 
-    session_id=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)
+    session_id=$(printf '%s' "$INPUT" | json_helper field session_id 2>/dev/null || true)
     session_file=$(codex_session_file_for "$session_id")
     if [ -n "$session_file" ]; then
         context_percent_from_session_file "$session_file"
@@ -266,28 +165,10 @@ context_alert_json() {
     local percent="$1"
     [ -n "$percent" ] || return 0
 
-    jq -c --argjson percent "$percent" '
-      def cfg($level): ((.context_alerts // {})[$level] // {});
-      def alert($level; $fallback_min; $fallback_badge; $fallback_name; $fallback_color):
-        (cfg($level) + {
-          level: $level,
-          percent: $percent,
-          min_percent: (cfg($level).min_percent // $fallback_min),
-          badge: (cfg($level).badge // $fallback_badge),
-          name: (cfg($level).name // $fallback_name),
-          color: (cfg($level).color // $fallback_color)
-        });
-      if $percent >= ((cfg("critical").min_percent // 85)) then
-        alert("critical"; 85; "CTX!"; "Context Critical"; [255, 45, 45])
-      elif $percent >= ((cfg("warning").min_percent // 70)) then
-        alert("warning"; 70; "CTX"; "Context High"; [255, 190, 40])
-      else
-        empty
-      end
-    ' "$THEME_FILE" 2>/dev/null || true
+    json_helper context-alert "$THEME_FILE" "$percent" 2>/dev/null || true
 }
 
-emit_terminal_status() {
+emit_iterm_status() {
     local tty_target="$1" badge_text="$2" tr="$3" tg="$4" tb="$5" rh="$6" gh="$7" bh="$8" r="$9"
     shift 9
     local g="$1" b="$2" title="$3" context_title="$4"
@@ -309,18 +190,110 @@ emit_terminal_status() {
     } >> "$tty_target" 2>/dev/null || true
 }
 
+windows_progress_state() {
+    local state_kind="$1" context_alert="$2"
+    case "$state_kind" in
+        error)
+            printf '2'
+            ;;
+        blocked)
+            printf '4'
+            ;;
+        review)
+            printf '3'
+            ;;
+        progress)
+            if [ -n "$context_alert" ]; then
+                printf '4'
+            else
+                printf '1'
+            fi
+            ;;
+        *)
+            printf '0'
+            ;;
+    esac
+}
+
+windows_progress_percent() {
+    local stage_num="$1" state_kind="$2" limit
+    case "$state_kind" in
+        progress|review)
+            limit=$(json_helper progress-bar-length "$THEME_FILE" 2>/dev/null || printf '0')
+            if [ -n "$stage_num" ] && [ "$limit" -gt 0 ]; then
+                printf '%d' $((stage_num * 100 / limit))
+            else
+                printf '0'
+            fi
+            ;;
+        *)
+            printf '0'
+            ;;
+    esac
+}
+
+emit_windows_status() {
+    local tty_target="$1" title="$2" stage_num="$3" state_kind="$4" context_alert="$5"
+    local progress_state progress_percent
+
+    progress_state=$(windows_progress_state "$state_kind" "$context_alert")
+    progress_percent=$(windows_progress_percent "$stage_num" "$state_kind")
+    {
+        printf '\033]0;%s\a' "$title"
+        printf '\033]9;4;%s;%s\a' "$progress_state" "$progress_percent"
+    } >> "$tty_target" 2>/dev/null || true
+}
+
+emit_wezterm_status() {
+    local tty_target="$1" badge_text="$2" title="$3" context_title="$4" stage_num="$5" state_kind="$6"
+    local sprite_path="$7" color_hex="$8" tint_hex="$9" stage_name="${10}" progress_percent state_b64
+
+    progress_percent=$(windows_progress_percent "$stage_num" "$state_kind")
+    state_b64=$(json_helper wezterm-state \
+        "$title" \
+        "$context_title" \
+        "$sprite_path" \
+        "$color_hex" \
+        "$tint_hex" \
+        "$stage_num" \
+        "$state_kind" \
+        "$progress_percent" \
+        "$badge_text" \
+        "$stage_name" \
+        "$PROJECT_NAME")
+
+    {
+        printf '\033]0;%s\a' "$title"
+        printf '\033]1337;SetUserVar=%s=%s\007' "visualhudState" "$state_b64"
+    } >> "$tty_target" 2>/dev/null || true
+}
+
+emit_terminal_status() {
+    local tty_target="$1" badge_text="$2" tr="$3" tg="$4" tb="$5" rh="$6" gh="$7" bh="$8" r="$9"
+    shift 9
+    local g="$1" b="$2" title="$3" context_title="$4" stage_num="${5:-}" state_kind="${6:-progress}" context_alert="${7:-}" sprite_path="${8:-}" stage_name="${9:-}"
+
+    case "$RENDERER" in
+        wezterm)
+            emit_wezterm_status "$tty_target" "$badge_text" "$title" "$context_title" "$stage_num" "$state_kind" "$sprite_path" "#${rh}${gh}${bh}" "#${tr}${tg}${tb}" "$stage_name"
+            ;;
+        windows|win32|powershell|windows-terminal)
+            emit_windows_status "$tty_target" "$title" "$stage_num" "$state_kind" "$context_alert"
+            ;;
+        *)
+            emit_iterm_status "$tty_target" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title"
+            ;;
+    esac
+}
+
 set_status_from_json() {
-    local state_json="$1" fallback_stage_num="${2:-}"
+    local state_json="$1" fallback_stage_num="${2:-}" state_kind="${3:-progress}"
     local r g b sprite badge_emoji stage_name stage_num rh gh bh tr tg tb badge_text title sprite_path
     local context_alert context_level context_percent context_badge context_name context_title reapply_delay
+    local state_fields
 
-    r=$(printf '%s' "$state_json" | jq -r '.color[0]')
-    g=$(printf '%s' "$state_json" | jq -r '.color[1]')
-    b=$(printf '%s' "$state_json" | jq -r '.color[2]')
-    sprite=$(printf '%s' "$state_json" | jq -r '.sprite // ""')
-    badge_emoji=$(printf '%s' "$state_json" | jq -r '.badge // ""')
-    stage_name=$(printf '%s' "$state_json" | jq -r '.name // ""')
-    stage_num=$(printf '%s' "$state_json" | jq -r '.stage // empty')
+    state_fields=$(printf '%s' "$state_json" | json_helper state-fields)
+    IFS=$'\t' read -r r g b sprite badge_emoji stage_name stage_num <<< "$state_fields"
     stage_num="${stage_num:-$fallback_stage_num}"
 
     rh=$(to_hex "$r")
@@ -343,10 +316,9 @@ set_status_from_json() {
 
     context_alert="${CONTEXT_ALERT_JSON:-}"
     if [ -n "$context_alert" ]; then
-        context_level=$(printf '%s' "$context_alert" | jq -r '.level')
-        context_percent=$(printf '%s' "$context_alert" | jq -r '.percent')
-        context_badge=$(printf '%s' "$context_alert" | jq -r '.badge')
-        context_name=$(printf '%s' "$context_alert" | jq -r '.name')
+        local alert_fields
+        alert_fields=$(printf '%s' "$context_alert" | json_helper alert-fields)
+        IFS=$'\t' read -r context_level context_percent context_badge context_name <<< "$alert_fields"
 
         badge_text="${badge_text} ${context_badge}${context_percent}"
         context_title="${context_name} CTX ${context_percent}%"
@@ -357,12 +329,13 @@ set_status_from_json() {
         rm -f "$CONTEXT_FILE" 2>/dev/null
     fi
 
-    emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title"
+    sprite_path=$(sprite_path_for "$sprite")
+    emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name"
     reapply_delay="${VISUALHUD_REAPPLY_DELAY:-0}"
     if [ -n "$reapply_delay" ] && [ "$reapply_delay" != "0" ]; then
         (
             sleep "$reapply_delay"
-            emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title"
+            emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name"
         ) >/dev/null 2>&1 &
     fi
 
@@ -370,8 +343,7 @@ set_status_from_json() {
     [ -f "$STAGE_FILE" ] && last_stage=$(cat "$STAGE_FILE")
     if [ "$sprite" != "$last_stage" ] && [ -n "$sprite" ]; then
         printf '%s' "$sprite" > "$STAGE_FILE" 2>/dev/null
-        sprite_path=$(sprite_path_for "$sprite")
-        if [ -f "$SET_BG" ]; then
+        if [ "$RENDERER" = "iterm2" ] && [ -f "$SET_BG" ]; then
             python3 "$SET_BG" "$sprite_path" "$SESSION_ID" 2>/dev/null &
         fi
     fi
@@ -379,7 +351,7 @@ set_status_from_json() {
 
 set_named_state() {
     local state="$1"
-    set_status_from_json "$(theme_state_json "$state")"
+    set_status_from_json "$(theme_state_json "$state")" "" "$state"
 }
 
 CONTEXT_PERCENT=$(context_percent_from_input)
@@ -391,7 +363,7 @@ case "$EVENT" in
         exit 0
         ;;
     Notification)
-        NOTIF_TYPE=$(printf '%s' "$INPUT" | jq -r '.notification_type // empty')
+        NOTIF_TYPE=$(printf '%s' "$INPUT" | json_helper field notification_type 2>/dev/null || true)
         if [ "$NOTIF_TYPE" = "permission_prompt" ]; then
             printf 'blocked' > "$ATTENTION_FILE" 2>/dev/null
             set_named_state "blocked"
@@ -443,10 +415,5 @@ count=1
 [ -f "$COUNTER_FILE" ] && count=$(( $(cat "$COUNTER_FILE") + 1 ))
 printf '%d' "$count" > "$COUNTER_FILE" 2>/dev/null
 
-stage_index=$(jq -r --argjson count "$count" '
-  .stages
-  | to_entries
-  | map(select($count <= .value.max))
-  | .[0].key // ((.stages | length) - 1)
-' "$THEME_FILE")
+stage_index=$(json_helper stage-index "$THEME_FILE" "$count")
 set_status_from_json "$(theme_state_json "progress" "$count")" "$((stage_index + 1))"

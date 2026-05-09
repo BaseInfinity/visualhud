@@ -12,20 +12,29 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_UNDER_TEST="${VISUALHUD_ENGINE_UNDER_TEST:-$ROOT_DIR/engine.sh}"
+JSON_HELPER="$ROOT_DIR/scripts/visualhud-json.js"
 PASS=0
 FAIL=0
 TOTAL=0
 export VISUALHUD_THEMES_DIR="$ROOT_DIR/themes"
 
+json_helper() {
+    node "$JSON_HELPER" "$@"
+}
+
 # Use a fake session ID so we don't interfere with real sessions
 TEST_SESSION="w0t0p0:TEST_SESSION_$(date +%s)"
 export ITERM_SESSION_ID="$TEST_SESSION"
 SESSION_KEY=$(echo "$TEST_SESSION" | tr ':/' '__')
-COUNTER_FILE="/private/tmp/claude-cooking-counter_${SESSION_KEY}"
-STAGE_FILE="/private/tmp/claude-cooking-stage_${SESSION_KEY}"
-ATTENTION_FILE="/private/tmp/claude-cooking-attention_${SESSION_KEY}"
-CONTEXT_FILE="/private/tmp/claude-cooking-context_${SESSION_KEY}"
-REVIEW_FILE="/private/tmp/claude-cooking-review_${SESSION_KEY}"
+TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/visualhud-cooking-state.XXXXXX")"
+STATE_ROOT="$TEST_ROOT/state"
+mkdir -p "$STATE_ROOT"
+export VISUALHUD_STATE_DIR="$STATE_ROOT"
+COUNTER_FILE="$STATE_ROOT/claude-cooking-counter_${SESSION_KEY}"
+STAGE_FILE="$STATE_ROOT/claude-cooking-stage_${SESSION_KEY}"
+ATTENTION_FILE="$STATE_ROOT/claude-cooking-attention_${SESSION_KEY}"
+CONTEXT_FILE="$STATE_ROOT/claude-cooking-context_${SESSION_KEY}"
+REVIEW_FILE="$STATE_ROOT/claude-cooking-review_${SESSION_KEY}"
 
 cleanup() {
     rm -f "$COUNTER_FILE" "$STAGE_FILE" "$ATTENTION_FILE" "$CONTEXT_FILE" "$REVIEW_FILE" 2>/dev/null
@@ -34,6 +43,13 @@ cleanup() {
     unset VISUALHUD_REAPPLY_DELAY
     export VISUALHUD_THEMES_DIR="$ROOT_DIR/themes"
 }
+
+final_cleanup() {
+    cleanup
+    rm -rf "$TEST_ROOT"
+    unset VISUALHUD_STATE_DIR
+}
+trap final_cleanup EXIT
 
 # Run the script with mock JSON stdin, suppress TTY output
 run_hook() {
@@ -194,7 +210,7 @@ assert_eq "Stage file is blastoise at count 901 (overflow)" "blastoise" "$(cat "
 echo ""
 
 # --- TEST 3: Stop event sets done state and clears counter ---
-echo "--- Test 3: Stop event sets Blastoise and clears counter ---"
+echo "--- Test 3: Stop event sets Mew and clears counter ---"
 cleanup
 # First create some state
 printf '50' > "$COUNTER_FILE"
@@ -203,7 +219,7 @@ printf 'bulbasaur' > "$STAGE_FILE"
 run_hook '{"hook_event_name": "Stop", "session_id": "test"}'
 assert_file_not_exists "Counter file deleted after Stop" "$COUNTER_FILE"
 assert_file_not_exists "Attention file deleted after Stop" "$ATTENTION_FILE"
-assert_eq "Stage file is blastoise after Stop" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Stage file is mew after Stop" "mew" "$(cat "$STAGE_FILE" 2>/dev/null)"
 echo ""
 
 # --- TEST 3b: Review work does not false-advertise done ---
@@ -216,19 +232,19 @@ export VISUALHUD_THEME="pokemon"
 
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "codex exec -o .reviews/latest-review.md \"Review v1.42.0 before ship\""}, "session_id": "test"}'
 assert_file_exists "Review marker is created for code review work" "$REVIEW_FILE"
-assert_eq "Pokemon review uses Wartortle instead of Blastoise" "wartortle" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Pokemon review uses Alakazam instead of a water progress stage" "alakazam" "$(cat "$STAGE_FILE" 2>/dev/null)"
 assert_contains "Review title is explicit" "Reviewing" "$(cat "$REVIEW_TTY" 2>/dev/null)"
 
 : > "$REVIEW_TTY"
 run_hook '{"hook_event_name": "Stop", "session_id": "test", "last_assistant_message": "Waiting for code review to finish."}'
 assert_file_exists "Review marker remains after Stop while review is active" "$REVIEW_FILE"
-assert_eq "Stop while reviewing preserves Wartortle" "wartortle" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Stop while reviewing preserves Alakazam" "alakazam" "$(cat "$STAGE_FILE" 2>/dev/null)"
 assert_contains "Stop while reviewing does not show Your turn" "Reviewing" "$(cat "$REVIEW_TTY" 2>/dev/null)"
 
 : > "$REVIEW_TTY"
 run_hook '{"hook_event_name": "TaskCompleted", "session_id": "test", "task": "code review completed"}'
 assert_file_not_exists "Review marker clears after TaskCompleted" "$REVIEW_FILE"
-assert_eq "TaskCompleted after review can finally show Blastoise" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "TaskCompleted after review can finally show Mew" "mew" "$(cat "$STAGE_FILE" 2>/dev/null)"
 rm -f "$REVIEW_TTY"
 echo ""
 
@@ -275,6 +291,7 @@ printf '30' > "$COUNTER_FILE"
 run_hook '{"hook_event_name": "StopFailure", "error": "rate_limit", "session_id": "test"}'
 assert_file_exists "Attention file created for ERROR" "$ATTENTION_FILE"
 assert_eq "Attention file contains 'error'" "error" "$(cat "$ATTENTION_FILE" 2>/dev/null)"
+assert_eq "Stage file is psyduck when ERROR" "psyduck" "$(cat "$STAGE_FILE" 2>/dev/null)"
 echo ""
 
 # --- TEST 8: PreToolUse clears attention state ---
@@ -329,11 +346,11 @@ assert_eq "Stage is charizard at count 6" "charizard" "$(cat "$STAGE_FILE" 2>/de
 # Claude finishes
 run_hook '{"hook_event_name": "Stop", "session_id": "test"}'
 assert_file_not_exists "Counter cleared after Stop" "$COUNTER_FILE"
-assert_eq "Stage is blastoise (done)" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Stage is mew (done)" "mew" "$(cat "$STAGE_FILE" 2>/dev/null)"
 echo ""
 
-# --- TEST 11: Notification(idle_prompt) triggers done state (Stop backup) ---
-echo "--- Test 11: idle_prompt notification triggers done state ---"
+# --- TEST 11: Notification(idle_prompt) triggers idle state ---
+echo "--- Test 11: idle_prompt notification triggers idle state ---"
 cleanup
 printf '50' > "$COUNTER_FILE"
 printf 'bulbasaur' > "$STAGE_FILE"
@@ -342,7 +359,7 @@ printf 'blocked' > "$ATTENTION_FILE"
 run_hook '{"hook_event_name": "Notification", "notification_type": "idle_prompt", "session_id": "test"}'
 assert_file_not_exists "Counter cleared after idle_prompt" "$COUNTER_FILE"
 assert_file_not_exists "Attention cleared after idle_prompt" "$ATTENTION_FILE"
-assert_eq "Stage is blastoise after idle_prompt" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Stage is eevee after idle_prompt" "eevee" "$(cat "$STAGE_FILE" 2>/dev/null)"
 echo ""
 
 # --- TEST 12: idle_prompt with no prior state still sets done ---
@@ -350,7 +367,7 @@ echo "--- Test 12: idle_prompt with clean state still sets done ---"
 cleanup
 
 run_hook '{"hook_event_name": "Notification", "notification_type": "idle_prompt", "session_id": "test"}'
-assert_eq "Stage is blastoise after idle_prompt (clean state)" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Stage is eevee after idle_prompt (clean state)" "eevee" "$(cat "$STAGE_FILE" 2>/dev/null)"
 assert_file_not_exists "No counter file after idle_prompt" "$COUNTER_FILE"
 echo ""
 
@@ -368,7 +385,7 @@ assert_eq "Stage is charizard during work" "charizard" "$(cat "$STAGE_FILE" 2>/d
 # Claude goes idle (Stop hook didn't fire — known bug)
 run_hook '{"hook_event_name": "Notification", "notification_type": "idle_prompt", "session_id": "test"}'
 assert_file_not_exists "Counter cleared by idle_prompt" "$COUNTER_FILE"
-assert_eq "Stage is blastoise via idle_prompt backup" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Stage is eevee via idle_prompt backup" "eevee" "$(cat "$STAGE_FILE" 2>/dev/null)"
 echo ""
 
 # --- TEST 14: progress_bar function outputs correct format ---
@@ -585,7 +602,7 @@ for _ in 1 2 3 4 5; do
     sleep 0.1
 done
 assert_eq "Theme-local TMNT sprite passed to set_bg" \
-    "$TMP_THEME_ROOT/tmnt/sprites/tmnt-leonardo.png" \
+    "$(cygpath -m "$TMP_THEME_ROOT/tmnt/sprites/tmnt-leonardo.png" 2>/dev/null || printf '%s' "$TMP_THEME_ROOT/tmnt/sprites/tmnt-leonardo.png")" \
     "$(head -n 1 "$SET_BG_LOG" 2>/dev/null)"
 rm -rf "$TMP_THEME_ROOT"
 cleanup

@@ -6,7 +6,7 @@ Watch your terminal transform in real-time as your agent works — colors shift,
 
 ## Install
 
-Codex on macOS/iTerm2, from the repo you want to skin:
+Codex on macOS/iTerm2, Windows Terminal/PowerShell, or WezTerm, from the repo you want to skin:
 
 ```bash
 npx -y visualhud@latest
@@ -17,8 +17,8 @@ That installs VisualHUD into the current Git repo only. It writes `.codex/`,
 `.visualhud/`, and `.agents/skills/visualhud-*` in that repo; it does not install
 a global Codex or Claude hook.
 
-If iTerm2 has not been configured for tab colors and pane background images yet,
-run this once after install, then quit and reopen iTerm2:
+On macOS/iTerm2, if iTerm2 has not been configured for tab colors and pane
+background images yet, run this once after install, then quit and reopen iTerm2:
 
 ```bash
 ./.visualhud/setup-iterm2.sh
@@ -26,6 +26,14 @@ run this once after install, then quit and reopen iTerm2:
 
 When developing from this source checkout, the equivalent local command is
 `./setup-iterm2.sh`.
+
+On Windows/WezTerm, install with the WezTerm renderer and run the setup helper
+once:
+
+```bash
+npx -y visualhud@latest install codex --platform wezterm
+powershell -ExecutionPolicy Bypass -File ./.visualhud/setup-wezterm.ps1
+```
 
 ## Screenshots
 
@@ -79,7 +87,9 @@ The installer writes:
     engine.sh
     set_bg.py
     setup-iterm2.sh
+    setup-wezterm.ps1
     visualhud
+    wezterm/
     themes/
   .agents/skills/
     visualhud-setup/
@@ -92,9 +102,12 @@ Claude support is repo-local and separate from Codex. Claude projects wire
 `.claude/settings.json` to `.claude/hooks/visualhud-claude.sh`; Codex projects
 wire `.codex/hooks.json` to `.codex/hooks/visualhud-codex.sh`.
 
-Windows Terminal/PowerShell is parked as a separate renderer track. The current
-installer is macOS/iTerm2-only until Windows has a tested background/title/color
-adapter.
+Windows Terminal/PowerShell uses a separate renderer track for tab title and
+progress status. WezTerm is the Windows path for live VisualHUD backgrounds:
+VisualHUD emits a `visualhudState` user var and the WezTerm Lua module applies
+per-window background/color overrides. Dynamic background images remain
+unsupported in Windows Terminal because it exposes background images through
+profile settings, not a per-hook escape sequence.
 
 ## Release To npm
 
@@ -226,27 +239,34 @@ specific step numbers:
 
 ### Windows Status
 
-Windows Terminal/PowerShell renderer is not supported yet. The theme JSON
-contract is portable, but the current background-image renderer uses the iTerm2
-Python API, so Windows needs a separate terminal renderer instead of reusing
-`set_bg.py`. The Codex installer fails explicitly on `--platform windows` until
-that renderer exists.
+Windows Terminal/PowerShell is supported for Codex hook install, title updates,
+and Windows Terminal progress status. The theme JSON contract is portable and
+the runtime does not require `jq`; JSON handling is done by the bundled Node
+helper under `scripts/`.
+
+WezTerm is supported for Codex hook install, title updates, and live
+background/color changes. The WezTerm renderer sends a `visualhudState` user var
+to `wezterm/visualhud.lua`, which updates the current window with
+`window:set_config_overrides()`.
+
+Windows Terminal background images are still static profile settings. Use the
+WezTerm renderer for live sprite changes on Windows.
 
 ## How It Works
 
-Claude Code and Codex fire lifecycle hooks on prompt, tool use, permission request, and stop events. VisualHUD intercepts those hooks and drives iTerm2's appearance through a progression of **stages** — each with its own colors, background image, and title.
+Claude Code and Codex fire lifecycle hooks on prompt, tool use, permission request, and stop events. VisualHUD intercepts those hooks and drives the terminal through a progression of **stages** — each with its own colors, background image where supported, and title.
 
 ```
-Hook fires → adapter normalizes event → counter increments → stage advances → iTerm2 updates
+Hook fires → adapter normalizes event → counter increments → stage advances → terminal renderer updates
 ```
 
-Each iTerm2 session is isolated via `ITERM_SESSION_ID`, so multiple Claude
-windows don't stomp each other.
+Each terminal session is isolated via `ITERM_SESSION_ID`, `WT_SESSION`, or the
+hook payload session id, so multiple windows don't stomp each other.
 
 Review work is a separate lifecycle state from done. If a Codex/Claude code
 review or background verification task is still running, VisualHUD shows the
-theme's `review` state and keeps `done`/Blastoise/Pizza Party reserved for when
-that review task completes.
+theme's `review` state and keeps `done`/Mew/Pizza Party reserved for when that
+review task completes.
 
 ## Themes
 
@@ -368,6 +388,8 @@ VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
 - Background, selection, cursor, and muted UI surface colors update through `OSC 1337;SetColors`.
 - Window/tab title, badge text, and `hudProgress`/`hudContext` user vars update from hook lifecycle state.
 - Background images update through the iTerm2 Python API (`LocalWriteOnlyProfile`) for the active terminal session.
+- Windows Terminal/PowerShell installs for Codex and updates the tab title plus `OSC 9;4` progress status.
+- WezTerm installs for Codex and updates title, right status, colors, and live background sprites through `OSC 1337;SetUserVar` plus the bundled Lua module.
 - `PreToolUse`, `UserPromptSubmit`, `Notification`, `PermissionRequest`, `Stop`, `StopFailure`, `TaskCompleted`, and `SessionStart` are mapped into the engine by repo-local adapters.
 - Theme stages use `color_family` plus `shades`, so a character can keep the same sprite while the terminal chrome advances through multiple color steps.
 - Pokemon and TMNT both ship source-backed sprite packs and theme JSON.
@@ -379,7 +401,7 @@ VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
 - Both adapters set `VISUALHUD_REAPPLY_DELAY=0.12` by default to reapply title/color after TUI repaint.
 
 **Known limitations:**
-- iTerm2 is the only complete renderer today; Windows Terminal/PowerShell needs a separate renderer.
+- iTerm2 and WezTerm are the complete live-background renderers today; Windows Terminal/PowerShell has title/progress support but not dynamic background images.
 - Background images are static only; sprite animation is parked until a terminal adapter supports it cleanly.
 - Badge content is text/emoji only because iTerm2 does not support image badges.
 - Snapshot/restore of the original terminal profile is still planned.
@@ -470,7 +492,7 @@ Task completion (stage progression) is the **main visual driver** — background
 Token/context usage is a **separate ambient indicator** that doesn't interfere with the main visual:
 - Badge/title suffix surfaces only when it matters (`CTX 70%+` warning, `CTX 85%+` critical)
 - The task stage color, cursor, and sprite stay intact; context labels must not gray-wash or emergency-wash the pane
-- Themes can name those alerts: Pokemon uses Pokemon Center/Nurse Joy, TMNT uses Casey Jones for critical context
+- Themes can name those alerts: Pokemon uses Pokemon Center/Chansey and Nurse Joy/Blissey, TMNT uses Casey Jones for critical context
 - Codex can derive context percent from hook payload token data or a matching session JSONL token-count event
 
 These are independent axes: you can be on stage 3 (Charizard) with low token usage, or stage 1 (Charmander) with high token usage.
@@ -521,8 +543,9 @@ Documenting these so we don't repeat them:
 ## Status
 
 **Pre-release.** Repo-local Codex and Claude Code hook wiring works on iTerm2.
-Windows Terminal/PowerShell support is tracked separately because it needs a
-non-iTerm2 renderer.
+Windows Terminal/PowerShell Codex installs work for title and progress status.
+WezTerm Codex installs work for title, status, colors, and live backgrounds on
+Windows.
 
 ---
 

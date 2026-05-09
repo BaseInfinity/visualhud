@@ -63,16 +63,18 @@
 | `scripts/import-tmnt-sprites.py` | repo root | Crops a source-backed four-panel TMNT character-select reference into theme-local sprite PNGs plus `manifest.json` provenance |
 | `demo.sh` | repo root | Interactive demo of all 11 stages + attention states |
 | `setup-iterm2.sh` | repo root | Configures iTerm2 defaults for VisualHUD |
+| `setup-wezterm.ps1` | repo root | Installs the WezTerm Lua module and creates a default WezTerm config when safe |
+| `wezterm/visualhud.lua` | repo root | WezTerm renderer module that reacts to VisualHUD user vars and applies per-window overrides |
 | `diagnose.py` | repo root | Diagnostic tool for troubleshooting |
 
 ## State Management
 
-- **Per-session isolation** via `ITERM_SESSION_ID`
-- State files in `/private/tmp/` with session-keyed filenames
-- Tool call counter: `/private/tmp/claude-cooking-counter_${SESSION_KEY}`
-- Current stage/sprite marker: `/private/tmp/claude-cooking-stage_${SESSION_KEY}`
-- Context/token alert marker: `/private/tmp/claude-cooking-context_${SESSION_KEY}`
-- Active code-review/background-verification marker: `/private/tmp/claude-cooking-review_${SESSION_KEY}`
+- **Per-session isolation** via `ITERM_SESSION_ID`, `WT_SESSION`, or hook payload `session_id`
+- State files live under `VISUALHUD_STATE_DIR` or `${TMPDIR:-/tmp}` with session-keyed filenames
+- Tool call counter: `claude-cooking-counter_${SESSION_KEY}`
+- Current stage/sprite marker: `claude-cooking-stage_${SESSION_KEY}`
+- Context/token alert marker: `claude-cooking-context_${SESSION_KEY}`
+- Active code-review/background-verification marker: `claude-cooking-review_${SESSION_KEY}`
 
 ## 11-Stage Progression (Logarithmic)
 
@@ -89,17 +91,18 @@ The default Pokemon theme preserves the original progression:
 | 7 | 76-120 | Ivysaur | Green |
 | 8 | 121-180 | Venusaur | Green |
 | 9 | 181-280 | Squirtle | Blue |
-| 10 | 281-400+ | Wartortle | Blue |
-| 11 | Stop | Blastoise | Blue (done) |
+| 10 | 281-400 | Wartortle | Blue |
+| 11 | 401+ | Blastoise | Blue |
 
 ## Attention States
 
 | State | Trigger | Sprite | Visual |
 |-------|---------|--------|--------|
 | BLOCKED | `permission_prompt` notification | Snorlax | Dark/muted colors |
-| REVIEW | Code-review/background-verification task starts | Wartortle | Non-final review state |
-| ERROR | `StopFailure` event | Warning | Red warning |
-| DONE | `Stop` or `idle_prompt` | Blastoise | Blue done state |
+| REVIEW | Code-review/background-verification task starts | Alakazam | Non-final review state |
+| ERROR | `StopFailure` event | Psyduck | Red warning |
+| DONE | `Stop` or review `TaskCompleted` | Mew | Completed state |
+| IDLE | `idle_prompt` notification | Eevee | Waiting state |
 
 Codex maps `PermissionRequest` to the `permission_prompt` notification, maps
 `SessionStart` to the done state so a new Codex session starts idle, and
@@ -121,12 +124,12 @@ Warning and critical overlays update badge/title/user-var text while preserving 
 Theme configs can provide their own alert identity and colors through
 `context_alerts`; those colors are metadata for reports/future non-destructive
 indicators, not a replacement for the active stage surface palette. Pokemon
-maps high context to Pokemon Center/Nurse Joy, while TMNT maps critical context
-to Casey Jones.
+maps high context to Pokemon Center/Chansey and critical context to Nurse
+Joy/Blissey, while TMNT maps critical context to Casey Jones.
 
 ## Key Technical Decisions
 
-- **Escape sequences over API**: Direct iTerm2 escape sequences for speed (tab color, title, badge, selection/background/neutral surface palette). Python API only for background images (no escape sequence equivalent).
+- **Renderer split**: iTerm2 uses direct escape sequences for tab color, title, badge, selection/background/neutral surface palette and the Python API for background images. Windows Terminal/PowerShell uses title plus `OSC 9;4` progress status. WezTerm receives a `visualhudState` user var and applies per-window colors/backgrounds through Lua `window:set_config_overrides()`.
 - **Logarithmic scaling**: Tool calls don't map linearly to progress. Early calls feel fast, later stages are earned.
 - **File-based state**: Simple, no dependencies, naturally per-session via env var.
 - **SetUserVar**: "Claude-proof" title that Claude Code can't overwrite with its own title.
@@ -145,11 +148,12 @@ pane can switch themes on the next hook without restarting Codex or Claude.
 
 ## Theme Engine
 
-The current theme engine reads `theme.json` with `jq`, supports multiple themes,
-and prefers theme-local sprite assets before falling back to legacy global
-sprites. Stage entries declare `color_family` and `shades`; the engine chooses
-the active shade from the current tool-call position inside that stage band, so
-Michelangelo can stay Michelangelo while orange advances across multiple steps.
+The current theme engine reads `theme.json` through the bundled Node JSON
+helper, supports multiple themes, and prefers theme-local sprite assets before
+falling back to legacy global sprites. Stage entries declare `color_family` and
+`shades`; the engine chooses the active shade from the current tool-call
+position inside that stage band, so Michelangelo can stay Michelangelo while
+orange advances across multiple steps.
 Stages may also declare `shade_sprites` to swap character art per shade, such as
 Raphael red variants matching the red ramp.
 If a selected theme sprite is missing, the engine sends an empty background image

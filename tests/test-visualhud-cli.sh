@@ -9,21 +9,24 @@ ENGINE="$ROOT_DIR/engine.sh"
 PASS=0
 FAIL=0
 TOTAL=0
+TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/visualhud-cli.XXXXXX")"
+STATE_ROOT="$TMP_ROOT/state"
+mkdir -p "$STATE_ROOT"
+export VISUALHUD_STATE_DIR="$STATE_ROOT"
 
 TEST_SESSION="w0t0p0:VISUALHUD_CLI_$(date +%s)"
 export ITERM_SESSION_ID="$TEST_SESSION"
 SESSION_KEY=$(printf '%s' "$TEST_SESSION" | tr ':/' '__')
-COUNTER_FILE="/private/tmp/claude-cooking-counter_${SESSION_KEY}"
-STAGE_FILE="/private/tmp/claude-cooking-stage_${SESSION_KEY}"
-ATTENTION_FILE="/private/tmp/claude-cooking-attention_${SESSION_KEY}"
-CONTEXT_FILE="/private/tmp/claude-cooking-context_${SESSION_KEY}"
-TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/visualhud-cli.XXXXXX")"
+COUNTER_FILE="$STATE_ROOT/claude-cooking-counter_${SESSION_KEY}"
+STAGE_FILE="$STATE_ROOT/claude-cooking-stage_${SESSION_KEY}"
+ATTENTION_FILE="$STATE_ROOT/claude-cooking-attention_${SESSION_KEY}"
+CONTEXT_FILE="$STATE_ROOT/claude-cooking-context_${SESSION_KEY}"
 
 cleanup() {
     rm -f "$COUNTER_FILE" "$STAGE_FILE" "$ATTENTION_FILE" "$CONTEXT_FILE" 2>/dev/null
     rm -rf "$TMP_ROOT"
     unset VISUALHUD_ROOT VISUALHUD_THEMES_DIR VISUALHUD_THEME_FILE VISUALHUD_THEME
-    unset VISUALHUD_DEFAULT_THEME VISUALHUD_TTY VISUALHUD_SET_BG
+    unset VISUALHUD_DEFAULT_THEME VISUALHUD_TTY VISUALHUD_SET_BG VISUALHUD_STATE_DIR
 }
 trap cleanup EXIT
 

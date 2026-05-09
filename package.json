@@ -10,7 +10,9 @@
     "engine.sh",
     "set_bg.py",
     "setup-iterm2.sh",
+    "setup-wezterm.ps1",
     "scripts",
+    "wezterm",
     "docs/screenshots",
     "themes",
     "skills",
@@ -23,6 +25,7 @@
   ],
   "scripts": {
     "test": "bash tests/run-all.sh",
+    "test:pokemon-theme": "node tests/test-pokemon-theme-lifecycle.js",
     "test:e2e": "bash tests/test-npm-package.sh",
     "pack:local": "npm pack",
     "release:dry-run": "bash scripts/release-npm.sh --dry-run",

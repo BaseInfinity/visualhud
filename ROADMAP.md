@@ -62,7 +62,7 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 - [ ] **TDLC: Terminal Development Life Cycle** — if terminal UI testing keeps exceeding normal shell/contact-sheet proof, define a dedicated lifecycle for terminal apps: captured pane screenshots, OCR/color sampling, host-terminal fixture runs, and explicit human-visible acceptance gates.
 - [ ] **Session context header** — show session/project/week info in title/badge (skip `/status`)
 - [ ] **Project identity** — glance across terminals, know which project each is on
-- [ ] **Celebratory finished state** — Hall of Fame / Elite 4 victory beyond Blastoise
+- [x] **Celebratory finished state** — Mew done state keeps Blastoise as the final progress-stage Pokemon
 - [x] **Context/token usage alert overlay** — warning at 70%+ and critical at 85%+ via badge/title/user var without overriding stage color/sprite
 - [ ] **Cost usage tracking** — visual warnings approaching rate/credit limits
 - [ ] **Kindle-style time estimation** — "~2 min left" based on historical sessions
@@ -74,11 +74,12 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 - [ ] **iTerm2 setup via CLI** — expose `visualhud setup iterm2` so the npm CLI can configure iTerm2 instead of requiring `./setup-iterm2.sh`
 - [x] **CLI install for Codex on macOS** — repo-local runtime copy, hook merge, theme selection
 - [ ] **CLI tool** — theme switching/install exists; `visualhud doctor/preview` still pending
-- [ ] **Codex on Windows install path** — document supported install targets and build a Windows adapter instead of reusing the iTerm2-only background API
+- [x] **Codex on Windows install path** — document supported install targets and ship a title/progress Windows adapter instead of reusing the iTerm2-only background API
 - [ ] Auto-configure Claude Code hooks in `settings.json`
 
 ## Platform Support
 - [ ] **Other agents** — Cursor, Windsurf, Cline, Aider (pluggable event source)
-- [ ] **Other terminals** — Kitty, WezTerm, Ghostty adapters
-- [ ] **Windows terminals** — Windows Terminal/PowerShell/WSL support with a non-iTerm background strategy
+- [x] **WezTerm adapter** — Windows-friendly live title/status/color/background renderer through `SetUserVar` + Lua config overrides
+- [ ] **Other terminals** — Kitty, Ghostty adapters
+- [ ] **Windows terminals** — extend Windows Terminal/PowerShell/WSL beyond title/progress with a non-iTerm background strategy
 - [ ] **Winamp-style theming** — push every visual capability to the max

@@ -14,11 +14,15 @@ TMP_DIR="$(mktemp -d)"
 ENGINE="$TMP_DIR/cooking-status.sh"
 LOG_FILE="$TMP_DIR/events.jsonl"
 OUT_FILE="$TMP_DIR/stdout.txt"
-COUNTER_FILE="/private/tmp/claude-cooking-counter_w0t0p0_CODEX_TEST_SESSION"
+STATE_ROOT="$TMP_DIR/state"
+mkdir -p "$STATE_ROOT"
+export VISUALHUD_STATE_DIR="$STATE_ROOT"
+COUNTER_FILE="$STATE_ROOT/claude-cooking-counter_w0t0p0_CODEX_TEST_SESSION"
 
 cleanup() {
     rm -f "$COUNTER_FILE"
     rm -rf "$TMP_DIR"
+    unset VISUALHUD_STATE_DIR
 }
 trap cleanup EXIT
 

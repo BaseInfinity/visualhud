@@ -207,6 +207,8 @@ windows_status=$?
 set -e
 assert_eq "Windows install exits zero" "0" "$windows_status"
 assert_contains "Windows install reports renderer" "Renderer: Windows Terminal/PowerShell" "$windows_output"
+assert_contains "Windows install points to WezTerm renderer for richer visuals" "--platform wezterm" "$windows_output"
+assert_contains "Windows install points to WezTerm setup helper" "setup-wezterm.ps1" "$windows_output"
 assert_file_exists "Windows install writes hooks" "$target/.codex/hooks.json"
 assert_contains "Windows wrapper pins renderer" 'VISUALHUD_RENDERER="windows"' "$(cat "$target/.codex/hooks/visualhud-codex.sh")"
 echo ""

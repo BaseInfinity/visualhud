@@ -314,7 +314,8 @@ install_codex() {
             ;;
         windows)
             printf 'Renderer: Windows Terminal/PowerShell\n'
-            printf 'Windows renderer updates the tab title and Windows Terminal progress indicator; dynamic background images remain iTerm2-only.\n'
+            printf 'Windows renderer updates the tab title and Windows Terminal progress indicator; background images require iTerm2 or WezTerm.\n'
+            printf 'For richer Windows colors/backgrounds in WezTerm, rerun this install with --platform wezterm, then run: pwsh -ExecutionPolicy Bypass -File "%s/setup-wezterm.ps1"\n' "$runtime_dir"
             ;;
         wezterm)
             printf 'Renderer: WezTerm\n'

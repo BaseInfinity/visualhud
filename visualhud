@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Repo-local VisualHUD CLI.
 
 set -euo pipefail
@@ -198,7 +198,7 @@ write_codex_hook_wrapper() {
     local wrapper="$target_root/.codex/hooks/visualhud-codex.sh"
     {
         cat <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 # VisualHUD installed Codex hook wrapper.
 
 set -euo pipefail

@@ -10,7 +10,11 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROOF_FILE="${VISUALHUD_SDLC_PROOF_FILE:-$REPO_ROOT/.codex-sdlc/proof/full-suite.sha256}"
 
 current_staged_hash() {
-  git -C "$REPO_ROOT" diff --cached --binary 2>/dev/null | LC_ALL=C LANG=C shasum -a 256 | awk '{print $1}'
+  if command -v sha256sum >/dev/null 2>&1; then
+    git -C "$REPO_ROOT" diff --cached --binary 2>/dev/null | LC_ALL=C LANG=C sha256sum | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    git -C "$REPO_ROOT" diff --cached --binary 2>/dev/null | LC_ALL=C LANG=C shasum -a 256 | awk '{print $1}'
+  fi
 }
 
 proof_is_current() {

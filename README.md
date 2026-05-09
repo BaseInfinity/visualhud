@@ -265,8 +265,8 @@ hook payload session id, so multiple windows don't stomp each other.
 
 Review work is a separate lifecycle state from done. If a Codex/Claude code
 review or background verification task is still running, VisualHUD shows the
-theme's `review` state and keeps `done`/Blastoise/Pizza Party reserved for when
-that review task completes.
+theme's `review` state and keeps `done`/Mew/Pizza Party reserved for when that
+review task completes.
 
 ## Themes
 
@@ -492,7 +492,7 @@ Task completion (stage progression) is the **main visual driver** — background
 Token/context usage is a **separate ambient indicator** that doesn't interfere with the main visual:
 - Badge/title suffix surfaces only when it matters (`CTX 70%+` warning, `CTX 85%+` critical)
 - The task stage color, cursor, and sprite stay intact; context labels must not gray-wash or emergency-wash the pane
-- Themes can name those alerts: Pokemon uses Pokemon Center/Nurse Joy, TMNT uses Casey Jones for critical context
+- Themes can name those alerts: Pokemon uses Pokemon Center/Chansey and Nurse Joy/Blissey, TMNT uses Casey Jones for critical context
 - Codex can derive context percent from hook payload token data or a matching session JSONL token-count event
 
 These are independent axes: you can be on stage 3 (Charizard) with low token usage, or stage 1 (Charmander) with high token usage.

@@ -14,10 +14,12 @@ TOTAL=0
 TEST_SESSION="w0t0p0:THEME_SYSTEM_$(date +%s)"
 export ITERM_SESSION_ID="$TEST_SESSION"
 SESSION_KEY=$(printf '%s' "$TEST_SESSION" | tr ':/' '__')
-COUNTER_FILE="/private/tmp/claude-cooking-counter_${SESSION_KEY}"
-STAGE_FILE="/private/tmp/claude-cooking-stage_${SESSION_KEY}"
-ATTENTION_FILE="/private/tmp/claude-cooking-attention_${SESSION_KEY}"
-CONTEXT_FILE="/private/tmp/claude-cooking-context_${SESSION_KEY}"
+STATE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/visualhud-theme-state.XXXXXX")"
+export VISUALHUD_STATE_DIR="$STATE_ROOT"
+COUNTER_FILE="$STATE_ROOT/claude-cooking-counter_${SESSION_KEY}"
+STAGE_FILE="$STATE_ROOT/claude-cooking-stage_${SESSION_KEY}"
+ATTENTION_FILE="$STATE_ROOT/claude-cooking-attention_${SESSION_KEY}"
+CONTEXT_FILE="$STATE_ROOT/claude-cooking-context_${SESSION_KEY}"
 TMP_ROOT=""
 
 cleanup() {
@@ -25,8 +27,9 @@ cleanup() {
     if [ -n "$TMP_ROOT" ] && [ -d "$TMP_ROOT" ]; then
         rm -rf "$TMP_ROOT"
     fi
+    rm -rf "$STATE_ROOT"
     unset VISUALHUD_THEME VISUALHUD_THEMES_DIR VISUALHUD_SET_BG VISUALHUD_SET_BG_LOG
-    unset VISUALHUD_TTY VISUALHUD_SPRITES_DIR VISUALHUD_CONTEXT_USED_PERCENT
+    unset VISUALHUD_TTY VISUALHUD_SPRITES_DIR VISUALHUD_CONTEXT_USED_PERCENT VISUALHUD_STATE_DIR
 }
 trap cleanup EXIT
 
@@ -159,7 +162,7 @@ assert_contains "README documents installed runtime theme switching" ".visualhud
 assert_contains "README records Batman as a future theme candidate" "Batman" "$README_DOC"
 assert_contains "README records Power Rangers as a future theme candidate" "Power Rangers" "$README_DOC"
 assert_contains "README records Sonic as a future theme candidate" "Sonic" "$README_DOC"
-assert_contains "README documents Windows renderer gap" "Windows Terminal/PowerShell renderer is not supported yet" "$README_DOC"
+assert_contains "README documents Windows status renderer" "Windows Terminal/PowerShell is supported for Codex hook install" "$README_DOC"
 assert_contains "Roadmap prioritizes TMNT hardening before new themes" "## TMNT Hardening Before New Themes" "$ROADMAP_DOC"
 assert_contains "Roadmap parks Batman theme candidate" "**Batman** (parked)" "$ROADMAP_DOC"
 assert_contains "Roadmap parks Power Rangers theme candidate" "**Power Rangers** (parked)" "$ROADMAP_DOC"
@@ -227,6 +230,7 @@ while IFS= read -r theme_file; do
     '
     missing_sprites=$(
       jq -r '[.stages[].sprite, .stages[].shade_sprites[]?, .blocked.sprite, .done.sprite, .idle.sprite, .review.sprite, .context_alerts[].sprite?] | map(select(. != null and . != "")) | unique | .[]' "$theme_file" \
+        | tr -d '\r' \
         | while IFS= read -r sprite_name; do
             if [ ! -f "$ROOT_DIR/themes/$theme_name/sprites/$sprite_name.png" ]; then
                 printf '%s\n' "$sprite_name"
@@ -291,10 +295,61 @@ assert_jq "TMNT every multi-shade stage defines per-shade sprite variants" "$ROO
     )
   )
 '
+# shellcheck disable=SC2016
+assert_jq "Pokemon lifecycle and context states use filled unique non-stage sprites" "$ROOT_DIR/themes/pokemon/theme.json" '
+  . as $theme
+  | ([.stages[].sprite, .stages[].shade_sprites[]?] | unique) as $stage_sprites
+  | [
+      .blocked.sprite,
+      .review.sprite,
+      .done.sprite,
+      .idle.sprite,
+      .error.sprite,
+      .context_alerts.warning.sprite,
+      .context_alerts.critical.sprite
+    ] as $state_sprites
+  | all($state_sprites[]; type == "string" and length > 0)
+    and (($state_sprites | unique | length) == ($state_sprites | length))
+    and all($state_sprites[]; . as $sprite | ($stage_sprites | index($sprite) | not))
+'
 echo ""
 
-echo "--- Test 3: Engine accepts a third theme by JSON only ---"
+echo "--- Test 3: Pokemon visual smoke renders filled lifecycle/context sprites ---"
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/visualhud-theme-system.XXXXXX")
+POKEMON_CONTACT_SHEET="$TMP_ROOT/pokemon-contact-sheet.png"
+POKEMON_CONTACT_REPORT="$TMP_ROOT/pokemon-contact-sheet.json"
+python3 "$ROOT_DIR/scripts/render-theme-contact-sheet.py" \
+    --theme "$ROOT_DIR/themes/pokemon/theme.json" \
+    --sprites-dir "$ROOT_DIR/themes/pokemon/sprites" \
+    --output "$POKEMON_CONTACT_SHEET" \
+    --report "$POKEMON_CONTACT_REPORT"
+
+assert_file_exists "Pokemon visual smoke writes contact sheet" "$POKEMON_CONTACT_SHEET"
+assert_file_exists "Pokemon visual smoke writes report" "$POKEMON_CONTACT_REPORT"
+assert_eq "Pokemon visual smoke covers stages/lifecycle/context" \
+    "18" \
+    "$(jq -r '.entries | length' "$POKEMON_CONTACT_REPORT")"
+assert_eq "Pokemon visual smoke has no missing sprite-backed states" \
+    "" \
+    "$(jq -r '.missing_sprites | join(",")' "$POKEMON_CONTACT_REPORT")"
+assert_eq "Pokemon lifecycle/context visual smoke has no empty sprite cards" \
+    "" \
+    "$(jq -r '[.entries[] | select((.kind != "stage") and (.kind != "stage-shade") and ((.sprite // "") == "")) | "\(.kind):\(.name)"] | join(",")' "$POKEMON_CONTACT_REPORT")"
+assert_eq "Pokemon lifecycle/context visual smoke uses unique sprites" \
+    "" \
+    "$(jq -r '[.entries[] | select((.kind != "stage") and (.kind != "stage-shade")) | .sprite] | group_by(.) | map(select(length > 1) | .[0]) | join(",")' "$POKEMON_CONTACT_REPORT")"
+assert_contains "Pokemon visual smoke covers Alakazam review" \
+    "review:Reviewing:alakazam" \
+    "$(jq -r '[.entries[] | "\(.kind):\(.name):\(.sprite // "")"] | join(",")' "$POKEMON_CONTACT_REPORT")"
+assert_contains "Pokemon visual smoke covers Mew done state" \
+    "done:Complete:mew" \
+    "$(jq -r '[.entries[] | "\(.kind):\(.name):\(.sprite // "")"] | join(",")' "$POKEMON_CONTACT_REPORT")"
+assert_contains "Pokemon visual smoke covers Nurse Joy/Blissey context" \
+    "context:Nurse Joy:blissey" \
+    "$(jq -r '[.entries[] | "\(.kind):\(.name):\(.sprite // "")"] | join(",")' "$POKEMON_CONTACT_REPORT")"
+echo ""
+
+echo "--- Test 4: Engine accepts a third theme by JSON only ---"
 THIRD_THEME="$TMP_ROOT/themes/third"
 mkdir -p "$THIRD_THEME/sprites"
 
@@ -364,7 +419,7 @@ done
 assert_eq "Third theme count 1 uses Alpha sprite" "alpha" "$(cat "$STAGE_FILE" 2>/dev/null)"
 assert_contains "Third theme writes Alpha tint escape" "SetColors=bg=030609" "$(cat "$TTY_LOG" 2>/dev/null)"
 assert_eq "Third theme calls set_bg with theme-local Alpha sprite" \
-    "$THIRD_THEME/sprites/alpha.png" \
+    "$(cygpath -m "$THIRD_THEME/sprites/alpha.png" 2>/dev/null || printf '%s' "$THIRD_THEME/sprites/alpha.png")" \
     "$(tail -n 1 "$SET_BG_LOG" 2>/dev/null)"
 
 : > "$TTY_LOG"
@@ -397,7 +452,7 @@ assert_eq "Third theme code review uses Review sprite" "review" "$(cat "$STAGE_F
 assert_contains "Third theme review title uses Review name" "Reviewing" "$(cat "$TTY_LOG" 2>/dev/null)"
 echo ""
 
-echo "--- Test 4: Visual smoke can render the third theme contact sheet ---"
+echo "--- Test 5: Visual smoke can render the third theme contact sheet ---"
 CONTACT_SHEET="$TMP_ROOT/third-contact-sheet.png"
 CONTACT_REPORT="$TMP_ROOT/third-contact-sheet.json"
 python3 "$ROOT_DIR/scripts/render-theme-contact-sheet.py" \

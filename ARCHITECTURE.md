@@ -91,17 +91,18 @@ The default Pokemon theme preserves the original progression:
 | 7 | 76-120 | Ivysaur | Green |
 | 8 | 121-180 | Venusaur | Green |
 | 9 | 181-280 | Squirtle | Blue |
-| 10 | 281-400+ | Wartortle | Blue |
-| 11 | Stop | Blastoise | Blue (done) |
+| 10 | 281-400 | Wartortle | Blue |
+| 11 | 401+ | Blastoise | Blue |
 
 ## Attention States
 
 | State | Trigger | Sprite | Visual |
 |-------|---------|--------|--------|
 | BLOCKED | `permission_prompt` notification | Snorlax | Dark/muted colors |
-| REVIEW | Code-review/background-verification task starts | Wartortle | Non-final review state |
-| ERROR | `StopFailure` event | Warning | Red warning |
-| DONE | `Stop` or `idle_prompt` | Blastoise | Blue done state |
+| REVIEW | Code-review/background-verification task starts | Alakazam | Non-final review state |
+| ERROR | `StopFailure` event | Psyduck | Red warning |
+| DONE | `Stop` or review `TaskCompleted` | Mew | Completed state |
+| IDLE | `idle_prompt` notification | Eevee | Waiting state |
 
 Codex maps `PermissionRequest` to the `permission_prompt` notification, maps
 `SessionStart` to the done state so a new Codex session starts idle, and
@@ -123,8 +124,8 @@ Warning and critical overlays update badge/title/user-var text while preserving 
 Theme configs can provide their own alert identity and colors through
 `context_alerts`; those colors are metadata for reports/future non-destructive
 indicators, not a replacement for the active stage surface palette. Pokemon
-maps high context to Pokemon Center/Nurse Joy, while TMNT maps critical context
-to Casey Jones.
+maps high context to Pokemon Center/Chansey and critical context to Nurse
+Joy/Blissey, while TMNT maps critical context to Casey Jones.
 
 ## Key Technical Decisions
 

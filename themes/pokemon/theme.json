@@ -15,12 +15,12 @@
     { "max": 999999, "sprite": "blastoise", "badge": "💧", "name": "Blastoise", "color_family": "water", "color": [40, 100, 255], "shades": [[40, 100, 255], [60, 125, 255], [25, 80, 225]] }
   ],
   "blocked": { "sprite": "snorlax", "badge": "😴", "name": "BLOCKED", "color": [40, 40, 50] },
-  "review": { "sprite": "wartortle", "badge": "REV", "name": "Reviewing", "stage": 10, "color": [50, 130, 240] },
-  "done": { "sprite": "blastoise", "badge": "💧", "name": "Your turn", "stage": 11, "color": [40, 100, 255] },
-  "idle": { "sprite": "blastoise", "badge": "💧", "name": "Your turn", "stage": 11, "color": [40, 100, 255] },
-  "error": { "sprite": "", "badge": "⚠️", "name": "Error", "color": [255, 40, 40] },
+  "review": { "sprite": "alakazam", "badge": "REV", "name": "Reviewing", "stage": 10, "color": [245, 205, 60] },
+  "done": { "sprite": "mew", "badge": "⭐", "name": "Complete", "stage": 11, "color": [255, 120, 180] },
+  "idle": { "sprite": "eevee", "badge": "IDLE", "name": "Your turn", "stage": 11, "color": [170, 115, 65] },
+  "error": { "sprite": "psyduck", "badge": "⚠️", "name": "Error", "color": [255, 40, 40] },
   "context_alerts": {
-    "warning": { "min_percent": 70, "badge": "HEAL", "name": "Pokemon Center", "color": [255, 120, 150] },
-    "critical": { "min_percent": 85, "badge": "JOY", "name": "Nurse Joy", "color": [255, 225, 235] }
+    "warning": { "min_percent": 70, "badge": "HEAL", "name": "Pokemon Center", "sprite": "chansey", "color": [255, 120, 150] },
+    "critical": { "min_percent": 85, "badge": "JOY", "name": "Nurse Joy", "sprite": "blissey", "color": [255, 225, 235] }
   }
 }

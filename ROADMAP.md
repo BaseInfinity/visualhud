@@ -62,7 +62,7 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 - [ ] **TDLC: Terminal Development Life Cycle** — if terminal UI testing keeps exceeding normal shell/contact-sheet proof, define a dedicated lifecycle for terminal apps: captured pane screenshots, OCR/color sampling, host-terminal fixture runs, and explicit human-visible acceptance gates.
 - [ ] **Session context header** — show session/project/week info in title/badge (skip `/status`)
 - [ ] **Project identity** — glance across terminals, know which project each is on
-- [ ] **Celebratory finished state** — Hall of Fame / Elite 4 victory beyond Blastoise
+- [x] **Celebratory finished state** — Mew done state keeps Blastoise as the final progress-stage Pokemon
 - [x] **Context/token usage alert overlay** — warning at 70%+ and critical at 85%+ via badge/title/user var without overriding stage color/sprite
 - [ ] **Cost usage tracking** — visual warnings approaching rate/credit limits
 - [ ] **Kindle-style time estimation** — "~2 min left" based on historical sessions

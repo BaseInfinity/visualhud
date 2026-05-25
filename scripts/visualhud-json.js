@@ -183,6 +183,23 @@ function contextPercentFromSessionFile(file) {
   return percent;
 }
 
+function transcriptTokenTotal(file) {
+  if (!file || !fs.existsSync(file)) return undefined;
+  const lines = fs.readFileSync(file, "utf8").split(/\r?\n/);
+  let total = 0;
+  for (const lineText of lines) {
+    if (!lineText.trim()) continue;
+    const entry = parseJson(lineText, null);
+    if (!entry || entry.type !== "assistant") continue;
+    const usage = getPath(entry, "message.usage") || {};
+    total += Number(usage.input_tokens || 0);
+    total += Number(usage.cache_creation_input_tokens || 0);
+    total += Number(usage.cache_read_input_tokens || 0);
+    total += Number(usage.output_tokens || 0);
+  }
+  return total;
+}
+
 function contextAlert(theme, percentArg) {
   const percent = Number(percentArg);
   if (!Number.isFinite(percent)) return null;
@@ -500,6 +517,10 @@ try {
     }
     case "context-percent-session": {
       line(contextPercentFromSessionFile(process.argv[3]) ?? "");
+      break;
+    }
+    case "transcript-token-total": {
+      line(transcriptTokenTotal(process.argv[3]) ?? "");
       break;
     }
     case "context-alert": {

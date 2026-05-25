@@ -40,10 +40,11 @@ EFFORT_FILE="$STATE_ROOT/claude-cooking-effort_${SESSION_KEY}"
 BG_CLEAR_FILE="$STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
 COMPACT_FILE="$STATE_ROOT/claude-cooking-compacting_${SESSION_KEY}"
 SUBAGENT_FILE="$STATE_ROOT/claude-cooking-subagent_${SESSION_KEY}"
+TOKENS_FILE="$STATE_ROOT/claude-cooking-tokens_${SESSION_KEY}"
 
 cleanup() {
     rm -f "$COUNTER_FILE" "$STAGE_FILE" "$ATTENTION_FILE" "$CONTEXT_FILE" "$REVIEW_FILE" 2>/dev/null
-    rm -f "$MODEL_FILE" "$EFFORT_FILE" "$BG_CLEAR_FILE" "$COMPACT_FILE" "$SUBAGENT_FILE" 2>/dev/null
+    rm -f "$MODEL_FILE" "$EFFORT_FILE" "$BG_CLEAR_FILE" "$COMPACT_FILE" "$SUBAGENT_FILE" "$TOKENS_FILE" 2>/dev/null
     unset VISUALHUD_THEME VISUALHUD_SET_BG VISUALHUD_SET_BG_LOG VISUALHUD_SPRITES_DIR
     unset VISUALHUD_TTY VISUALHUD_CONTEXT_USED_PERCENT VISUALHUD_CODEX_SESSION_FILE CODEX_HOME
     unset VISUALHUD_REAPPLY_DELAY
@@ -660,6 +661,51 @@ assert_eq "Missing TMNT sprite clears stale background" "" "$(head -n 1 "$SET_BG
 unset VISUALHUD_BG
 rm -rf "$TMP_THEME_ROOT"
 cleanup
+echo ""
+
+# --- TEST 21h: transcript_path token total → hudCost user var ---
+echo "--- Test 21h: transcript-based cost tracking emits hudCost ---"
+cleanup
+COST_TTY="${TMPDIR:-/tmp}/visualhud-cost-$$.log"
+TRANSCRIPT="${TMPDIR:-/tmp}/visualhud-transcript-$$.jsonl"
+
+# Build a transcript with 3 assistant messages: 100+200+300 input + 0+50+100 output
+# + 1000 cache_creation + 500 cache_read on one message
+# Expected total: 100+200+300 + 0+50+100 + 1000 + 500 = 2250 tokens
+cat > "$TRANSCRIPT" <<'JSONL'
+{"type":"user","message":{"role":"user","content":"hi"}}
+{"type":"assistant","message":{"role":"assistant","model":"claude-opus-4-7","usage":{"input_tokens":100,"cache_creation_input_tokens":1000,"cache_read_input_tokens":500,"output_tokens":0}}}
+{"type":"assistant","message":{"role":"assistant","model":"claude-opus-4-7","usage":{"input_tokens":200,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":50}}}
+{"type":"assistant","message":{"role":"assistant","model":"claude-opus-4-7","usage":{"input_tokens":300,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":100}}}
+JSONL
+
+export VISUALHUD_TTY="$COST_TTY"
+export VISUALHUD_THEME="pokemon"
+: > "$COST_TTY"
+rm -f "$TOKENS_FILE" 2>/dev/null
+
+run_hook "$(jq -nc --arg path "$TRANSCRIPT" '{hook_event_name:"PreToolUse", tool_name:"Read", session_id:"test", transcript_path:$path}')"
+assert_file_exists "Token total persisted to state file" "$TOKENS_FILE"
+assert_eq "Sums input+cache_creation+cache_read+output across assistant lines" "2250" "$(cat "$TOKENS_FILE" 2>/dev/null)"
+assert_contains "hudCost user var emitted" "hudCost" "$(cat "$COST_TTY" 2>/dev/null)"
+
+# Subsequent event with same transcript: still sums correctly (idempotent)
+: > "$COST_TTY"
+run_hook "$(jq -nc --arg path "$TRANSCRIPT" '{hook_event_name:"PreToolUse", tool_name:"Read", session_id:"test", transcript_path:$path}')"
+assert_eq "Total still 2250 on next call (idempotent)" "2250" "$(cat "$TOKENS_FILE" 2>/dev/null)"
+
+# Missing transcript_path: should not error, falls back to last-known value
+: > "$COST_TTY"
+run_hook '{"hook_event_name":"PreToolUse","tool_name":"Read","session_id":"test"}'
+assert_eq "Missing transcript_path keeps last-known token total" "2250" "$(cat "$TOKENS_FILE" 2>/dev/null)"
+
+# Missing transcript file at given path: also graceful (no crash, keeps last-known)
+: > "$COST_TTY"
+run_hook "$(jq -nc '{hook_event_name:"PreToolUse", tool_name:"Read", session_id:"test", transcript_path:"/nonexistent/transcript.jsonl"}')"
+assert_eq "Nonexistent transcript path keeps last-known total" "2250" "$(cat "$TOKENS_FILE" 2>/dev/null)"
+
+rm -f "$TOKENS_FILE" "$COST_TTY" "$TRANSCRIPT"
+unset VISUALHUD_TTY
 echo ""
 
 # --- TEST 21g: PostToolUseFailure rolls back counter + flash error (success-weighted progress) ---

@@ -54,6 +54,7 @@ EFFORT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-effort_${SESSION_KEY}"
 BG_CLEAR_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
 COMPACT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-compacting_${SESSION_KEY}"
 SUBAGENT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-subagent_${SESSION_KEY}"
+TOKENS_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-tokens_${SESSION_KEY}"
 SPRITES_DIR="${VISUALHUD_SPRITES_DIR:-$SCRIPT_DIR/sprites}"
 SET_BG="${VISUALHUD_SET_BG:-$SCRIPT_DIR/set_bg.py}"
 TTY_TARGET="${VISUALHUD_TTY:-/dev/tty}"
@@ -197,6 +198,7 @@ emit_iterm_status() {
         printf '\033]1337;SetUserVar=%s=%s\007' "hudProgress" "$(printf '%s' "$title" | base64)"
         printf '\033]1337;SetUserVar=%s=%s\007' "hudContext" "$(printf '%s' "$context_title" | base64)"
         printf '\033]1337;SetUserVar=%s=%s\007' "hudEffort" "$(printf '%s' "${EFFORT_LEVEL:-}" | base64)"
+        printf '\033]1337;SetUserVar=%s=%s\007' "hudCost" "$(printf '%s' "${TOKEN_TOTAL:-}" | base64)"
     } >> "$tty_target" 2>/dev/null || true
 }
 
@@ -393,6 +395,19 @@ if [ -n "$EFFORT_LEVEL" ]; then
     printf '%s' "$EFFORT_LEVEL" > "$EFFORT_FILE" 2>/dev/null
 elif [ -f "$EFFORT_FILE" ]; then
     EFFORT_LEVEL=$(cat "$EFFORT_FILE" 2>/dev/null)
+fi
+
+# Sum tokens from transcript_path (assistant lines only).
+# Adds input + cache_creation + cache_read + output across all assistant messages.
+# Persists running total in TOKENS_FILE; falls back to last-known on missing/bad path.
+TRANSCRIPT_PATH=$(printf '%s' "$INPUT" | json_helper field transcript_path 2>/dev/null || true)
+if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
+    TOKEN_TOTAL=$(json_helper transcript-token-total "$TRANSCRIPT_PATH" 2>/dev/null || printf 0)
+    if [ -n "$TOKEN_TOTAL" ]; then
+        printf '%s' "$TOKEN_TOTAL" > "$TOKENS_FILE" 2>/dev/null
+    fi
+elif [ -f "$TOKENS_FILE" ]; then
+    TOKEN_TOTAL=$(cat "$TOKENS_FILE" 2>/dev/null)
 fi
 
 # True iff input is permission_mode=plan AND active theme defines a .plan state.

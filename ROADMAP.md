@@ -74,7 +74,7 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 - [x] **Context/token usage alert overlay** — warning at 70%+ and critical at 85%+ via badge/title/user var without overriding stage color/sprite
 - [ ] **Ranger Formation window choreography** — `visualhud ranger formation` should activate iTerm2, raise/unminimize all iTerm windows, arrange at most six visible sessions on a single laptop display, and cascade/overlap the rest so solo one-monitor workflows stay manageable.
 - [ ] **Voice/dictation workflow docs** — document the recommended macOS setup for using Dictation/Voice Control with Codex/Claude terminals, including double-tap Control dictation and always-on Voice Control tradeoffs.
-- [ ] **Cost usage tracking** — visual warnings approaching rate/credit limits
+- [x] **Cost usage tracking** — engine parses `transcript_path` JSONL out-of-band, sums `input_tokens + cache_creation_input_tokens + cache_read_input_tokens + output_tokens` across all `type:assistant` lines, persists running total under `VISUALHUD_STATE_DIR` / temp state as `claude-cooking-tokens_*`, and emits iTerm2 user var `hudCost` for status-bar consumption. Threshold-based visual warnings by spend are deferred to v1.2.1.
 - [ ] **Kindle-style time estimation** — "~2 min left" based on historical sessions
 - [ ] **Sound effects** — optional theme-matched sounds on state changes (Pokemon cries, etc.)
 

@@ -164,6 +164,11 @@ assert_eq "Stop hook registered" "true" "$(hook_registered "$target/.codex/hooks
 assert_eq "TaskCompleted hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "TaskCompleted" "visualhud-codex.sh")"
 assert_eq "SessionStart hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "SessionStart" "visualhud-codex.sh")"
 assert_eq "CwdChanged hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "CwdChanged" "visualhud-codex.sh")"
+assert_eq "PreCompact hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "PreCompact" "visualhud-codex.sh")"
+assert_eq "PostCompact hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "PostCompact" "visualhud-codex.sh")"
+assert_eq "SubagentStart hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "SubagentStart" "visualhud-codex.sh")"
+assert_eq "SubagentStop hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "SubagentStop" "visualhud-codex.sh")"
+assert_eq "PostToolUseFailure hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "PostToolUseFailure" "visualhud-codex.sh")"
 echo ""
 
 echo "--- Test 3: Codex install preserves existing hooks and is idempotent ---"
@@ -220,6 +225,11 @@ assert_eq "Claude StopFailure VisualHUD hook registered" "true" "$(jq -r 'any(.h
 assert_eq "Claude TaskCompleted VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.TaskCompleted[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
 assert_eq "Claude CwdChanged VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.CwdChanged[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
 assert_eq "Claude SessionStart VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.SessionStart[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
+assert_eq "Claude PreCompact VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.PreCompact[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
+assert_eq "Claude PostCompact VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.PostCompact[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
+assert_eq "Claude SubagentStart VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.SubagentStart[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
+assert_eq "Claude SubagentStop VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.SubagentStop[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
+assert_eq "Claude PostToolUseFailure VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.PostToolUseFailure[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
 echo ""
 
 echo "--- Test 3c: Claude install preserves existing hooks + is idempotent ---"

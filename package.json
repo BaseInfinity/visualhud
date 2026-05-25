@@ -1,6 +1,6 @@
 {
   "name": "visualhud",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Themeable visual status HUD for Codex, Claude Code, and iTerm2.",
   "bin": {
     "visualhud": "visualhud"

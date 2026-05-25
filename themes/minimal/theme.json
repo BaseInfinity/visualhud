@@ -13,7 +13,9 @@
   "done":    { "sprite": "", "badge": "OK",  "name": "",     "stage": 5, "color": [60, 220, 120] },
   "idle":    { "sprite": "", "badge": "·",   "name": "Idle", "stage": 5, "color": [120, 140, 180] },
   "error":   { "sprite": "", "badge": "X",   "name": "Error",                 "color": [255, 40, 40] },
-  "plan":    { "sprite": "", "badge": "PLAN", "name": "Planning", "stage": 2, "color": [180, 110, 255] },
+  "plan":      { "sprite": "", "badge": "PLAN",    "name": "Planning",   "stage": 2, "color": [180, 110, 255] },
+  "compacting":{ "sprite": "", "badge": "COMPACT", "name": "Compacting", "stage": 3, "color": [220, 50, 230] },
+  "subagent":  { "sprite": "", "badge": "AGT",     "name": "Subagent",   "stage": 3, "color": [110, 180, 255] },
   "context_alerts": {
     "warning":  { "min_percent": 70, "badge": "WRN", "name": "Context High",     "color": [255, 190, 40] },
     "critical": { "min_percent": 85, "badge": "MAX", "name": "Context Critical", "color": [255, 60, 60] }

@@ -38,10 +38,12 @@ REVIEW_FILE="$STATE_ROOT/claude-cooking-review_${SESSION_KEY}"
 MODEL_FILE="$STATE_ROOT/claude-cooking-model_${SESSION_KEY}"
 EFFORT_FILE="$STATE_ROOT/claude-cooking-effort_${SESSION_KEY}"
 BG_CLEAR_FILE="$STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
+COMPACT_FILE="$STATE_ROOT/claude-cooking-compacting_${SESSION_KEY}"
+SUBAGENT_FILE="$STATE_ROOT/claude-cooking-subagent_${SESSION_KEY}"
 
 cleanup() {
     rm -f "$COUNTER_FILE" "$STAGE_FILE" "$ATTENTION_FILE" "$CONTEXT_FILE" "$REVIEW_FILE" 2>/dev/null
-    rm -f "$MODEL_FILE" "$EFFORT_FILE" "$BG_CLEAR_FILE" 2>/dev/null
+    rm -f "$MODEL_FILE" "$EFFORT_FILE" "$BG_CLEAR_FILE" "$COMPACT_FILE" "$SUBAGENT_FILE" 2>/dev/null
     unset VISUALHUD_THEME VISUALHUD_SET_BG VISUALHUD_SET_BG_LOG VISUALHUD_SPRITES_DIR
     unset VISUALHUD_TTY VISUALHUD_CONTEXT_USED_PERCENT VISUALHUD_CODEX_SESSION_FILE CODEX_HOME
     unset VISUALHUD_REAPPLY_DELAY
@@ -658,6 +660,167 @@ assert_eq "Missing TMNT sprite clears stale background" "" "$(head -n 1 "$SET_BG
 unset VISUALHUD_BG
 rm -rf "$TMP_THEME_ROOT"
 cleanup
+echo ""
+
+# --- TEST 21g: PostToolUseFailure rolls back counter + flash error (success-weighted progress) ---
+echo "--- Test 21g: PostToolUseFailure decrements counter and flashes error ---"
+cleanup
+PT_TTY="${TMPDIR:-/tmp}/visualhud-posttool-$$.log"
+export VISUALHUD_TTY="$PT_TTY"
+export VISUALHUD_THEME="pokemon"
+: > "$PT_TTY"
+
+# Three optimistic PreToolUse calls
+for _ in 1 2 3; do
+    run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "test"}'
+done
+assert_eq "Counter is 3 after 3 PreToolUse (optimistic count)" "3" "$(cat "$COUNTER_FILE" 2>/dev/null)"
+
+# One PostToolUseFailure rolls back the third call (failed work shouldn't count)
+: > "$PT_TTY"
+run_hook '{"hook_event_name": "PostToolUseFailure", "tool_name": "Bash", "session_id": "test", "tool_use_id": "toolu_x"}'
+assert_eq "Counter rolls back to 2 after PostToolUseFailure" "2" "$(cat "$COUNTER_FILE" 2>/dev/null)"
+assert_contains "PostToolUseFailure flashes error state" "Error" "$(cat "$PT_TTY" 2>/dev/null)"
+
+# Subsequent PreToolUse clears the error flash and resumes normal progress
+: > "$PT_TTY"
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
+assert_eq "Next PreToolUse increments back to 3" "3" "$(cat "$COUNTER_FILE" 2>/dev/null)"
+assert_not_contains "Next PreToolUse does NOT persist error" "Error" "$(cat "$PT_TTY" 2>/dev/null)"
+
+# PostToolUseFailure does NOT roll back below 0 (defensive)
+cleanup
+run_hook '{"hook_event_name": "PostToolUseFailure", "tool_name": "Bash", "session_id": "test"}'
+assert_eq "PostToolUseFailure on empty counter stays at 0 (or absent)" "0" "$(cat "$COUNTER_FILE" 2>/dev/null || printf 0)"
+
+rm -f "$PT_TTY"
+unset VISUALHUD_TTY
+echo ""
+
+# --- TEST 21f: SubagentStart/SubagentStop lifecycle ---
+echo "--- Test 21f: SubagentStart writes subagent marker; SubagentStop clears it ---"
+cleanup
+SUBAGENT_TTY="${TMPDIR:-/tmp}/visualhud-subagent-$$.log"
+SUBAGENT_THEME_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/visualhud-subagent-theme.XXXXXX")
+mkdir -p "$SUBAGENT_THEME_ROOT/agentic"
+cat > "$SUBAGENT_THEME_ROOT/agentic/theme.json" <<'JSON'
+{
+  "name": "Agentic",
+  "progress_bar": ["🟦"],
+  "stages": [
+    { "max": 999999, "sprite": "", "badge": ">", "name": "Working", "color_family": "cool", "color_family_singleton": true, "color": [60, 120, 200] }
+  ],
+  "blocked": { "sprite": "", "badge": "!",   "name": "BLOCKED",      "color": [250, 80, 60] },
+  "review":  { "sprite": "", "badge": "REV", "name": "Reviewing",     "stage": 1, "color": [200, 170, 60] },
+  "done":    { "sprite": "", "badge": "OK",  "name": "Done",          "stage": 1, "color": [60, 220, 120] },
+  "idle":    { "sprite": "", "badge": ".",   "name": "Idle",          "stage": 1, "color": [120, 140, 180] },
+  "error":   { "sprite": "", "badge": "X",   "name": "Error",         "color": [255, 40, 40] },
+  "subagent":{ "sprite": "", "badge": "AGT", "name": "Subagent",      "stage": 1, "color": [110, 180, 255] },
+  "context_alerts": {
+    "warning":  { "min_percent": 70, "badge": "WRN", "name": "Context High",     "color": [255, 190, 40] },
+    "critical": { "min_percent": 85, "badge": "MAX", "name": "Context Critical", "color": [255, 60, 60] }
+  }
+}
+JSON
+
+rm -f "$SUBAGENT_FILE" 2>/dev/null
+export VISUALHUD_TTY="$SUBAGENT_TTY"
+export VISUALHUD_THEME="agentic"
+export VISUALHUD_THEMES_DIR="$SUBAGENT_THEME_ROOT"
+: > "$SUBAGENT_TTY"
+
+# SubagentStart should write marker (with agent_type) and render .subagent state
+run_hook '{"hook_event_name": "SubagentStart", "session_id": "test", "agent_type": "Plan", "agent_id": "agt_test"}'
+assert_file_exists "SubagentStart creates subagent marker" "$SUBAGENT_FILE"
+assert_eq "Subagent marker captures agent_type" "Plan" "$(cat "$SUBAGENT_FILE" 2>/dev/null)"
+assert_contains "SubagentStart renders theme.subagent name" "Subagent" "$(cat "$SUBAGENT_TTY" 2>/dev/null)"
+
+# SubagentStop should clear the marker
+: > "$SUBAGENT_TTY"
+run_hook '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_type": "Plan", "agent_id": "agt_test", "stop_reason": "completed"}'
+assert_file_not_exists "SubagentStop clears subagent marker" "$SUBAGENT_FILE"
+
+# Theme without .subagent: SubagentStart still tracks marker but doesn't crash on missing state
+cleanup
+rm -f "$SUBAGENT_FILE" 2>/dev/null
+rm -rf "$SUBAGENT_THEME_ROOT/agentic-no-sub"
+cp -R "$SUBAGENT_THEME_ROOT/agentic" "$SUBAGENT_THEME_ROOT/agentic-no-sub"
+tmpfile="$SUBAGENT_THEME_ROOT/agentic-no-sub/theme.json.tmp"
+jq 'del(.subagent)' "$SUBAGENT_THEME_ROOT/agentic-no-sub/theme.json" > "$tmpfile" && mv "$tmpfile" "$SUBAGENT_THEME_ROOT/agentic-no-sub/theme.json"
+export VISUALHUD_TTY="$SUBAGENT_TTY"
+export VISUALHUD_THEME="agentic-no-sub"
+export VISUALHUD_THEMES_DIR="$SUBAGENT_THEME_ROOT"
+: > "$SUBAGENT_TTY"
+run_hook '{"hook_event_name": "SubagentStart", "session_id": "test", "agent_type": "Explore", "agent_id": "agt_x"}'
+assert_file_not_exists "Theme without .subagent does NOT write marker" "$SUBAGENT_FILE"
+
+rm -f "$SUBAGENT_FILE" "$SUBAGENT_TTY"
+rm -rf "$SUBAGENT_THEME_ROOT"
+unset VISUALHUD_TTY VISUALHUD_THEME VISUALHUD_THEMES_DIR
+export VISUALHUD_THEMES_DIR="$ROOT_DIR/themes"
+echo ""
+
+# --- TEST 21e: PreCompact/PostCompact lifecycle ---
+echo "--- Test 21e: PreCompact renders .compacting; PostCompact restores ---"
+cleanup
+COMPACT_TTY="${TMPDIR:-/tmp}/visualhud-compact-$$.log"
+COMPACT_THEME_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/visualhud-compact-theme.XXXXXX")
+mkdir -p "$COMPACT_THEME_ROOT/glitch"
+cat > "$COMPACT_THEME_ROOT/glitch/theme.json" <<'JSON'
+{
+  "name": "Glitch",
+  "progress_bar": ["🟦"],
+  "stages": [
+    { "max": 999999, "sprite": "", "badge": ">", "name": "Working", "color_family": "cool", "color_family_singleton": true, "color": [60, 120, 200] }
+  ],
+  "blocked": { "sprite": "", "badge": "!",   "name": "BLOCKED",      "color": [250, 80, 60] },
+  "review":  { "sprite": "", "badge": "REV", "name": "Reviewing",     "stage": 1, "color": [200, 170, 60] },
+  "done":    { "sprite": "", "badge": "OK",  "name": "Done",          "stage": 1, "color": [60, 220, 120] },
+  "idle":    { "sprite": "", "badge": ".",   "name": "Idle",          "stage": 1, "color": [120, 140, 180] },
+  "error":   { "sprite": "", "badge": "X",   "name": "Error",         "color": [255, 40, 40] },
+  "compacting": { "sprite": "", "badge": "MISSINGNO", "name": "Compacting", "stage": 1, "color": [220, 50, 230] },
+  "context_alerts": {
+    "warning":  { "min_percent": 70, "badge": "WRN", "name": "Context High",     "color": [255, 190, 40] },
+    "critical": { "min_percent": 85, "badge": "MAX", "name": "Context Critical", "color": [255, 60, 60] }
+  }
+}
+JSON
+
+rm -f "$COMPACT_FILE" 2>/dev/null
+export VISUALHUD_TTY="$COMPACT_TTY"
+export VISUALHUD_THEME="glitch"
+export VISUALHUD_THEMES_DIR="$COMPACT_THEME_ROOT"
+: > "$COMPACT_TTY"
+
+# PreCompact should render the .compacting state and write the marker
+run_hook '{"hook_event_name": "PreCompact", "session_id": "test", "trigger": "auto"}'
+assert_file_exists "PreCompact creates compacting marker" "$COMPACT_FILE"
+assert_contains "PreCompact renders theme.compacting name" "Compacting" "$(cat "$COMPACT_TTY" 2>/dev/null)"
+assert_contains "PreCompact emits MISSINGNO-style badge" "MISSINGNO" "$(cat "$COMPACT_TTY" 2>/dev/null)"
+
+# PostCompact should clear the marker
+: > "$COMPACT_TTY"
+run_hook '{"hook_event_name": "PostCompact", "session_id": "test", "trigger": "auto"}'
+assert_file_not_exists "PostCompact clears compacting marker" "$COMPACT_FILE"
+
+# Theme without .compacting falls through cleanly (no error)
+cleanup
+rm -f "$COMPACT_FILE" 2>/dev/null
+rm -rf "$COMPACT_THEME_ROOT/glitch-no-compact"
+cp -R "$COMPACT_THEME_ROOT/glitch" "$COMPACT_THEME_ROOT/glitch-no-compact"
+tmpfile="$COMPACT_THEME_ROOT/glitch-no-compact/theme.json.tmp"
+jq 'del(.compacting)' "$COMPACT_THEME_ROOT/glitch-no-compact/theme.json" > "$tmpfile" && mv "$tmpfile" "$COMPACT_THEME_ROOT/glitch-no-compact/theme.json"
+export VISUALHUD_TTY="$COMPACT_TTY"
+export VISUALHUD_THEME="glitch-no-compact"
+export VISUALHUD_THEMES_DIR="$COMPACT_THEME_ROOT"
+: > "$COMPACT_TTY"
+run_hook '{"hook_event_name": "PreCompact", "session_id": "test", "trigger": "manual"}'
+assert_file_not_exists "Theme without .compacting does NOT write marker" "$COMPACT_FILE"
+
+rm -f "$COMPACT_FILE" "$COMPACT_TTY"
+rm -rf "$COMPACT_THEME_ROOT"
+unset VISUALHUD_TTY VISUALHUD_THEME VISUALHUD_THEMES_DIR
+export VISUALHUD_THEMES_DIR="$ROOT_DIR/themes"
 echo ""
 
 # --- TEST 21d: effort.level captured into state file + hudEffort user var ---

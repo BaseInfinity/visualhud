@@ -20,6 +20,8 @@
   "idle": { "sprite": "eevee", "badge": "IDLE", "name": "Your turn", "stage": 11, "color": [170, 115, 65] },
   "error": { "sprite": "psyduck", "badge": "⚠️", "name": "Error", "color": [255, 40, 40] },
   "plan":  { "sprite": "", "badge": "PLAN", "name": "Planning", "stage": 4, "color": [180, 110, 255] },
+  "compacting": { "sprite": "", "badge": "MISSINGNO", "name": "Compacting", "stage": 6, "color": [220, 50, 230] },
+  "subagent":   { "sprite": "pikachu", "badge": "AGT", "name": "Subagent", "stage": 4, "color": [110, 180, 255] },
   "context_alerts": {
     "warning": { "min_percent": 70, "badge": "HEAL", "name": "Pokemon Center", "sprite": "chansey", "color": [255, 120, 150] },
     "critical": { "min_percent": 85, "badge": "JOY", "name": "Nurse Joy", "sprite": "blissey", "color": [255, 225, 235] }

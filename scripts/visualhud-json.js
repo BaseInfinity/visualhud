@@ -237,6 +237,11 @@ function mergeCodexHooks(existing, command) {
   addPlain("TaskCompleted");
   addMatcher("SessionStart");
   addPlain("CwdChanged");
+  addMatcher("PreCompact");
+  addMatcher("PostCompact");
+  addMatcher("SubagentStart");
+  addMatcher("SubagentStop");
+  addMatcher("PostToolUseFailure");
   return data;
 }
 
@@ -271,15 +276,26 @@ function mergeClaudeHooks(existing, command) {
   addPlain("TaskCompleted");
   addPlain("CwdChanged");
   addMatcher("SessionStart");
+  addMatcher("PreCompact");
+  addMatcher("PostCompact");
+  addMatcher("SubagentStart");
+  addMatcher("SubagentStop");
+  addMatcher("PostToolUseFailure");
   return data;
 }
 
 function codexPayload(payload) {
   switch (payload.hook_event_name || "") {
     case "PreToolUse":
+    case "PostToolUse":
+    case "PostToolUseFailure":
     case "UserPromptSubmit":
     case "Stop":
     case "TaskCompleted":
+    case "PreCompact":
+    case "PostCompact":
+    case "SubagentStart":
+    case "SubagentStop":
       return payload;
     case "SessionStart":
       return {
@@ -304,7 +320,22 @@ function codexPayload(payload) {
 }
 
 function claudePayload(payload) {
-  const allowed = new Set(["PreToolUse", "Notification", "UserPromptSubmit", "Stop", "StopFailure", "TaskCompleted", "CwdChanged", "SessionStart"]);
+  const allowed = new Set([
+    "PreToolUse",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "Notification",
+    "UserPromptSubmit",
+    "Stop",
+    "StopFailure",
+    "TaskCompleted",
+    "CwdChanged",
+    "SessionStart",
+    "PreCompact",
+    "PostCompact",
+    "SubagentStart",
+    "SubagentStop",
+  ]);
   return allowed.has(payload.hook_event_name || "") ? payload : null;
 }
 
@@ -455,7 +486,7 @@ try {
     case "state-fields": {
       const state = parseJson(readStdin(), {});
       const color = Array.isArray(state.color) ? state.color : ["", "", ""];
-      line([color[0] ?? "", color[1] ?? "", color[2] ?? "", state.sprite || "", state.badge || "", state.name || "", state.stage ?? ""].join("\t"));
+      line([color[0] ?? "", color[1] ?? "", color[2] ?? "", state.sprite || "", state.badge || "", state.name || "", state.stage ?? ""].join("\x1f"));
       break;
     }
     case "review-payload": {
@@ -479,7 +510,7 @@ try {
     }
     case "alert-fields": {
       const alert = parseJson(readStdin(), {});
-      line([alert.level || "", alert.percent ?? "", alert.badge || "", alert.name || ""].join("\t"));
+      line([alert.level || "", alert.percent ?? "", alert.badge || "", alert.name || ""].join("\x1f"));
       break;
     }
     case "merge-codex-hooks": {

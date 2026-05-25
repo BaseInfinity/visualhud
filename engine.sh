@@ -52,6 +52,8 @@ REVIEW_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-review_${SESSION_KEY}"
 MODEL_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-model_${SESSION_KEY}"
 EFFORT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-effort_${SESSION_KEY}"
 BG_CLEAR_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
+COMPACT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-compacting_${SESSION_KEY}"
+SUBAGENT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-subagent_${SESSION_KEY}"
 SPRITES_DIR="${VISUALHUD_SPRITES_DIR:-$SCRIPT_DIR/sprites}"
 SET_BG="${VISUALHUD_SET_BG:-$SCRIPT_DIR/set_bg.py}"
 TTY_TARGET="${VISUALHUD_TTY:-/dev/tty}"
@@ -301,7 +303,7 @@ set_status_from_json() {
     local state_fields
 
     state_fields=$(printf '%s' "$state_json" | json_helper state-fields)
-    IFS=$'\t' read -r r g b sprite badge_emoji stage_name stage_num <<< "$state_fields"
+    IFS=$'\037' read -r r g b sprite badge_emoji stage_name stage_num <<< "$state_fields"
     stage_num="${stage_num:-$fallback_stage_num}"
 
     rh=$(to_hex "$r")
@@ -330,7 +332,7 @@ set_status_from_json() {
     if [ -n "$context_alert" ]; then
         local alert_fields
         alert_fields=$(printf '%s' "$context_alert" | json_helper alert-fields)
-        IFS=$'\t' read -r context_level context_percent context_badge context_name <<< "$alert_fields"
+        IFS=$'\037' read -r context_level context_percent context_badge context_name <<< "$alert_fields"
 
         badge_text="${badge_text} ${context_badge}${context_percent}"
         context_title="${context_name} CTX ${context_percent}%"
@@ -431,6 +433,42 @@ case "$EVENT" in
                 rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$REVIEW_FILE" "$STAGE_FILE" 2>/dev/null
                 ;;
         esac
+        exit 0
+        ;;
+    PreCompact)
+        # Theme can opt in via .compacting state. Glitch/MISSINGNO moment in Pokemon.
+        if theme_has_state "compacting"; then
+            touch "$COMPACT_FILE" 2>/dev/null
+            set_named_state "compacting"
+        fi
+        exit 0
+        ;;
+    PostCompact)
+        rm -f "$COMPACT_FILE" 2>/dev/null
+        exit 0
+        ;;
+    SubagentStart)
+        if theme_has_state "subagent"; then
+            SUBAGENT_TYPE=$(printf '%s' "$INPUT" | json_helper field agent_type 2>/dev/null || true)
+            printf '%s' "$SUBAGENT_TYPE" > "$SUBAGENT_FILE" 2>/dev/null
+            set_named_state "subagent"
+        fi
+        exit 0
+        ;;
+    SubagentStop)
+        rm -f "$SUBAGENT_FILE" 2>/dev/null
+        exit 0
+        ;;
+    PostToolUseFailure)
+        # Success-weighted progress: roll back the optimistic increment from PreToolUse
+        # and flash error state (without persisting attention — next PreToolUse clears).
+        if [ -f "$COUNTER_FILE" ]; then
+            current=$(cat "$COUNTER_FILE" 2>/dev/null)
+            if [ -n "$current" ] && [ "$current" -gt 0 ] 2>/dev/null; then
+                printf '%d' "$((current - 1))" > "$COUNTER_FILE" 2>/dev/null
+            fi
+        fi
+        set_named_state "error"
         exit 0
         ;;
     Notification)

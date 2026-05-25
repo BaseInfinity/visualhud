@@ -6,16 +6,33 @@ Watch your terminal transform in real-time as your agent works — colors shift,
 
 ## Install
 
-Codex on macOS/iTerm2, Windows Terminal/PowerShell, or WezTerm, from the repo you want to skin:
+VisualHUD installs into a single Git repo (never a global hook). Codex supports
+macOS/iTerm2, Windows Terminal/PowerShell, and WezTerm. Claude Code support is
+currently macOS/iTerm2.
+
+**Claude Code:**
 
 ```bash
+cd /path/to/repo
+npx -y visualhud@latest install claude --target .
+claude
+```
+
+That writes `.claude/hooks/visualhud-claude.sh`, merges VisualHUD entries into
+`.claude/settings.json` (existing SDLC/TDD hooks are preserved), and lays down a
+`.visualhud/` runtime with engine, themes, and the CLI.
+
+**Codex:**
+
+```bash
+cd /path/to/repo
 npx -y visualhud@latest
 codex --yolo
 ```
 
-That installs VisualHUD into the current Git repo only. It writes `.codex/`,
-`.visualhud/`, and `.agents/skills/visualhud-*` in that repo; it does not install
-a global Codex or Claude hook.
+The bare `npx -y visualhud@latest` invocation is shorthand for
+`visualhud install codex --target .` — it writes `.codex/`, `.visualhud/`, and
+`.agents/skills/visualhud-*` in the current repo.
 
 VisualHUD setup/update skills should run platform setup helpers themselves. For
 example, when a Windows repo should use WezTerm for live colors/backgrounds, the
@@ -23,15 +40,31 @@ skill should install with `--platform wezterm`, run `setup-wezterm.ps1`, and
 handle straightforward config merges instead of sending you manual follow-up
 commands.
 
-On macOS/iTerm2, if iTerm2 has not been configured for tab colors and pane
-background images yet, run this once after install, then quit and reopen iTerm2:
+**One-shot iTerm2 setup (run once per machine):**
 
 ```bash
-./.visualhud/setup-iterm2.sh
+npx -y visualhud@latest setup iterm2
 ```
 
-When developing from this source checkout, the equivalent local command is
-`./setup-iterm2.sh`.
+That writes the iTerm2 defaults VisualHUD needs (Minimal theme, tab bar at
+bottom for the hero-banner-footer look, per-pane background image, Python API,
+dynamic profile). Quit and reopen iTerm2 for changes to stick. Undo with
+`npx -y visualhud@latest setup iterm2 --reset`. From a source checkout, the
+direct equivalent is `./setup-iterm2.sh`.
+
+**Health check:**
+
+```bash
+.visualhud/visualhud doctor
+```
+
+Reports active theme, themes directory, jq/python3 presence, engine + setup
+helper status. Use it whenever a hook silently does nothing.
+
+**Compact-by-default rendering.** v1.0 ships without the full-pane sprite
+background — visual identity comes from the bottom tab bar, title progress bar,
+and badge. Opt back into the original full-pane sprite mode with
+`export VISUALHUD_BG=on` in your shell or hook environment.
 
 On Windows/WezTerm, install with the WezTerm renderer and run the setup helper
 once:
@@ -548,10 +581,10 @@ Documenting these so we don't repeat them:
 
 ## Status
 
-**Pre-release.** Repo-local Codex and Claude Code hook wiring works on iTerm2.
-Windows Terminal/PowerShell Codex installs work for title and progress status.
-WezTerm Codex installs work for title, status, colors, and live backgrounds on
-Windows.
+**v1.0.** Repo-local Codex and Claude Code hook wiring ships via
+`npx visualhud install <claude|codex>`. Codex supports macOS/iTerm2 plus
+Windows Terminal/PowerShell title/progress and WezTerm title/status/color/live
+backgrounds. Claude Code support is macOS/iTerm2-only for now.
 
 ---
 

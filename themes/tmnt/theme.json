@@ -19,6 +19,7 @@
   "done": { "sprite": "tmnt-pizza", "badge": "PIZZA", "name": "Pizza Party", "stage": 11, "color": [20, 185, 85] },
   "idle": { "sprite": "tmnt-splinter", "badge": "SPLINTER", "name": "Splinter", "stage": 11, "color": [130, 95, 65] },
   "error": { "sprite": "tmnt-shredder", "badge": "ERROR", "name": "Shredder", "color": [255, 40, 40] },
+  "plan":  { "sprite": "tmnt-splinter", "badge": "PLAN", "name": "Splinter Planning", "stage": 4, "color": [180, 110, 255] },
   "context_alerts": {
     "warning": { "min_percent": 70, "badge": "MUT", "name": "Mutagen Leak", "sprite": "tmnt-mutagen", "color": [40, 220, 90] },
     "critical": { "min_percent": 85, "badge": "CASEY", "name": "Casey Jones", "sprite": "tmnt-casey-jones", "color": [245, 245, 245] }

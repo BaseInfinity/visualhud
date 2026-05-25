@@ -411,6 +411,7 @@ export VISUALHUD_THEME="third"
 export VISUALHUD_SET_BG="$MOCK_SET_BG"
 export VISUALHUD_SET_BG_LOG="$SET_BG_LOG"
 export VISUALHUD_TTY="$TTY_LOG"
+export VISUALHUD_BG="on"
 
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "third-theme"}'
 for _ in 1 2 3 4 5; do
@@ -419,7 +420,7 @@ for _ in 1 2 3 4 5; do
 done
 assert_eq "Third theme count 1 uses Alpha sprite" "alpha" "$(cat "$STAGE_FILE" 2>/dev/null)"
 assert_contains "Third theme writes Alpha tint escape" "SetColors=bg=030609" "$(cat "$TTY_LOG" 2>/dev/null)"
-assert_eq "Third theme calls set_bg with theme-local Alpha sprite" \
+assert_eq "Third theme calls set_bg with theme-local Alpha sprite when VISUALHUD_BG=on" \
     "$(cygpath -m "$THIRD_THEME/sprites/alpha.png" 2>/dev/null || printf '%s' "$THIRD_THEME/sprites/alpha.png")" \
     "$(tail -n 1 "$SET_BG_LOG" 2>/dev/null)"
 

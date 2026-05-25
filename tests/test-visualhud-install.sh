@@ -163,6 +163,7 @@ assert_eq "UserPromptSubmit hook registered" "true" "$(hook_registered "$target/
 assert_eq "Stop hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "Stop" "visualhud-codex.sh")"
 assert_eq "TaskCompleted hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "TaskCompleted" "visualhud-codex.sh")"
 assert_eq "SessionStart hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "SessionStart" "visualhud-codex.sh")"
+assert_eq "CwdChanged hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "CwdChanged" "visualhud-codex.sh")"
 echo ""
 
 echo "--- Test 3: Codex install preserves existing hooks and is idempotent ---"
@@ -197,6 +198,62 @@ assert_file_exists "Existing repo skill is preserved" "$target/.agents/skills/ex
 assert_file_exists "Installed runtime self-repair keeps Pokemon sprites" "$target/.visualhud/themes/pokemon/sprites/charmander.png"
 assert_file_exists "Installed runtime self-repair keeps VisualHUD skills" "$target/.agents/skills/visualhud-update/SKILL.md"
 assert_eq "Installed runtime self-repair can switch theme" "tmnt" "$(cat "$target/.visualhud/theme")"
+echo ""
+
+echo "--- Test 3b: Claude install wires repo-local Claude hooks and runtime ---"
+target="$(make_repo mac-claude)"
+output="$("$CLI" install claude --target "$target" --platform macos 2>&1)"
+assert_contains "Claude install reports target" "Installed VisualHUD Claude hooks in:" "$output"
+assert_contains "Claude install reports active theme" "Active theme: pokemon" "$output"
+assert_file_exists "Claude hook wrapper exists" "$target/.claude/hooks/visualhud-claude.sh"
+assert_executable "Claude hook wrapper is executable" "$target/.claude/hooks/visualhud-claude.sh"
+assert_file_exists "Claude settings.json exists" "$target/.claude/settings.json"
+assert_file_exists "Claude runtime engine copied" "$target/.visualhud/engine.sh"
+assert_file_exists "Claude runtime CLI copied" "$target/.visualhud/visualhud"
+assert_file_exists "Pokemon theme ships in Claude runtime" "$target/.visualhud/themes/pokemon/theme.json"
+assert_eq "Claude install defaults to Pokemon" "pokemon" "$(cat "$target/.visualhud/theme")"
+assert_eq "Claude PreToolUse VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.PreToolUse[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
+assert_eq "Claude Notification VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.Notification[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
+assert_eq "Claude UserPromptSubmit VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.UserPromptSubmit[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
+assert_eq "Claude Stop VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.Stop[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
+assert_eq "Claude StopFailure VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.StopFailure[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
+assert_eq "Claude TaskCompleted VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.TaskCompleted[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
+assert_eq "Claude CwdChanged VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.CwdChanged[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
+assert_eq "Claude SessionStart VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.SessionStart[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$target/.claude/settings.json")"
+echo ""
+
+echo "--- Test 3c: Claude install preserves existing hooks + is idempotent ---"
+target="$(make_repo claude-existing)"
+mkdir -p "$target/.claude"
+cat > "$target/.claude/settings.json" <<'JSON'
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "bash .claude/hooks/existing-sdlc.sh" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "^Bash$", "hooks": [ { "type": "command", "command": "bash .claude/hooks/existing-tdd.sh" } ] }
+    ]
+  }
+}
+JSON
+"$CLI" install claude --target "$target" --platform macos --theme tmnt >/dev/null
+"$CLI" install claude --target "$target" --platform macos --theme tmnt >/dev/null
+assert_eq "Claude install preserves existing SDLC hook" "true" "$(jq -r 'any(.hooks.UserPromptSubmit[]?.hooks[]?; .command == "bash .claude/hooks/existing-sdlc.sh")' "$target/.claude/settings.json")"
+assert_eq "Claude install preserves existing TDD hook" "true" "$(jq -r 'any(.hooks.PreToolUse[]?.hooks[]?; .command == "bash .claude/hooks/existing-tdd.sh")' "$target/.claude/settings.json")"
+assert_eq "Claude VisualHUD UserPromptSubmit hook not duplicated" "1" "$(jq -r '[.hooks.UserPromptSubmit[]?.hooks[]? | select(.command | contains("visualhud-claude.sh"))] | length' "$target/.claude/settings.json")"
+assert_eq "Claude VisualHUD Stop hook not duplicated" "1" "$(jq -r '[.hooks.Stop[]?.hooks[]? | select(.command | contains("visualhud-claude.sh"))] | length' "$target/.claude/settings.json")"
+assert_eq "Claude install can switch active theme" "tmnt" "$(cat "$target/.visualhud/theme")"
+echo ""
+
+echo "--- Test 3d: Claude install rejects unsupported platforms ---"
+target="$(make_repo claude-windows)"
+set +e
+win_output="$("$CLI" install claude --target "$target" --platform windows 2>&1)"
+win_status=$?
+set -e
+assert_eq "Claude Windows install exits nonzero" "1" "$win_status"
+assert_contains "Claude Windows install explains gap" "Windows" "$win_output"
 echo ""
 
 echo "--- Test 4: Windows Codex install writes the status renderer ---"

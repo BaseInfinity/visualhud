@@ -49,6 +49,9 @@ STAGE_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-stage_${SESSION_KEY}"
 ATTENTION_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-attention_${SESSION_KEY}"
 CONTEXT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-context_${SESSION_KEY}"
 REVIEW_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-review_${SESSION_KEY}"
+MODEL_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-model_${SESSION_KEY}"
+EFFORT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-effort_${SESSION_KEY}"
+BG_CLEAR_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
 SPRITES_DIR="${VISUALHUD_SPRITES_DIR:-$SCRIPT_DIR/sprites}"
 SET_BG="${VISUALHUD_SET_BG:-$SCRIPT_DIR/set_bg.py}"
 TTY_TARGET="${VISUALHUD_TTY:-/dev/tty}"
@@ -85,6 +88,10 @@ progress_bar() {
 theme_state_json() {
     local state="$1" count="${2:-0}"
     json_helper state "$THEME_FILE" "$state" "$count"
+}
+
+theme_has_state() {
+    [ "$(theme_state_json "$1")" != "null" ]
 }
 
 is_review_payload() {
@@ -187,6 +194,7 @@ emit_iterm_status() {
         printf '\033]0;%s\a' "$title"
         printf '\033]1337;SetUserVar=%s=%s\007' "hudProgress" "$(printf '%s' "$title" | base64)"
         printf '\033]1337;SetUserVar=%s=%s\007' "hudContext" "$(printf '%s' "$context_title" | base64)"
+        printf '\033]1337;SetUserVar=%s=%s\007' "hudEffort" "$(printf '%s' "${EFFORT_LEVEL:-}" | base64)"
     } >> "$tty_target" 2>/dev/null || true
 }
 
@@ -305,13 +313,17 @@ set_status_from_json() {
 
     if [ -n "$stage_num" ]; then
         badge_text=$(badge_text_for "$badge_emoji" "$stage_name" "$stage_num")
-        title="$(progress_bar "$stage_num") ${badge_emoji} ${stage_name} — ${PROJECT_NAME}"
+        if [ -n "$stage_name" ]; then
+            title="$(progress_bar "$stage_num") ${badge_emoji} ${stage_name} — ${PROJECT_NAME}"
+        else
+            title="$(progress_bar "$stage_num") ${badge_emoji} ${PROJECT_NAME}"
+        fi
     elif [ -n "$stage_name" ]; then
         badge_text=$(badge_text_for "$badge_emoji" "$stage_name" "")
         title="${badge_emoji} ${stage_name} — ${PROJECT_NAME}"
     else
         badge_text=$(badge_text_for "$badge_emoji" "" "")
-        title="${badge_emoji} — ${PROJECT_NAME}"
+        title="${badge_emoji} ${PROJECT_NAME}"
     fi
 
     context_alert="${CONTEXT_ALERT_JSON:-}"
@@ -343,7 +355,10 @@ set_status_from_json() {
     [ -f "$STAGE_FILE" ] && last_stage=$(cat "$STAGE_FILE")
     if [ "$sprite" != "$last_stage" ] && [ -n "$sprite" ]; then
         printf '%s' "$sprite" > "$STAGE_FILE" 2>/dev/null
-        if [ "$RENDERER" = "iterm2" ] && [ -f "$SET_BG" ]; then
+        # Background sprite is opt-in. Default is compact mode (no full-pane sprite).
+        # Enable with VISUALHUD_BG=on for the full-pane sprite background.
+        if [ "$RENDERER" = "iterm2" ] && [ "${VISUALHUD_BG:-off}" = "on" ] && [ -f "$SET_BG" ]; then
+            sprite_path=$(sprite_path_for "$sprite")
             python3 "$SET_BG" "$sprite_path" "$SESSION_ID" 2>/dev/null &
         fi
     fi
@@ -357,9 +372,65 @@ set_named_state() {
 CONTEXT_PERCENT=$(context_percent_from_input)
 CONTEXT_ALERT_JSON=$(context_alert_json "$CONTEXT_PERCENT")
 
+# Self-heal stale iTerm2 BG image once per pane when VISUALHUD_BG is off.
+# Upgrading from v0.x (BG defaulted on) leaves a cached sprite in iTerm2's
+# per-pane state; with compact-by-default we never call set_bg.py again, so
+# the stale image sticks forever. One explicit clear per pane fixes it.
+# Toggling VISUALHUD_BG=on removes the marker so off→on→off re-triggers.
+if [ "$RENDERER" != "iterm2" ]; then
+    :
+elif [ "${VISUALHUD_BG:-off}" = "on" ]; then
+    rm -f "$BG_CLEAR_FILE" 2>/dev/null
+elif [ ! -f "$BG_CLEAR_FILE" ] && [ -f "$SET_BG" ]; then
+    python3 "$SET_BG" "" "$SESSION_ID" 2>/dev/null &
+    touch "$BG_CLEAR_FILE" 2>/dev/null
+fi
+PERMISSION_MODE=$(printf '%s' "$INPUT" | json_helper field permission_mode 2>/dev/null || true)
+EFFORT_LEVEL=$(printf '%s' "$INPUT" | json_helper field effort.level 2>/dev/null || true)
+if [ -n "$EFFORT_LEVEL" ]; then
+    printf '%s' "$EFFORT_LEVEL" > "$EFFORT_FILE" 2>/dev/null
+elif [ -f "$EFFORT_FILE" ]; then
+    EFFORT_LEVEL=$(cat "$EFFORT_FILE" 2>/dev/null)
+fi
+
+# True iff input is permission_mode=plan AND active theme defines a .plan state.
+in_plan_mode() {
+    [ "$PERMISSION_MODE" = "plan" ] \
+        && theme_has_state "plan"
+}
+
 case "$EVENT" in
     UserPromptSubmit)
-        rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$REVIEW_FILE" 2>/dev/null
+        # Reset working counter + attention, but preserve REVIEW_FILE.
+        # A user message during an in-flight code review (background shell still
+        # running) must not flip the state to 'done' on the next Stop.
+        rm -f "$COUNTER_FILE" "$ATTENTION_FILE" 2>/dev/null
+        if in_plan_mode; then
+            set_named_state "plan"
+        fi
+        exit 0
+        ;;
+    CwdChanged)
+        NEW_CWD=$(printf '%s' "$INPUT" | json_helper field cwd 2>/dev/null || true)
+        if [ -n "$NEW_CWD" ] && [ -d "$NEW_CWD" ]; then
+            PROJECT_NAME=$(basename "$NEW_CWD")
+            rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$REVIEW_FILE" "$STAGE_FILE" 2>/dev/null
+            set_named_state "idle"
+        fi
+        exit 0
+        ;;
+    SessionStart)
+        SESSION_MODEL=$(printf '%s' "$INPUT" | json_helper field model 2>/dev/null || true)
+        SESSION_SOURCE=$(printf '%s' "$INPUT" | json_helper field source 2>/dev/null || true)
+        if [ -n "$SESSION_MODEL" ]; then
+            printf '%s' "$SESSION_MODEL" > "$MODEL_FILE" 2>/dev/null
+        fi
+        # /clear or post-compact: fresh slate (counter, attention, review, stage)
+        case "$SESSION_SOURCE" in
+            clear|compact)
+                rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$REVIEW_FILE" "$STAGE_FILE" 2>/dev/null
+                ;;
+        esac
         exit 0
         ;;
     Notification)
@@ -406,6 +477,10 @@ case "$EVENT" in
         if is_review_payload "$INPUT"; then
             printf 'review' > "$REVIEW_FILE" 2>/dev/null
             set_named_state "review"
+            exit 0
+        fi
+        if in_plan_mode; then
+            set_named_state "plan"
             exit 0
         fi
         ;;

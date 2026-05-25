@@ -3,6 +3,9 @@
 
 set -euo pipefail
 
+export LC_ALL=C
+export LANG=C
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLI="$ROOT_DIR/visualhud"
 ENGINE="$ROOT_DIR/engine.sh"
@@ -165,6 +168,69 @@ assert_eq "Explicit VISUALHUD_THEME env still has highest priority" "charmander"
 echo ""
 
 cleanup
+
+echo "--- CLI: setup iterm2 subcommand dispatch + doctor health check ---"
+SETUP_HARNESS="$TMP_ROOT/setup-harness"
+mkdir -p "$SETUP_HARNESS/themes/pokemon" "$SETUP_HARNESS/themes/tmnt"
+cp "$ROOT_DIR/themes/pokemon/theme.json" "$SETUP_HARNESS/themes/pokemon/theme.json"
+cp "$ROOT_DIR/themes/tmnt/theme.json" "$SETUP_HARNESS/themes/tmnt/theme.json"
+cp "$ROOT_DIR/engine.sh" "$SETUP_HARNESS/engine.sh"
+cp "$ROOT_DIR/set_bg.py" "$SETUP_HARNESS/set_bg.py"
+cp "$ROOT_DIR/visualhud" "$SETUP_HARNESS/visualhud"
+mkdir -p "$SETUP_HARNESS/scripts"
+cp "$ROOT_DIR/scripts/visualhud-json.js" "$SETUP_HARNESS/scripts/visualhud-json.js"
+chmod +x "$SETUP_HARNESS/visualhud"
+
+cat > "$SETUP_HARNESS/setup-iterm2.sh" <<'EOF'
+#!/bin/bash
+printf 'mock setup-iterm2 invoked\n'
+printf 'args: %s\n' "$*"
+exit 0
+EOF
+chmod +x "$SETUP_HARNESS/setup-iterm2.sh"
+
+export VISUALHUD_ROOT="$SETUP_HARNESS"
+set +e
+setup_out="$("$SETUP_HARNESS/visualhud" setup iterm2 2>&1)"
+setup_status=$?
+setup_reset_out="$("$SETUP_HARNESS/visualhud" setup iterm2 --reset 2>&1)"
+doctor_out="$("$SETUP_HARNESS/visualhud" doctor 2>&1)"
+doctor_status=$?
+set -e
+assert_eq "visualhud setup iterm2 exits 0 on success" "0" "$setup_status"
+assert_contains "visualhud setup iterm2 dispatches to setup-iterm2.sh" "mock setup-iterm2 invoked" "$setup_out"
+assert_contains "visualhud setup iterm2 --reset forwards flags" "args: --reset" "$setup_reset_out"
+assert_eq "visualhud doctor exits 0 when healthy" "0" "$doctor_status"
+assert_contains "doctor reports node" "node" "$doctor_out"
+assert_contains "doctor reports JSON helper" "JSON helper" "$doctor_out"
+assert_contains "doctor reports python3" "python3" "$doctor_out"
+assert_contains "doctor reports active theme line" "active theme" "$(printf '%s' "$doctor_out" | tr '[:upper:]' '[:lower:]')"
+assert_contains "doctor reports themes directory" "themes" "$doctor_out"
+
+unset VISUALHUD_ROOT
+rm -rf "$SETUP_HARNESS"
+echo ""
+
+echo "--- setup-iterm2.sh: tab bar positioned at bottom (hero banner footer) ---"
+SETUP_SCRIPT="$ROOT_DIR/setup-iterm2.sh"
+TOTAL=$((TOTAL + 1))
+if grep -qE 'defaults write com\.googlecode\.iterm2 TabViewType -int 1' "$SETUP_SCRIPT"; then
+    PASS=$((PASS + 1))
+    printf "  PASS: setup-iterm2.sh writes TabViewType=1 (bottom tab bar)\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  FAIL: setup-iterm2.sh writes TabViewType=1 (bottom tab bar)\n"
+fi
+TOTAL=$((TOTAL + 1))
+RESET_BLOCK=$(sed -n '/--reset/,/^fi$/p' "$SETUP_SCRIPT")
+if printf '%s\n' "$RESET_BLOCK" | grep -qE 'defaults (delete|write) com\.googlecode\.iterm2 TabViewType'; then
+    PASS=$((PASS + 1))
+    printf "  PASS: setup-iterm2.sh --reset reverts TabViewType\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  FAIL: setup-iterm2.sh --reset reverts TabViewType\n"
+fi
+echo ""
 
 echo "=== Results: $PASS/$TOTAL passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then

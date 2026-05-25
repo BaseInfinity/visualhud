@@ -19,6 +19,7 @@
   "done": { "sprite": "mew", "badge": "⭐", "name": "Complete", "stage": 11, "color": [255, 120, 180] },
   "idle": { "sprite": "eevee", "badge": "IDLE", "name": "Your turn", "stage": 11, "color": [170, 115, 65] },
   "error": { "sprite": "psyduck", "badge": "⚠️", "name": "Error", "color": [255, 40, 40] },
+  "plan":  { "sprite": "", "badge": "PLAN", "name": "Planning", "stage": 4, "color": [180, 110, 255] },
   "context_alerts": {
     "warning": { "min_percent": 70, "badge": "HEAL", "name": "Pokemon Center", "sprite": "chansey", "color": [255, 120, 150] },
     "critical": { "min_percent": 85, "badge": "JOY", "name": "Nurse Joy", "sprite": "blissey", "color": [255, 225, 235] }

@@ -35,9 +35,13 @@ STAGE_FILE="$STATE_ROOT/claude-cooking-stage_${SESSION_KEY}"
 ATTENTION_FILE="$STATE_ROOT/claude-cooking-attention_${SESSION_KEY}"
 CONTEXT_FILE="$STATE_ROOT/claude-cooking-context_${SESSION_KEY}"
 REVIEW_FILE="$STATE_ROOT/claude-cooking-review_${SESSION_KEY}"
+MODEL_FILE="$STATE_ROOT/claude-cooking-model_${SESSION_KEY}"
+EFFORT_FILE="$STATE_ROOT/claude-cooking-effort_${SESSION_KEY}"
+BG_CLEAR_FILE="$STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
 
 cleanup() {
     rm -f "$COUNTER_FILE" "$STAGE_FILE" "$ATTENTION_FILE" "$CONTEXT_FILE" "$REVIEW_FILE" 2>/dev/null
+    rm -f "$MODEL_FILE" "$EFFORT_FILE" "$BG_CLEAR_FILE" 2>/dev/null
     unset VISUALHUD_THEME VISUALHUD_SET_BG VISUALHUD_SET_BG_LOG VISUALHUD_SPRITES_DIR
     unset VISUALHUD_TTY VISUALHUD_CONTEXT_USED_PERCENT VISUALHUD_CODEX_SESSION_FILE CODEX_HOME
     unset VISUALHUD_REAPPLY_DELAY
@@ -248,8 +252,8 @@ assert_eq "TaskCompleted after review can finally show Mew" "mew" "$(cat "$STAGE
 rm -f "$REVIEW_TTY"
 echo ""
 
-# --- TEST 4: UserPromptSubmit resets counter ---
-echo "--- Test 4: UserPromptSubmit resets counter ---"
+# --- TEST 4: UserPromptSubmit resets counter but keeps review marker ---
+echo "--- Test 4: UserPromptSubmit resets counter; preserves in-flight review marker ---"
 cleanup
 printf '100' > "$COUNTER_FILE"
 printf 'ivysaur' > "$STAGE_FILE"
@@ -259,7 +263,17 @@ printf 'review' > "$REVIEW_FILE"
 run_hook '{"hook_event_name": "UserPromptSubmit", "prompt": "do something", "session_id": "test"}'
 assert_file_not_exists "Counter file deleted after UserPromptSubmit" "$COUNTER_FILE"
 assert_file_not_exists "Attention file deleted after UserPromptSubmit" "$ATTENTION_FILE"
-assert_file_not_exists "Review marker deleted after UserPromptSubmit" "$REVIEW_FILE"
+assert_file_exists "Review marker PERSISTS after UserPromptSubmit (review shell still running)" "$REVIEW_FILE"
+
+# Follow-up: Stop after the user-prompt should still keep us in review, not flash 'Your turn'
+REVIEW_TTY="${TMPDIR:-/tmp}/visualhud-userprompt-review-$$.log"
+export VISUALHUD_TTY="$REVIEW_TTY"
+: > "$REVIEW_TTY"
+run_hook '{"hook_event_name": "Stop", "session_id": "test", "last_assistant_message": "checking in while review runs"}'
+assert_file_exists "REVIEW_FILE still present after Stop following UserPromptSubmit" "$REVIEW_FILE"
+assert_contains "Stop after UserPromptSubmit stays in Reviewing state, not Your turn" "Reviewing" "$(cat "$REVIEW_TTY" 2>/dev/null)"
+rm -f "$REVIEW_TTY"
+unset VISUALHUD_TTY
 echo ""
 
 # --- TEST 5: Notification(permission_prompt) sets BLOCKED ---
@@ -595,15 +609,17 @@ export VISUALHUD_THEMES_DIR="$TMP_THEME_ROOT"
 export VISUALHUD_SET_BG="$MOCK_SET_BG"
 export VISUALHUD_SET_BG_LOG="$SET_BG_LOG"
 export VISUALHUD_SPRITES_DIR="$TMP_THEME_ROOT/global-sprites"
+export VISUALHUD_BG="on"
 
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
 for _ in 1 2 3 4 5; do
     [ -f "$SET_BG_LOG" ] && break
     sleep 0.1
 done
-assert_eq "Theme-local TMNT sprite passed to set_bg" \
+assert_eq "Theme-local TMNT sprite passed to set_bg when VISUALHUD_BG=on" \
     "$(cygpath -m "$TMP_THEME_ROOT/tmnt/sprites/tmnt-leonardo.png" 2>/dev/null || printf '%s' "$TMP_THEME_ROOT/tmnt/sprites/tmnt-leonardo.png")" \
     "$(head -n 1 "$SET_BG_LOG" 2>/dev/null)"
+unset VISUALHUD_BG
 rm -rf "$TMP_THEME_ROOT"
 cleanup
 echo ""
@@ -629,6 +645,7 @@ export VISUALHUD_THEMES_DIR="$TMP_THEME_ROOT"
 export VISUALHUD_SET_BG="$MOCK_SET_BG"
 export VISUALHUD_SET_BG_LOG="$SET_BG_LOG"
 export VISUALHUD_SPRITES_DIR="$TMP_THEME_ROOT/global-sprites"
+export VISUALHUD_BG="on"
 
 printf 'snorlax' > "$STAGE_FILE"
 run_hook '{"hook_event_name": "Notification", "notification_type": "permission_prompt", "message": "needs approval", "session_id": "test"}'
@@ -636,8 +653,232 @@ for _ in 1 2 3 4 5; do
     [ -f "$SET_BG_LOG" ] && break
     sleep 0.1
 done
-assert_file_exists "Missing TMNT sprite still invokes set_bg" "$SET_BG_LOG"
+assert_file_exists "Missing TMNT sprite still invokes set_bg when VISUALHUD_BG=on" "$SET_BG_LOG"
 assert_eq "Missing TMNT sprite clears stale background" "" "$(head -n 1 "$SET_BG_LOG" 2>/dev/null)"
+unset VISUALHUD_BG
+rm -rf "$TMP_THEME_ROOT"
+cleanup
+echo ""
+
+# --- TEST 21d: effort.level captured into state file + hudEffort user var ---
+echo "--- Test 21d: effort.level persists into state file and iTerm2 user var ---"
+cleanup
+EFFORT_TTY="${TMPDIR:-/tmp}/visualhud-effort-$$.log"
+export VISUALHUD_TTY="$EFFORT_TTY"
+export VISUALHUD_THEME="pokemon"
+: > "$EFFORT_TTY"
+rm -f "$EFFORT_FILE" 2>/dev/null
+
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test", "effort": {"level": "xhigh"}}'
+assert_file_exists "Effort file created when payload carries effort.level" "$EFFORT_FILE"
+assert_eq "Persisted effort level matches payload" "xhigh" "$(cat "$EFFORT_FILE" 2>/dev/null)"
+assert_contains "hudEffort iTerm user var is emitted" "hudEffort" "$(cat "$EFFORT_TTY" 2>/dev/null)"
+
+# Subsequent payload with different effort updates the file
+: > "$EFFORT_TTY"
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test", "effort": {"level": "low"}}'
+assert_eq "Effort file updates on subsequent payloads" "low" "$(cat "$EFFORT_FILE" 2>/dev/null)"
+
+# Payload without effort.level leaves last-known effort intact (no regression)
+: > "$EFFORT_TTY"
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
+assert_eq "Effort file unchanged when payload lacks effort.level" "low" "$(cat "$EFFORT_FILE" 2>/dev/null)"
+
+rm -f "$EFFORT_FILE" "$EFFORT_TTY"
+unset VISUALHUD_TTY
+echo ""
+
+# --- TEST 21c: permission_mode=plan renders theme.plan state when theme opts in ---
+echo "--- Test 21c: permission_mode=plan overlays theme.plan when defined ---"
+cleanup
+PLAN_THEME_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/visualhud-plan-theme.XXXXXX")
+mkdir -p "$PLAN_THEME_ROOT/planner/sprites"
+cat > "$PLAN_THEME_ROOT/planner/theme.json" <<'JSON'
+{
+  "name": "Planner",
+  "progress_bar": ["🟦"],
+  "stages": [
+    { "max": 999999, "sprite": "", "badge": ">", "name": "Working", "color_family": "cool", "color_family_singleton": true, "color": [60, 120, 200] }
+  ],
+  "blocked": { "sprite": "", "badge": "!",   "name": "BLOCKED",      "color": [250, 80, 60] },
+  "review":  { "sprite": "", "badge": "REV", "name": "Reviewing", "stage": 1, "color": [200, 170, 60] },
+  "done":    { "sprite": "", "badge": "OK",  "name": "Done", "stage": 1, "color": [60, 220, 120] },
+  "idle":    { "sprite": "", "badge": ".",   "name": "Idle", "stage": 1, "color": [120, 140, 180] },
+  "error":   { "sprite": "", "badge": "X",   "name": "Error",          "color": [255, 40, 40] },
+  "plan":    { "sprite": "", "badge": "PLAN", "name": "Planning", "stage": 1, "color": [180, 110, 255] },
+  "context_alerts": {
+    "warning":  { "min_percent": 70, "badge": "WRN", "name": "Context High",     "color": [255, 190, 40] },
+    "critical": { "min_percent": 85, "badge": "MAX", "name": "Context Critical", "color": [255, 60, 60] }
+  }
+}
+JSON
+
+PLAN_TTY="${TMPDIR:-/tmp}/visualhud-plan-mode-$$.log"
+export VISUALHUD_TTY="$PLAN_TTY"
+export VISUALHUD_THEME="planner"
+export VISUALHUD_THEMES_DIR="$PLAN_THEME_ROOT"
+: > "$PLAN_TTY"
+
+# permission_mode=plan should pick up theme.plan
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test", "permission_mode": "plan"}'
+assert_contains "permission_mode=plan renders theme.plan name 'Planning'" "Planning" "$(cat "$PLAN_TTY" 2>/dev/null)"
+assert_not_contains "permission_mode=plan does NOT render the progress 'Working' name" "Working" "$(cat "$PLAN_TTY" 2>/dev/null)"
+
+# permission_mode=default falls through to normal progress
+cleanup
+export VISUALHUD_TTY="$PLAN_TTY"
+export VISUALHUD_THEME="planner"
+export VISUALHUD_THEMES_DIR="$PLAN_THEME_ROOT"
+: > "$PLAN_TTY"
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test", "permission_mode": "default"}'
+assert_contains "permission_mode=default renders normal stage name 'Working'" "Working" "$(cat "$PLAN_TTY" 2>/dev/null)"
+assert_not_contains "permission_mode=default does NOT render 'Planning'" "Planning" "$(cat "$PLAN_TTY" 2>/dev/null)"
+
+# Theme without .plan: permission_mode=plan falls through to normal progress (graceful)
+cleanup
+rm -rf "$PLAN_THEME_ROOT/planner-no-plan"
+cp -R "$PLAN_THEME_ROOT/planner" "$PLAN_THEME_ROOT/planner-no-plan"
+# Strip the plan key
+tmpfile="$PLAN_THEME_ROOT/planner-no-plan/theme.json.tmp"
+jq 'del(.plan)' "$PLAN_THEME_ROOT/planner-no-plan/theme.json" > "$tmpfile" && mv "$tmpfile" "$PLAN_THEME_ROOT/planner-no-plan/theme.json"
+export VISUALHUD_TTY="$PLAN_TTY"
+export VISUALHUD_THEME="planner-no-plan"
+export VISUALHUD_THEMES_DIR="$PLAN_THEME_ROOT"
+: > "$PLAN_TTY"
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test", "permission_mode": "plan"}'
+assert_contains "Theme without .plan falls through to normal 'Working' state" "Working" "$(cat "$PLAN_TTY" 2>/dev/null)"
+
+rm -rf "$PLAN_THEME_ROOT"
+rm -f "$PLAN_TTY"
+unset VISUALHUD_TTY VISUALHUD_THEME VISUALHUD_THEMES_DIR
+export VISUALHUD_THEMES_DIR="$ROOT_DIR/themes"
+echo ""
+
+# --- TEST 21b: SessionStart(source=clear|compact) resets counter; captures model ---
+echo "--- Test 21b: SessionStart resets work on clear/compact + persists model ---"
+cleanup
+SESS_TTY="${TMPDIR:-/tmp}/visualhud-session-start-$$.log"
+export VISUALHUD_TTY="$SESS_TTY"
+export VISUALHUD_THEME="pokemon"
+: > "$SESS_TTY"
+rm -f "$MODEL_FILE" 2>/dev/null
+
+# Build some progress
+for _ in 1 2 3 4 5; do
+    run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
+done
+assert_eq "Counter is 5 before SessionStart(clear)" "5" "$(cat "$COUNTER_FILE" 2>/dev/null)"
+
+# SessionStart from /clear should reset the counter and persist model
+run_hook '{"hook_event_name": "SessionStart", "source": "clear", "model": "claude-opus-4-7", "session_id": "test"}'
+assert_file_not_exists "Counter reset on SessionStart(clear)" "$COUNTER_FILE"
+assert_file_exists "Model is persisted on SessionStart" "$MODEL_FILE"
+assert_eq "Persisted model matches payload" "claude-opus-4-7" "$(cat "$MODEL_FILE" 2>/dev/null)"
+
+# SessionStart with source=startup also captures model but does NOT need to reset (fresh session already has no counter)
+cleanup
+rm -f "$MODEL_FILE" 2>/dev/null
+run_hook '{"hook_event_name": "SessionStart", "source": "startup", "model": "claude-sonnet-4-6", "session_id": "test"}'
+assert_file_exists "Startup SessionStart persists model" "$MODEL_FILE"
+assert_eq "Startup persists sonnet model" "claude-sonnet-4-6" "$(cat "$MODEL_FILE" 2>/dev/null)"
+
+rm -f "$MODEL_FILE" "$SESS_TTY"
+unset VISUALHUD_TTY
+echo ""
+
+# --- TEST 21a: CwdChanged resets counter and re-themes project name ---
+echo "--- Test 21a: CwdChanged resets counter and re-themes for new project ---"
+cleanup
+CWD_TTY="${TMPDIR:-/tmp}/visualhud-cwd-changed-$$.log"
+export VISUALHUD_TTY="$CWD_TTY"
+export VISUALHUD_THEME="pokemon"
+: > "$CWD_TTY"
+
+# Establish some progress under the original cwd
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+    run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
+done
+assert_eq "Counter is 10 after 10 PreToolUse calls (pre-cwd-change)" "10" "$(cat "$COUNTER_FILE" 2>/dev/null)"
+
+# Simulate CwdChanged into a different project root
+NEW_PROJECT_DIR="${TMPDIR:-/tmp}/visualhud-cwd-test-$$"
+mkdir -p "$NEW_PROJECT_DIR"
+: > "$CWD_TTY"
+run_hook "$(jq -nc --arg cwd "$NEW_PROJECT_DIR" '{hook_event_name: "CwdChanged", session_id: "test", cwd: $cwd}')"
+assert_file_not_exists "Counter resets after CwdChanged" "$COUNTER_FILE"
+assert_contains "Title reflects new project name after CwdChanged" "$(basename "$NEW_PROJECT_DIR")" "$(cat "$CWD_TTY" 2>/dev/null)"
+
+# Subsequent work increments fresh counter
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
+assert_eq "Post-CwdChanged counter starts at 1" "1" "$(cat "$COUNTER_FILE" 2>/dev/null)"
+
+rm -rf "$NEW_PROJECT_DIR"
+rm -f "$CWD_TTY"
+unset VISUALHUD_TTY
+echo ""
+
+# --- TEST 22a: Pokemon done state does not announce "Your turn" ---
+echo "--- Test 22a: Pokemon done state title omits 'Your turn' (compact title) ---"
+cleanup
+DONE_TTY="${TMPDIR:-/tmp}/visualhud-done-title-$$.log"
+export VISUALHUD_TTY="$DONE_TTY"
+export VISUALHUD_THEME="pokemon"
+: > "$DONE_TTY"
+run_hook '{"hook_event_name": "Stop", "session_id": "test"}'
+assert_not_contains "Pokemon Stop title drops 'Your turn'" "Your turn" "$(cat "$DONE_TTY" 2>/dev/null)"
+assert_contains "Pokemon Stop title still carries project name" "$(basename "$PWD")" "$(cat "$DONE_TTY" 2>/dev/null)"
+rm -f "$DONE_TTY"
+unset VISUALHUD_TTY
+echo ""
+
+# --- TEST 22b: VISUALHUD_BG=off self-heals stale iTerm2 cache once per pane ---
+echo "--- Test 22b: Compact default (VISUALHUD_BG unset) self-heals stale BG once ---"
+cleanup
+rm -f "$BG_CLEAR_FILE" 2>/dev/null
+TMP_THEME_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/visualhud-theme-test.XXXXXX")
+mkdir -p "$TMP_THEME_ROOT/tmnt/sprites"
+cp "$ROOT_DIR/themes/tmnt/theme.json" "$TMP_THEME_ROOT/tmnt/theme.json"
+: > "$TMP_THEME_ROOT/tmnt/sprites/tmnt-leonardo.png"
+MOCK_SET_BG="$TMP_THEME_ROOT/set_bg.py"
+SET_BG_LOG="$TMP_THEME_ROOT/set-bg.log"
+cat > "$MOCK_SET_BG" <<'PY'
+import os
+import sys
+
+with open(os.environ["VISUALHUD_SET_BG_LOG"], "a", encoding="utf-8") as handle:
+    handle.write((sys.argv[1] if len(sys.argv) > 1 else "") + "\n")
+PY
+
+export VISUALHUD_THEME="tmnt"
+export VISUALHUD_THEMES_DIR="$TMP_THEME_ROOT"
+export VISUALHUD_SET_BG="$MOCK_SET_BG"
+export VISUALHUD_SET_BG_LOG="$SET_BG_LOG"
+export VISUALHUD_SPRITES_DIR="$TMP_THEME_ROOT/global-sprites"
+unset VISUALHUD_BG
+
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
+# Wait for backgrounded set_bg.py call to land
+for _ in 1 2 3 4 5; do
+    [ -f "$SET_BG_LOG" ] && break
+    sleep 0.1
+done
+assert_file_exists "First BG=off engine call invokes set_bg to self-heal stale cache" "$SET_BG_LOG"
+assert_eq "Self-heal calls set_bg with EMPTY path (clears, not sets sprite)" "" "$(head -n 1 "$SET_BG_LOG" 2>/dev/null)"
+assert_file_exists "Self-heal marker created so we don't re-fire" "$BG_CLEAR_FILE"
+
+# Second event in same session: should NOT re-call set_bg (only one line in log)
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
+sleep 0.3
+assert_eq "Subsequent BG=off events do NOT re-clear (marker prevents loop)" "1" "$(wc -l < "$SET_BG_LOG" | tr -d ' ')"
+
+# Toggle VISUALHUD_BG=on: marker should be removed so next off-toggle re-triggers
+export VISUALHUD_BG="on"
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
+sleep 0.3
+assert_file_not_exists "Setting VISUALHUD_BG=on removes self-heal marker" "$BG_CLEAR_FILE"
+
+unset VISUALHUD_BG
+rm -f "$BG_CLEAR_FILE" 2>/dev/null
 rm -rf "$TMP_THEME_ROOT"
 cleanup
 echo ""

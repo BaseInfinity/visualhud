@@ -120,6 +120,8 @@ assert_eq "UserPromptSubmit VisualHUD hook registered" "true" "$(jq -r 'any(.hoo
 assert_eq "Stop VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.Stop[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$SETTINGS_JSON")"
 assert_eq "StopFailure VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.StopFailure[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$SETTINGS_JSON")"
 assert_eq "TaskCompleted VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.TaskCompleted[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$SETTINGS_JSON")"
+assert_eq "CwdChanged VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.CwdChanged[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$SETTINGS_JSON")"
+assert_eq "SessionStart VisualHUD hook registered" "true" "$(jq -r 'any(.hooks.SessionStart[]?.hooks[]?; .command | contains("visualhud-claude.sh"))' "$SETTINGS_JSON")"
 assert_eq "Existing SDLC prompt hook preserved" "true" "$(jq -r 'any(.hooks.UserPromptSubmit[]?.hooks[]?; .command | contains("sdlc-prompt-check.sh"))' "$SETTINGS_JSON")"
 assert_eq "Existing TDD pretool hook preserved" "true" "$(jq -r 'any(.hooks.PreToolUse[]?.hooks[]?; .command | contains("tdd-pretool-check.sh"))' "$SETTINGS_JSON")"
 echo ""

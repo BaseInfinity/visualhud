@@ -31,6 +31,9 @@ Quick start:
 Usage:
   visualhud [--theme <name>] [--platform macos|windows|wezterm]
   visualhud install codex --target <repo> [--theme <name>] [--platform macos|windows|wezterm]
+  visualhud install claude --target <repo> [--theme <name>] [--platform macos]
+  visualhud setup iterm2 [--reset]
+  visualhud doctor
   visualhud theme list
   visualhud theme current
   visualhud theme set <name>
@@ -232,6 +235,211 @@ install_codex_hooks_json() {
     tmp="${hooks_json}.tmp.$$"
     json_helper merge-codex-hooks "$hooks_json" "$command" > "$tmp"
     mv "$tmp" "$hooks_json"
+}
+
+setup_iterm2() {
+    local script="$ROOT_DIR/setup-iterm2.sh"
+    if [ ! -x "$script" ]; then
+        printf 'setup-iterm2.sh is missing or not executable at: %s\n' "$script" >&2
+        return 1
+    fi
+    exec "$script" "$@"
+}
+
+doctor() {
+    local status=0 theme themes_root
+    themes_root="$THEMES_DIR"
+    theme=$(active_theme)
+
+    printf 'VisualHUD Doctor\n'
+    printf '  root        : %s\n' "$ROOT_DIR"
+    printf '  themes dir  : %s\n' "$themes_root"
+    printf '  active theme: %s\n' "$theme"
+
+    if command -v node >/dev/null 2>&1; then
+        printf '  [ok] node       %s\n' "$(node --version 2>/dev/null || printf 'present')"
+    else
+        printf '  [missing] node  (install Node.js)\n'
+        status=1
+    fi
+
+    if [ -f "$JSON_HELPER" ]; then
+        printf '  [ok] JSON helper          present\n'
+    else
+        printf '  [missing] JSON helper     %s\n' "$JSON_HELPER"
+        status=1
+    fi
+
+    if command -v python3 >/dev/null 2>&1; then
+        printf '  [ok] python3    %s\n' "$(python3 --version 2>/dev/null || printf 'present')"
+    else
+        printf '  [missing] python3 (install: brew install python)\n'
+        status=1
+    fi
+
+    if [ -d "$themes_root" ] && compgen -G "$themes_root/*/theme.json" >/dev/null 2>&1; then
+        printf '  [ok] themes     %s\n' "$(find "$themes_root" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort | tr '\n' ' ')"
+    else
+        printf '  [missing] themes (no theme.json under %s)\n' "$themes_root"
+        status=1
+    fi
+
+    if [ -f "$themes_root/$theme/theme.json" ]; then
+        printf '  [ok] active theme.json     present\n'
+    else
+        printf '  [missing] active theme.json (theme: %s)\n' "$theme"
+        status=1
+    fi
+
+    if [ -f "$ROOT_DIR/engine.sh" ]; then
+        printf '  [ok] engine.sh             present\n'
+    else
+        printf '  [missing] engine.sh\n'
+        status=1
+    fi
+
+    if [ -f "$ROOT_DIR/set_bg.py" ]; then
+        printf '  [ok] set_bg.py             present (VISUALHUD_BG=on to enable)\n'
+    else
+        printf '  [missing] set_bg.py\n'
+        status=1
+    fi
+
+    if [ -f "$ROOT_DIR/setup-iterm2.sh" ]; then
+        printf '  [ok] setup-iterm2.sh       present (run: visualhud setup iterm2)\n'
+    else
+        printf '  [missing] setup-iterm2.sh\n'
+        status=1
+    fi
+
+    if [ "$status" -eq 0 ]; then
+        printf 'VisualHUD looks healthy.\n'
+    else
+        printf 'VisualHUD has issues; see [missing] lines above.\n'
+    fi
+    return "$status"
+}
+
+copy_claude_runtime() {
+    local target_root="$1"
+    local runtime_dir="$target_root/.visualhud"
+
+    mkdir -p "$runtime_dir/.claude/hooks" "$target_root/.claude/hooks"
+    copy_runtime_file "$ROOT_DIR/engine.sh" "$runtime_dir/engine.sh"
+    copy_runtime_file "$ROOT_DIR/set_bg.py" "$runtime_dir/set_bg.py"
+    copy_runtime_file "$ROOT_DIR/setup-iterm2.sh" "$runtime_dir/setup-iterm2.sh"
+    copy_runtime_file "$ROOT_DIR/visualhud" "$runtime_dir/visualhud"
+    copy_runtime_file "$ROOT_DIR/.claude/hooks/visualhud-claude.sh" "$runtime_dir/.claude/hooks/visualhud-claude.sh"
+    copy_runtime_dir "$ROOT_DIR/themes" "$runtime_dir/themes"
+    copy_runtime_dir "$ROOT_DIR/scripts" "$runtime_dir/scripts"
+    chmod +x "$runtime_dir/visualhud" "$runtime_dir/setup-iterm2.sh" "$runtime_dir/.claude/hooks/visualhud-claude.sh"
+}
+
+write_claude_hook_wrapper() {
+    local target_root="$1"
+    local wrapper="$target_root/.claude/hooks/visualhud-claude.sh"
+    cat > "$wrapper" <<'EOF'
+#!/bin/bash
+# VisualHUD installed Claude Code hook wrapper.
+
+set -euo pipefail
+
+REPO_ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+VISUALHUD_ROOT="$REPO_ROOT/.visualhud"
+
+export VISUALHUD_ENGINE="$VISUALHUD_ROOT/engine.sh"
+export VISUALHUD_THEMES_DIR="$VISUALHUD_ROOT/themes"
+export VISUALHUD_SET_BG="$VISUALHUD_ROOT/set_bg.py"
+
+exec bash "$VISUALHUD_ROOT/.claude/hooks/visualhud-claude.sh"
+EOF
+    chmod +x "$wrapper"
+}
+
+install_claude_settings_json() {
+    local target_root="$1"
+    local settings_json="$target_root/.claude/settings.json" tmp command
+    command="bash \"\$CLAUDE_PROJECT_DIR/.claude/hooks/visualhud-claude.sh\""
+    mkdir -p "$(dirname "$settings_json")"
+    if [ ! -f "$settings_json" ]; then
+        printf '{"hooks":{}}\n' > "$settings_json"
+    fi
+    tmp="${settings_json}.tmp.$$"
+    json_helper merge-claude-hooks "$settings_json" "$command" > "$tmp"
+    mv "$tmp" "$settings_json"
+}
+
+install_claude() {
+    local target="" theme="pokemon" platform="" target_root runtime_dir
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --target)
+                target="${2:-}"
+                if [ -z "$target" ]; then
+                    printf 'Missing --target value.\n' >&2
+                    return 2
+                fi
+                shift
+                ;;
+            --theme)
+                theme="${2:-}"
+                if [ -z "$theme" ]; then
+                    printf 'Missing --theme value.\n' >&2
+                    return 2
+                fi
+                shift
+                ;;
+            --platform)
+                platform="${2:-}"
+                if [ -z "$platform" ]; then
+                    printf 'Missing --platform value.\n' >&2
+                    return 2
+                fi
+                shift
+                ;;
+            *)
+                printf 'Unknown install option: %s\n' "$1" >&2
+                usage >&2
+                return 2
+                ;;
+        esac
+        shift
+    done
+
+    target="${target:-.}"
+    platform="${platform:-$(detect_platform)}"
+    case "$platform" in
+        macos|darwin)
+            ;;
+        windows|win32|powershell)
+            printf 'Windows Terminal/PowerShell renderer is not supported yet; Claude install is macOS/iTerm2-only for now.\n' >&2
+            return 1
+            ;;
+        *)
+            printf 'VisualHUD Claude install is macOS/iTerm2-only for now; detected platform: %s\n' "$platform" >&2
+            return 1
+            ;;
+    esac
+
+    if ! theme_exists "$theme"; then
+        printf 'Unknown theme: %s\n' "$theme" >&2
+        printf 'Run visualhud theme list to see available themes.\n' >&2
+        return 1
+    fi
+
+    target_root=$(target_repo_root "$target")
+    runtime_dir="$target_root/.visualhud"
+    copy_claude_runtime "$target_root"
+    printf '%s\n' "$theme" > "$runtime_dir/theme"
+    write_claude_hook_wrapper "$target_root"
+    install_claude_settings_json "$target_root"
+
+    printf 'Installed VisualHUD Claude hooks in: %s\n' "$target_root"
+    printf 'Active theme: %s\n' "$theme"
+    printf 'Runtime: %s\n' "$runtime_dir"
+    printf 'If iTerm2 visuals are not enabled yet, run: %s/setup-iterm2.sh\n' "$runtime_dir"
+    printf 'Then start Claude Code in the target repo: claude\n'
 }
 
 install_codex() {
@@ -459,12 +667,33 @@ case "${1:-}" in
                 shift 2
                 install_codex "$@"
                 ;;
+            claude)
+                shift 2
+                install_claude "$@"
+                ;;
             *)
                 printf 'Unknown install command: %s\n' "$subcommand" >&2
                 usage >&2
                 exit 2
                 ;;
         esac
+        ;;
+    setup)
+        subcommand="${2:-}"
+        case "$subcommand" in
+            iterm2)
+                shift 2
+                setup_iterm2 "$@"
+                ;;
+            *)
+                printf 'Unknown setup command: %s\n' "$subcommand" >&2
+                usage >&2
+                exit 2
+                ;;
+        esac
+        ;;
+    doctor)
+        doctor
         ;;
     theme|themes)
         subcommand="${2:-list}"

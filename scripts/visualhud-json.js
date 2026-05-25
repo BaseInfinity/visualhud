@@ -236,6 +236,41 @@ function mergeCodexHooks(existing, command) {
   addPlain("Stop");
   addPlain("TaskCompleted");
   addMatcher("SessionStart");
+  addPlain("CwdChanged");
+  return data;
+}
+
+function mergeClaudeHooks(existing, command) {
+  const data = existing && typeof existing === "object" ? existing : {};
+  data.hooks = data.hooks && typeof data.hooks === "object" ? data.hooks : {};
+  const hook = { type: "command", command };
+
+  const hasVisualHud = (name) => {
+    const groups = Array.isArray(data.hooks[name]) ? data.hooks[name] : [];
+    return groups.some((group) =>
+      (Array.isArray(group.hooks) ? group.hooks : []).some((item) => String(item.command || "").includes("visualhud-claude.sh")),
+    );
+  };
+
+  const addMatcher = (name) => {
+    if (!hasVisualHud(name)) {
+      data.hooks[name] = [...(Array.isArray(data.hooks[name]) ? data.hooks[name] : []), { matcher: "*", hooks: [hook] }];
+    }
+  };
+  const addPlain = (name) => {
+    if (!hasVisualHud(name)) {
+      data.hooks[name] = [...(Array.isArray(data.hooks[name]) ? data.hooks[name] : []), { hooks: [hook] }];
+    }
+  };
+
+  addMatcher("PreToolUse");
+  addMatcher("Notification");
+  addPlain("UserPromptSubmit");
+  addPlain("Stop");
+  addPlain("StopFailure");
+  addPlain("TaskCompleted");
+  addPlain("CwdChanged");
+  addMatcher("SessionStart");
   return data;
 }
 
@@ -269,7 +304,7 @@ function codexPayload(payload) {
 }
 
 function claudePayload(payload) {
-  const allowed = new Set(["PreToolUse", "Notification", "UserPromptSubmit", "Stop", "StopFailure", "TaskCompleted"]);
+  const allowed = new Set(["PreToolUse", "Notification", "UserPromptSubmit", "Stop", "StopFailure", "TaskCompleted", "CwdChanged", "SessionStart"]);
   return allowed.has(payload.hook_event_name || "") ? payload : null;
 }
 
@@ -451,6 +486,12 @@ try {
       const file = process.argv[3];
       const existing = fs.existsSync(file) ? readJsonFile(file) : { hooks: {} };
       process.stdout.write(`${JSON.stringify(mergeCodexHooks(existing, process.argv[4] || ""), null, 2)}\n`);
+      break;
+    }
+    case "merge-claude-hooks": {
+      const file = process.argv[3];
+      const existing = fs.existsSync(file) ? readJsonFile(file) : { hooks: {} };
+      process.stdout.write(`${JSON.stringify(mergeClaudeHooks(existing, process.argv[4] || ""), null, 2)}\n`);
       break;
     }
     case "codex-payload": {

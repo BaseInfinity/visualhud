@@ -34,6 +34,11 @@ echo "--- Appearance Settings (defaults write) ---"
 defaults write com.googlecode.iterm2 HideTab -bool false
 echo "  [x] Show tab bar even when there is only one tab"
 
+# Tab bar position: bottom (1) — gives the colored tab a hero banner / footer feel
+# 0=Top, 1=Bottom, 2=Left
+defaults write com.googlecode.iterm2 TabViewType -int 1
+echo "  [x] Tab bar at bottom (hero banner footer)"
+
 # Theme: Minimal (5) for most dramatic tab colors
 # 0=Light, 1=Dark, 2=Light HC, 3=Dark HC, 4=Automatic, 5=Minimal, 6=Compact
 defaults write com.googlecode.iterm2 TabStyleWithAutomaticOption -int 5
@@ -108,6 +113,7 @@ echo "To undo: ./setup-iterm2.sh --reset"
 if [ "${1:-}" = "--reset" ]; then
     echo "--- Resetting to defaults ---"
     defaults write com.googlecode.iterm2 HideTab -bool true
+    defaults delete com.googlecode.iterm2 TabViewType 2>/dev/null || true
     defaults write com.googlecode.iterm2 TabStyleWithAutomaticOption -int 4
     defaults delete com.googlecode.iterm2 EnableAPIServer 2>/dev/null || true
     defaults delete com.googlecode.iterm2 PerPaneBackgroundImage 2>/dev/null || true

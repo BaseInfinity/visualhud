@@ -359,7 +359,12 @@ EOF
 install_claude_settings_json() {
     local target_root="$1"
     local settings_json="$target_root/.claude/settings.json" tmp command
-    command="bash \"\$CLAUDE_PROJECT_DIR/.claude/hooks/visualhud-claude.sh\""
+    # Hardened wrapper: a syntactically-broken hook (e.g., leftover merge
+    # conflict markers) can otherwise deadlock every tool call across the
+    # session. The outer `bash -c '... || true'` always exits 0 even if the
+    # inner bash fails at parse time. Single quotes defer all expansion to the
+    # inner bash, so $CLAUDE_PROJECT_DIR still resolves at hook-fire time.
+    command="bash -c 'bash \"\$CLAUDE_PROJECT_DIR/.claude/hooks/visualhud-claude.sh\" 2>/dev/null || true'"
     mkdir -p "$(dirname "$settings_json")"
     if [ ! -f "$settings_json" ]; then
         printf '{"hooks":{}}\n' > "$settings_json"

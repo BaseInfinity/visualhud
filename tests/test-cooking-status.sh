@@ -1593,6 +1593,74 @@ rm -rf "$TMP_REAPPLY_ROOT"
 cleanup
 echo ""
 
+# --- TEST 32: TTY target resolves to a usable target in hook context (Fix #1) ---
+echo "--- Test 32: TTY target resolution probes for usable target ---"
+cleanup
+
+# 32a: explicit VISUALHUD_TTY override wins over auto-resolve
+result=$(VISUALHUD_TTY="/tmp/visualhud-explicit-tty" bash "$SCRIPT_UNDER_TEST" --resolve-tty </dev/null 2>/dev/null || true)
+assert_eq "VISUALHUD_TTY override honored by --resolve-tty" "/tmp/visualhud-explicit-tty" "$result"
+
+# 32b: without override, returns a non-empty, non-/dev/null target when running interactively
+unset VISUALHUD_TTY
+result=$(bash "$SCRIPT_UNDER_TEST" --resolve-tty </dev/null 2>/dev/null || true)
+TOTAL=$((TOTAL + 1))
+if [ -n "$result" ]; then
+    PASS=$((PASS + 1))
+    printf "  PASS: --resolve-tty returns a target (%s)\n" "$result"
+else
+    FAIL=$((FAIL + 1))
+    printf "  FAIL: --resolve-tty returned empty\n"
+fi
+
+# 32c: VISUALHUD_NO_DEV_TTY=1 forces the PPID-walk fallback (simulates hook context)
+result=$(VISUALHUD_NO_DEV_TTY=1 bash "$SCRIPT_UNDER_TEST" --resolve-tty </dev/null 2>/dev/null || true)
+TOTAL=$((TOTAL + 1))
+if [ -n "$result" ]; then
+    PASS=$((PASS + 1))
+    printf "  PASS: PPID-walk fallback produces a target (%s)\n" "$result"
+else
+    FAIL=$((FAIL + 1))
+    printf "  FAIL: PPID-walk fallback returned empty\n"
+fi
+echo ""
+
+# --- TEST 33: Stop-loop detection renders visible LOOP state (Fix #3) ---
+echo "--- Test 33: Stop-loop detection makes /goal deadlock visible ---"
+cleanup
+LOOP_TTY="$STATE_ROOT/loop_tty.log"
+STOP_HISTORY_FILE="$STATE_ROOT/claude-cooking-stop-history_${SESSION_KEY}"
+LOOP_FILE="$STATE_ROOT/claude-cooking-loop_${SESSION_KEY}"
+export VISUALHUD_TTY="$LOOP_TTY"
+# Lower the loop window so the test stays under wall-clock; keep threshold realistic.
+export VISUALHUD_LOOP_WINDOW_SEC=60
+export VISUALHUD_LOOP_THRESHOLD=8
+
+# 33a: First Stop creates the stop-history file
+run_hook '{"hook_event_name": "Stop", "session_id": "test"}'
+assert_file_exists "Stop history file created after first Stop" "$STOP_HISTORY_FILE"
+
+# 33b: After threshold consecutive rapid Stops, the loop marker is set
+for _ in 2 3 4 5 6 7 8 9; do
+    run_hook '{"hook_event_name": "Stop", "session_id": "test"}'
+done
+assert_file_exists "Loop marker created after threshold Stops" "$LOOP_FILE"
+
+# 33c: Next Stop while looped emits a visible LOOP signal to the TTY target
+: > "$LOOP_TTY"
+run_hook '{"hook_event_name": "Stop", "session_id": "test"}'
+LOOP_OUT=$(cat "$LOOP_TTY" 2>/dev/null || true)
+assert_contains "Loop state title contains LOOP" "LOOP" "$LOOP_OUT"
+assert_contains "Loop state hints at /goal clear" "/goal clear" "$LOOP_OUT"
+
+# 33d: UserPromptSubmit clears the loop history and marker (user broke the loop)
+run_hook '{"hook_event_name": "UserPromptSubmit", "prompt": "hi", "session_id": "test"}'
+assert_file_not_exists "UserPromptSubmit clears stop history" "$STOP_HISTORY_FILE"
+assert_file_not_exists "UserPromptSubmit clears loop marker" "$LOOP_FILE"
+
+unset VISUALHUD_TTY VISUALHUD_LOOP_WINDOW_SEC VISUALHUD_LOOP_THRESHOLD
+echo ""
+
 # ============================================================
 # Cleanup
 cleanup

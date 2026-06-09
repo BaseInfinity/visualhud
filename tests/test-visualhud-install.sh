@@ -266,6 +266,43 @@ assert_eq "Claude Windows install exits nonzero" "1" "$win_status"
 assert_contains "Claude Windows install explains gap" "Windows" "$win_output"
 echo ""
 
+echo "--- Test 3e: Claude PreToolUse hook is hardened against parse-time failures ---"
+target="$(make_repo claude-harden)"
+"$CLI" install claude --target "$target" --platform macos --theme pokemon >/dev/null
+pretoolcmd=$(jq -r '[.hooks.PreToolUse[]?.hooks[]? | select(.command | contains("visualhud-claude.sh")) | .command] | first' "$target/.claude/settings.json")
+assert_contains "Hardened PreToolUse command wraps in bash -c" "bash -c" "$pretoolcmd"
+assert_contains "Hardened PreToolUse command has '|| true' safety net" "|| true" "$pretoolcmd"
+echo ""
+
+echo "--- Test 3f: hardened wrapper survives a corrupted hook script ---"
+broken="$TMP_ROOT/broken-hook-$$.sh"
+cat > "$broken" <<'EOF'
+#!/bin/bash
+<<<<<<< HEAD
+echo a
+=======
+echo b
+>>>>>>> branch
+EOF
+chmod +x "$broken"
+set +e
+bash "$broken" >/dev/null 2>&1
+direct_exit=$?
+bash -c "bash \"$broken\" 2>/dev/null || true"
+wrapped_exit=$?
+set -e
+TOTAL=$((TOTAL + 1))
+if [ "$direct_exit" -ne 0 ]; then
+    PASS=$((PASS + 1))
+    printf "  PASS: corrupt hook exits non-zero when called directly (exit %d)\n" "$direct_exit"
+else
+    FAIL=$((FAIL + 1))
+    printf "  FAIL: corrupt hook should fail directly to establish baseline\n"
+fi
+assert_eq "hardened wrapper exits 0 despite corrupt hook" "0" "$wrapped_exit"
+rm -f "$broken"
+echo ""
+
 echo "--- Test 4: Windows Codex install writes the status renderer ---"
 target="$(make_repo windows-codex)"
 set +e

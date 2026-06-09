@@ -3,8 +3,41 @@
 
 set -euo pipefail
 
-INPUT=$(cat)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Resolve the terminal target for iTerm2 escape sequences.
+# In a hook (non-interactive) context, /dev/tty is "device not configured" and
+# writes silently drop — title/badge/colors disappear. Walk the parent process
+# tree for a real controlling tty as a fallback.
+resolve_tty_target() {
+    if [ -n "${VISUALHUD_TTY:-}" ]; then
+        printf '%s' "$VISUALHUD_TTY"
+        return
+    fi
+    if [ -z "${VISUALHUD_NO_DEV_TTY:-}" ] && printf '' > /dev/tty 2>/dev/null; then
+        printf '/dev/tty'
+        return
+    fi
+    local pid="$PPID" tty
+    while [ -n "$pid" ] && [ "$pid" != "0" ] && [ "$pid" != "1" ]; do
+        tty=$(ps -o tt= -p "$pid" 2>/dev/null | tr -d ' \t\n' || true)
+        case "$tty" in
+            ''|'?'|'??') ;;
+            /*) printf '%s' "$tty"; return ;;
+            *)  printf '/dev/%s' "$tty"; return ;;
+        esac
+        pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' \t\n' || true)
+    done
+    printf '/dev/null'
+}
+
+# Test-mode flag: print resolved TTY target and exit without consuming stdin.
+if [ "${1:-}" = "--resolve-tty" ]; then
+    resolve_tty_target
+    exit 0
+fi
+
+INPUT=$(cat)
 JSON_HELPER="${VISUALHUD_JSON_HELPER:-$SCRIPT_DIR/scripts/visualhud-json.js}"
 
 json_helper() {
@@ -55,10 +88,14 @@ BG_CLEAR_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
 COMPACT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-compacting_${SESSION_KEY}"
 SUBAGENT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-subagent_${SESSION_KEY}"
 TOKENS_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-tokens_${SESSION_KEY}"
+STOP_HISTORY_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-stop-history_${SESSION_KEY}"
+LOOP_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-loop_${SESSION_KEY}"
 SPRITES_DIR="${VISUALHUD_SPRITES_DIR:-$SCRIPT_DIR/sprites}"
 SET_BG="${VISUALHUD_SET_BG:-$SCRIPT_DIR/set_bg.py}"
-TTY_TARGET="${VISUALHUD_TTY:-/dev/tty}"
+TTY_TARGET=$(resolve_tty_target)
 RENDERER="${VISUALHUD_RENDERER:-}"
+VISUALHUD_LOOP_WINDOW_SEC="${VISUALHUD_LOOP_WINDOW_SEC:-30}"
+VISUALHUD_LOOP_THRESHOLD="${VISUALHUD_LOOP_THRESHOLD:-8}"
 
 if [ -z "$RENDERER" ]; then
     if [ -n "${WEZTERM_PANE:-}" ]; then
@@ -176,6 +213,36 @@ context_alert_json() {
     [ -n "$percent" ] || return 0
 
     json_helper context-alert "$THEME_FILE" "$percent" 2>/dev/null || true
+}
+
+# Track Stop fires inside the window; set LOOP_FILE when threshold is exceeded.
+# Catches /goal Stop-hook deadlocks where Claude can't satisfy an unmet condition
+# and silently spirals — without this, the loop is invisible until user notices.
+detect_stop_loop() {
+    local now cutoff kept count
+    now=$(date +%s 2>/dev/null || printf 0)
+    [ -n "$now" ] && [ "$now" -gt 0 ] 2>/dev/null || return 1
+    printf '%d\n' "$now" >> "$STOP_HISTORY_FILE" 2>/dev/null || true
+    cutoff=$(( now - VISUALHUD_LOOP_WINDOW_SEC ))
+    if [ -f "$STOP_HISTORY_FILE" ]; then
+        kept=$(awk -v cutoff="$cutoff" '$1+0 >= cutoff+0 { print }' "$STOP_HISTORY_FILE" 2>/dev/null || true)
+        printf '%s\n' "$kept" > "$STOP_HISTORY_FILE" 2>/dev/null || true
+        count=$(printf '%s\n' "$kept" | grep -c '^[0-9]' 2>/dev/null || printf 0)
+        if [ "$count" -ge "$VISUALHUD_LOOP_THRESHOLD" ] 2>/dev/null; then
+            touch "$LOOP_FILE" 2>/dev/null || true
+            return 0
+        fi
+    fi
+    return 1
+}
+
+emit_loop_status() {
+    local count="$1" title badge r=255 g=40 b=40 rh gh bh tr tg tb
+    title="LOOP DETECTED (${count} stops/${VISUALHUD_LOOP_WINDOW_SEC}s) — run /goal clear"
+    badge="LOOP"
+    rh=$(to_hex "$r"); gh=$(to_hex "$g"); bh=$(to_hex "$b")
+    tr=$(to_tint "$r"); tg=$(to_tint "$g"); tb=$(to_tint "$b")
+    emit_iterm_status "$TTY_TARGET" "$badge" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" ""
 }
 
 emit_iterm_status() {
@@ -421,7 +488,8 @@ case "$EVENT" in
         # Reset working counter + attention, but preserve REVIEW_FILE.
         # A user message during an in-flight code review (background shell still
         # running) must not flip the state to 'done' on the next Stop.
-        rm -f "$COUNTER_FILE" "$ATTENTION_FILE" 2>/dev/null
+        # A user message also breaks any /goal Stop loop in progress — clear loop state.
+        rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$STOP_HISTORY_FILE" "$LOOP_FILE" 2>/dev/null
         if in_plan_mode; then
             set_named_state "plan"
         fi
@@ -516,6 +584,11 @@ case "$EVENT" in
         ;;
     Stop)
         rm -f "$COUNTER_FILE" "$ATTENTION_FILE" 2>/dev/null
+        if detect_stop_loop; then
+            loop_count=$(wc -l < "$STOP_HISTORY_FILE" 2>/dev/null | tr -d ' ')
+            emit_loop_status "${loop_count:-?}"
+            exit 0
+        fi
         if [ -f "$REVIEW_FILE" ] || is_review_payload "$INPUT"; then
             printf 'review' > "$REVIEW_FILE" 2>/dev/null
             set_named_state "review"

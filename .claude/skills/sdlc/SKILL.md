@@ -9,17 +9,39 @@ effort: high
 ## Task
 $ARGUMENTS
 
+## Pre-Flight: Session Health Check (DO THIS FIRST)
+
+Before anything else, verify the session is not compromised:
+
+1. `git status --short` — clean tree, OR you understand the in-flight state
+2. Check for active `/goal` Stop-hook condition — if one exists, **know its exit condition** before any action that could trigger Stop. The Stop hook fires after every assistant turn; an unsatisfiable condition will infinite-loop you.
+3. Watch every tool result for: `PreToolUse:<Tool> hook error` + `syntax error near unexpected token` → **STOP IMMEDIATELY**. The hook is corrupted (usually leftover `<<<<<<<` merge conflict markers). Tool calls won't recover. Tell the user:
+   > "Blocked by corrupted PreToolUse hook. From your terminal run: `git -C <repo> checkout HEAD -- .claude/hooks/<file>.sh` — or `/goal clear` to escape."
+   Do NOT spam tool retries or single-period responses.
+
+## Deadlock Recovery Patterns
+
+| Symptom | Cause | Fix (user runs in their terminal) |
+|---|---|---|
+| Every Bash/Read/Edit fails with `syntax error near unexpected token \`<<<\`` | Aborted `git rebase` left conflict markers in `.claude/hooks/*.sh` | `git -C <repo> checkout HEAD -- .claude/hooks/<file>.sh` |
+| Stop hook blocks every turn quoting `/goal` condition | Goal condition unsatisfiable (e.g., requires a publish that's blocked) | `/goal clear` |
+| Tool results echo a hook stack trace but tool itself succeeded | Hook is informational, not blocking | Continue |
+
+If you find yourself in a deadlock for more than ~3 turns, **stop the loop**: emit one clear message naming the corrupted file + the exact recovery command, then wait. The user must intervene from outside the session.
+
 ## Full SDLC Checklist
 
 Your FIRST action must be TodoWrite with these steps:
 
 ```
 TodoWrite([
+  // PRE-FLIGHT (always)
+  { content: "Pre-flight: git status clean, hooks intact, /goal conditions understood", status: "in_progress", activeForm: "Running pre-flight checks" },
   // PLANNING PHASE (Plan Mode for non-trivial tasks)
-  { content: "Find and read relevant documentation", status: "in_progress", activeForm: "Reading docs" },
+  { content: "Find and read relevant documentation", status: "pending", activeForm: "Reading docs" },
   { content: "Assess doc health - flag issues (ask before cleaning)", status: "pending", activeForm: "Checking doc health" },
   { content: "DRY scan: What patterns exist to reuse?", status: "pending", activeForm: "Scanning for reusable patterns" },
-  { content: "Blast radius: What depends on code I'm changing?", status: "pending", activeForm: "Checking dependencies" },
+  { content: "Blast radius: What depends on code I'm changing? (include hook scripts in .claude/hooks/)", status: "pending", activeForm: "Checking dependencies" },
   { content: "Restate task in own words - verify understanding", status: "pending", activeForm: "Verifying understanding" },
   { content: "Scrutinize test design - right things tested? Follow TESTING.md?", status: "pending", activeForm: "Reviewing test approach" },
   { content: "Present approach + STATE CONFIDENCE LEVEL", status: "pending", activeForm: "Presenting approach" },
@@ -32,6 +54,8 @@ TodoWrite([
   { content: "TDD GREEN: Implement, verify test passes", status: "pending", activeForm: "Implementing feature" },
   { content: "Run shellcheck lint", status: "pending", activeForm: "Running shellcheck" },
   { content: "Run ALL tests", status: "pending", activeForm: "Running all tests" },
+  // PRE-COMMIT GATE
+  { content: "Pre-commit: git status — no rebase artifacts, no '<<<' markers in tracked files", status: "pending", activeForm: "Verifying clean commit state" },
   // REVIEW PHASE
   { content: "DRY check: Is logic duplicated elsewhere?", status: "pending", activeForm: "Checking for duplication" },
   { content: "Self-review: run /code-review", status: "pending", activeForm: "Running code review" },
@@ -143,6 +167,28 @@ If tests fail:
 - "Just in case" fallbacks? DELETE IT
 
 **THE RULE:** Delete old code first. If it breaks, fix it properly.
+
+## Hook-Event Awareness (visualhud-specific)
+
+This repo *is* a Claude Code hook consumer. When changing `engine.sh`, `.claude/hooks/*.sh`, `themes/**/theme.json`, or anything in `scripts/`, expect every assistant turn to fire these events and write per-session state to `/private/tmp/claude-cooking-*_${ITERM_SESSION_ID}`:
+
+| Event | Phase | What engine.sh does |
+|---|---|---|
+| `SessionStart` | v1.0 | Captures model + source (startup/resume/clear/compact); resets counter on clear/compact |
+| `CwdChanged` | v1.0 | Resets counter, re-themes per-project |
+| `PreToolUse` / `PostToolUse` | v1.0 | Increments counter, renders stage |
+| `PostToolUseFailure` | v1.0 | Decrements counter, flashes error |
+| `UserPromptSubmit` | v0.x | Cleans transient markers (NOT review marker) |
+| `Notification` | v0.x | Renders blocked/permission state |
+| `Stop` / `StopFailure` / `TaskCompleted` | v0.x | Renders done/idle/blastoise |
+| `PreCompact` / `PostCompact` | v1.1 | Renders/clears compacting state |
+| `SubagentStart` / `SubagentStop` | v1.1 | Renders/clears subagent overlay |
+
+Payload fields available from hook input: `effort.level` (low/medium/high/xhigh/max), `permission_mode` (default/plan/acceptEdits/auto), `model`, `transcript_path` (for cost tracking — v1.2), `cwd`, `source`, `agent_type`.
+
+Tests in `tests/test-cooking-status.sh` (esp. 21a–21h, 22a–22b) exercise each handler. Keep them green before commit.
+
+**When writing a hook handler:** always `exit 0` on any parse/decode failure. A non-zero exit (or syntax error) blocks every subsequent tool call across the entire session.
 
 ---
 

@@ -20,7 +20,7 @@ resolve_tty_target() {
     fi
     local pid="$PPID" tty
     while [ -n "$pid" ] && [ "$pid" != "0" ] && [ "$pid" != "1" ]; do
-        tty=$(ps -o tt= -p "$pid" 2>/dev/null | tr -d ' \t\n' || true)
+        tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' \t\n' || true)
         case "$tty" in
             ''|'?'|'??') ;;
             /*) printf '%s' "$tty"; return ;;

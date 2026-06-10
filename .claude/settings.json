@@ -14,7 +14,9 @@
     "Bash(jq *)",
     "Bash(git *)",
     "Bash(ls *)",
-    "Bash(mkdir *)"
+    "Bash(mkdir *)",
+    "Bash(shellcheck *)",
+    "Bash(node *)"
   ],
   "hooks": {
     "UserPromptSubmit": [

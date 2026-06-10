@@ -1,0 +1,173 @@
+{
+  "name": "Power Rangers MMPR",
+  "progress_bar": ["R", "B", "Y", "P", "K", "G", "W", "Au", "⚡", "🐲", "⭐"],
+  "stages": [
+    {
+      "max": 2,
+      "sprite": "",
+      "badge": "R",
+      "name": "Red Ranger",
+      "color_family": "red",
+      "color_family_singleton": true,
+      "color": [220, 30, 30]
+    },
+    {
+      "max": 5,
+      "sprite": "",
+      "badge": "B",
+      "name": "Blue Ranger",
+      "color_family": "blue",
+      "color_family_singleton": true,
+      "color": [30, 80, 220]
+    },
+    {
+      "max": 12,
+      "sprite": "",
+      "badge": "Y",
+      "name": "Yellow Ranger",
+      "color_family": "yellow",
+      "color_family_singleton": true,
+      "color": [255, 220, 30]
+    },
+    {
+      "max": 25,
+      "sprite": "",
+      "badge": "P",
+      "name": "Pink Ranger",
+      "color_family": "pink",
+      "color_family_singleton": true,
+      "color": [255, 100, 160]
+    },
+    {
+      "max": 45,
+      "sprite": "",
+      "badge": "BK",
+      "name": "Black Ranger",
+      "color_family": "black",
+      "color_family_singleton": true,
+      "color": [50, 50, 55]
+    },
+    {
+      "max": 75,
+      "sprite": "",
+      "badge": "G",
+      "name": "Green Ranger",
+      "color_family": "green",
+      "color_family_singleton": true,
+      "color": [0, 170, 60]
+    },
+    {
+      "max": 120,
+      "sprite": "",
+      "badge": "W",
+      "name": "White Ranger",
+      "color_family": "white",
+      "color_family_singleton": true,
+      "color": [230, 230, 240]
+    },
+    {
+      "max": 180,
+      "sprite": "",
+      "badge": "AU",
+      "name": "Gold Ranger",
+      "color_family": "gold",
+      "color_family_singleton": true,
+      "color": [255, 200, 50]
+    },
+    {
+      "max": 280,
+      "sprite": "",
+      "badge": "MZ",
+      "name": "Megazord",
+      "color_family": "steel",
+      "color_family_singleton": true,
+      "color": [140, 150, 190]
+    },
+    {
+      "max": 400,
+      "sprite": "",
+      "badge": "DZ",
+      "name": "Dragonzord",
+      "color_family": "emerald",
+      "color_family_singleton": true,
+      "color": [60, 180, 90]
+    },
+    {
+      "max": 999999,
+      "sprite": "",
+      "badge": "UZ",
+      "name": "Ultrazord",
+      "color_family": "platinum",
+      "color_family_singleton": true,
+      "color": [200, 210, 240]
+    }
+  ],
+  "blocked": {
+    "sprite": "",
+    "badge": "RITA",
+    "name": "Rita Repulsa",
+    "color": [100, 30, 120]
+  },
+  "review": {
+    "sprite": "",
+    "badge": "ZRD",
+    "name": "Zordon",
+    "stage": 10,
+    "color": [80, 160, 255]
+  },
+  "done": {
+    "sprite": "",
+    "badge": "PWR",
+    "name": "Power Coin",
+    "stage": 11,
+    "color": [255, 215, 0]
+  },
+  "idle": {
+    "sprite": "",
+    "badge": "A5",
+    "name": "Alpha 5",
+    "stage": 11,
+    "color": [160, 165, 170]
+  },
+  "error": {
+    "sprite": "",
+    "badge": "ERR",
+    "name": "Putty Patrol",
+    "color": [180, 40, 40]
+  },
+  "plan": {
+    "sprite": "",
+    "badge": "CMD",
+    "name": "Command Center",
+    "stage": 10,
+    "color": [60, 120, 200]
+  },
+  "compacting": {
+    "sprite": "",
+    "badge": "GRID",
+    "name": "Morphin Grid",
+    "stage": 10,
+    "color": [180, 60, 220]
+  },
+  "subagent": {
+    "sprite": "",
+    "badge": "NJR",
+    "name": "Ninjor",
+    "stage": 10,
+    "color": [40, 180, 180]
+  },
+  "context_alerts": {
+    "warning": {
+      "min_percent": 70,
+      "badge": "LOW",
+      "name": "Power Down",
+      "color": [240, 180, 40]
+    },
+    "critical": {
+      "min_percent": 85,
+      "badge": "SOS",
+      "name": "Self Destruct",
+      "color": [255, 50, 30]
+    }
+  }
+}

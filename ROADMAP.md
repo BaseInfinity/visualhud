@@ -14,7 +14,7 @@ Batman, Power Rangers, or any other skin.
 - [ ] Codex TMNT title/badge/progress presentation should match the clarity of the Claude Pokemon panes, including visible progress state instead of a plain `visualhud (codex)` title when the host permits it.
 - [ ] Replace any remaining weak one-off art crops found during the live visual pass with better source-backed crops.
 - [ ] **Batman** (parked) — next branded theme candidate after TMNT hardening is visually accepted.
-- [ ] **Power Rangers** (parked) — future color-team theme candidate after TMNT hardening and third-theme scaffolding are stable.
+- [x] **Power Rangers** — shipped as colors-only theme; sprite art to be added later.
 - [ ] **Sonic** (parked) — future speed/progress theme candidate after TMNT hardening, installer, and Windows renderer tracks are stable.
 - [ ] Windows Terminal/PowerShell stays a separate renderer track; do not mix that portability work into TMNT theme quality.
 
@@ -36,12 +36,12 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 ## Themes
 - [x] **Pokemon** — shipped first-party theme and Claude default
 - [x] **TMNT** — shipped first-party theme and Codex default: Leonardo blue, Michelangelo orange, Donatello purple, Raphael red, April yellow, Metalhead gray, Mutagen green, Splinter brown, Krang pink, Foot Clan steel-purple, Turtle Power green
-- [ ] **Otter Pop** — 6 popsicle flavors by color (Strawberry Short Kook, Sir Isaac Lime, Alexander the Grape, Little Orphan Orange, Louie-Bloo Raspberry, Poncho Punch)
+- [x] **Otter Pop** — 6 popsicle flavors by color (Strawberry Short Kook, Sir Isaac Lime, Alexander the Grape, Little Orphan Orange, Louie-Bloo Raspberry, Poncho Punch)
 - [x] **TMNT sprite pack** — actual background PNGs for all TMNT stage/lifecycle sprite names
 - [ ] **MISSINGNO error sprite** — glitch Pokemon for ERROR/StopFailure state
 - [ ] **Pokemon ghost-line extension** — add Gastly/Haunter/Gengar purple overflow only after real theme-local sprites are available; do not ship missing-art references
 - [ ] **Batman** (parked) — do after TMNT hardening, not before
-- [ ] **Power Rangers** (parked) — color-team theme candidate after TMNT hardening and theme authoring docs are stable
+- [x] **Power Rangers** — MMPR color-team progression: Red, Blue, Yellow, Pink, Black, Green, White, Gold Rangers, Megazord, Dragonzord, Ultrazord
 - [ ] **Sonic** (parked) — speed/progress theme candidate after the bundled-theme install path is boring and repeatable
 
 ## Theme System Features

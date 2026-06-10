@@ -1,0 +1,128 @@
+{
+  "name": "Otter Pop Flavors",
+  "progress_bar": ["🍓", "🍋", "🍇", "🍊", "💙", "🥊"],
+  "stages": [
+    {
+      "max": 5,
+      "sprite": "",
+      "badge": "SK",
+      "name": "Strawberry Short Kook",
+      "color_family": "strawberry",
+      "color_family_singleton": true,
+      "color": [255, 50, 70]
+    },
+    {
+      "max": 25,
+      "sprite": "",
+      "badge": "IL",
+      "name": "Sir Isaac Lime",
+      "color_family": "lime",
+      "color_family_singleton": true,
+      "color": [70, 200, 50]
+    },
+    {
+      "max": 75,
+      "sprite": "",
+      "badge": "AG",
+      "name": "Alexander the Grape",
+      "color_family": "grape",
+      "color_family_singleton": true,
+      "color": [140, 40, 190]
+    },
+    {
+      "max": 200,
+      "sprite": "",
+      "badge": "OO",
+      "name": "Little Orphan Orange",
+      "color_family": "orange",
+      "color_family_singleton": true,
+      "color": [255, 140, 20]
+    },
+    {
+      "max": 500,
+      "sprite": "",
+      "badge": "LB",
+      "name": "Louie-Bloo Raspberry",
+      "color_family": "blueberry",
+      "color_family_singleton": true,
+      "color": [30, 100, 255]
+    },
+    {
+      "max": 999999,
+      "sprite": "",
+      "badge": "PP",
+      "name": "Poncho Punch",
+      "color_family": "punch",
+      "color_family_singleton": true,
+      "color": [255, 60, 160]
+    }
+  ],
+  "blocked": {
+    "sprite": "",
+    "badge": "BRR",
+    "name": "Brain Freeze",
+    "color": [140, 200, 240]
+  },
+  "review": {
+    "sprite": "",
+    "badge": "TST",
+    "name": "Taste Test",
+    "stage": 5,
+    "color": [240, 200, 60]
+  },
+  "done": {
+    "sprite": "",
+    "badge": "YUM",
+    "name": "Empty Wrapper",
+    "stage": 6,
+    "color": [255, 100, 200]
+  },
+  "idle": {
+    "sprite": "",
+    "badge": "ICE",
+    "name": "Freezer",
+    "stage": 6,
+    "color": [200, 220, 240]
+  },
+  "error": {
+    "sprite": "",
+    "badge": "SPL",
+    "name": "Dropped Pop",
+    "color": [230, 30, 30]
+  },
+  "plan": {
+    "sprite": "",
+    "badge": "FLV",
+    "name": "Flavor Pick",
+    "stage": 5,
+    "color": [160, 120, 220]
+  },
+  "compacting": {
+    "sprite": "",
+    "badge": "DFR",
+    "name": "Defrosting",
+    "stage": 5,
+    "color": [220, 160, 60]
+  },
+  "subagent": {
+    "sprite": "",
+    "badge": "MYS",
+    "name": "Mystery Flavor",
+    "stage": 5,
+    "color": [40, 190, 180]
+  },
+  "context_alerts": {
+    "warning": {
+      "min_percent": 70,
+      "badge": "MLT",
+      "name": "Melting",
+      "color": [240, 160, 40]
+    },
+    "critical": {
+      "min_percent": 85,
+      "badge": "PDL",
+      "name": "Puddle",
+      "color": [255, 60, 100]
+    }
+  }
+}

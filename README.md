@@ -215,7 +215,7 @@ the full proof set in `THEMES.md`.
 Future work: a dedicated theme creator workflow should scaffold the JSON,
 sprite folders, calibration sheet, and TODO checklist automatically. Until that
 exists, `THEMES.md` is the source of truth for agents and humans creating
-Batman, Sonic, Power Rangers, or any third-party theme.
+Batman, Sonic, or any third-party theme.
 
 ### 5. Use With Claude Code
 
@@ -313,20 +313,11 @@ A theme is a directory with a config file and optional assets:
 
 ```
 themes/
-  pokemon/
-    theme.json
-    sprites/
-      charmander.png
-      charmeleon.png
-      ...
-  tmnt/
-    theme.json
-    sprites/
-      tmnt-leonardo.png
-      tmnt-michelangelo.png
-      ...
-  custom/
-    theme.json
+  pokemon/          11-stage evolution (Charmander → Blastoise) — sprite art
+  tmnt/             11-stage character select (Leo → Turtle Power) — sprite art
+  power-rangers/    11-stage MMPR team (Red Ranger → Ultrazord) — colors only
+  otter-pop/        6-stage popsicle flavors (Strawberry → Poncho Punch) — colors only
+  minimal/          5-stage color gradient — no sprites
 ```
 
 ### Theme Config (theme.json)
@@ -431,7 +422,7 @@ VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
 - WezTerm installs for Codex and updates title, right status, colors, and live background sprites through `OSC 1337;SetUserVar` plus the bundled Lua module.
 - `PreToolUse`, `UserPromptSubmit`, `Notification`, `PermissionRequest`, `Stop`, `StopFailure`, `TaskCompleted`, and `SessionStart` are mapped into the engine by repo-local adapters.
 - Theme stages use `color_family` plus `shades`, so a character can keep the same sprite while the terminal chrome advances through multiple color steps.
-- Pokemon and TMNT both ship source-backed sprite packs and theme JSON.
+- Pokemon, TMNT, Power Rangers, Otter Pop, and Minimal all ship as theme packs. Pokemon and TMNT include source-backed sprite art; Power Rangers, Otter Pop, and Minimal are colors-only.
 - Context/token pressure is an ambient overlay: warning and critical label the state while preserving the active stage color/sprite.
 
 **Current hooks:**
@@ -579,12 +570,20 @@ Documenting these so we don't repeat them:
 
 5. **Badge disappears on resize/different monitors** — `badge_top_margin` is pixel-based (not percentage). When the window is shorter than the margin value, the badge goes off-screen. Moving windows between monitors with different sizes makes it worse. Dynamic recalculation in `set_bg.py` helps but only fires on stage transitions, not on resize. **Needs a resize listener in v0.1.**
 
+6. **TTY "Device not configured" in hook context** — Hook processes don't inherit a controlling terminal, so `/dev/tty` writes silently fail and badge/title/tab colors never render. Fix: `resolve_tty_target()` walks the PPID chain via `ps -o tty=` (not `tt=` — the abbreviated form gives wrong device paths like `/dev/s014` instead of `/dev/ttys014`) to discover the parent's controlling pty. Background images were unaffected since `set_bg.py` uses the iTerm2 Python API channel.
+
+7. **Corrupted hook deadlocks all tool calls** — A syntax error in the hook script (e.g. leftover merge conflict markers from an aborted rebase) causes a non-zero exit that blocks every subsequent tool call. Fix: the installer now wraps every hook as `bash -c 'bash "$HOOK" 2>/dev/null || true'` so parse-time failures always exit 0.
+
+8. **Invisible /goal Stop-loop** — An unsatisfiable `/goal` condition fires Stop in a tight loop. Without visibility, the user stares at a frozen HUD. Fix: engine tracks Stop timestamps; at ≥8 fires within 30s, it emits a red "LOOP DETECTED — run /goal clear" title.
+
 ## Status
 
-**v1.0.** Repo-local Codex and Claude Code hook wiring ships via
-`npx visualhud install <claude|codex>`. Codex supports macOS/iTerm2 plus
-Windows Terminal/PowerShell title/progress and WezTerm title/status/color/live
-backgrounds. Claude Code support is macOS/iTerm2-only for now.
+**v1.2.** Five themes ship (Pokemon, TMNT, Power Rangers, Otter Pop, Minimal).
+Repo-local hook wiring for Codex and Claude Code via `npx visualhud install`.
+Codex supports macOS/iTerm2, Windows Terminal/PowerShell, and WezTerm. Claude
+Code support is macOS/iTerm2-only for now. v1.2 adds transcript-based cost
+tracking (`hudCost` user var), hardened hook wrappers, TTY resolution for badge/
+title/tab colors in hook context, and Stop-loop deadlock detection.
 
 ---
 
@@ -634,12 +633,13 @@ stage counters, applies stage shades, resolves sprite paths, and drives iTerm2.
 Pokemon and TMNT live under `themes/`, and both Codex and Claude use repo-local
 adapters.
 
-Next hardening work:
+Next work:
+- Sprite art for Power Rangers and Otter Pop (currently colors-only).
 - Replace any weak TMNT one-off cover-art states with character-focused source art.
-- Add the next branded theme candidates, Batman and Power Rangers, as JSON/sprite packs that prove third-theme parity without engine changes.
-- Add a terminal-renderer abstraction for Windows Terminal/PowerShell, Kitty, WezTerm, and Ghostty.
-- Add snapshot/restore so VisualHUD can return terminal chrome to its original state.
-- Add a CLI installer/doctor once the repo-local contract is stable.
+- Batman and Sonic theme candidates (parked on ROADMAP).
+- Terminal-renderer abstraction for Kitty, Ghostty adapters.
+- Snapshot/restore so VisualHUD can return terminal chrome to its original state.
+- Theme marketplace / community theme distribution.
 
 **Then — Polish:**
 - [ ] **Window border integration (JankyBorders)** — colored border around iTerm2 window that changes with stage progression:

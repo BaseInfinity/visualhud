@@ -9,6 +9,7 @@ TOTAL=0
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SKILLS_DIR="$ROOT_DIR/skills"
+AGENT_SKILLS_DIR="$ROOT_DIR/.agents/skills"
 
 pass() {
     PASS=$((PASS + 1))
@@ -64,7 +65,25 @@ for skill in visualhud-setup visualhud-update visualhud-theme visualhud-feedback
 done
 echo ""
 
-echo "--- Test 2: Skills route to the repo-local VisualHUD runtime ---"
+echo "--- Test 2: Source checkout exposes VisualHUD skills to Codex ---"
+for skill in visualhud-setup visualhud-update visualhud-theme visualhud-feedback; do
+    assert_file_exists "repo exposes \$$skill skill" "$AGENT_SKILLS_DIR/$skill/SKILL.md"
+    TOTAL=$((TOTAL + 1))
+    if [ ! -L "$AGENT_SKILLS_DIR/$skill/SKILL.md" ]; then
+        pass "repo \$$skill uses a real SKILL.md file"
+    else
+        fail "repo \$$skill uses a real SKILL.md file"
+    fi
+    TOTAL=$((TOTAL + 1))
+    if cmp -s "$SKILLS_DIR/$skill/SKILL.md" "$AGENT_SKILLS_DIR/$skill/SKILL.md"; then
+        pass "repo \$$skill mirrors packaged skill"
+    else
+        fail "repo \$$skill mirrors packaged skill"
+    fi
+done
+echo ""
+
+echo "--- Test 3: Skills route to the repo-local VisualHUD runtime ---"
 README_DOC="$(cat "$ROOT_DIR/README.md")"
 TESTING_DOC="$(cat "$ROOT_DIR/TESTING.md")"
 SETUP_DOC="$(skill_doc visualhud-setup 2>/dev/null || true)"

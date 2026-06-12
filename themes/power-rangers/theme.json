@@ -3,94 +3,94 @@
   "progress_bar": ["R", "B", "Y", "P", "K", "G", "W", "Au", "⚡", "🐲", "⭐"],
   "stages": [
     {
-      "max": 2,
+      "max": 6,
       "sprite": "",
       "badge": "R",
       "name": "Red Ranger",
       "color_family": "red",
-      "color_family_singleton": true,
-      "color": [220, 30, 30]
-    },
-    {
-      "max": 5,
-      "sprite": "",
-      "badge": "B",
-      "name": "Blue Ranger",
-      "color_family": "blue",
-      "color_family_singleton": true,
-      "color": [30, 80, 220]
+      "color": [220, 30, 30],
+      "shades": [[145, 24, 28], [190, 28, 30]]
     },
     {
       "max": 12,
       "sprite": "",
+      "badge": "B",
+      "name": "Blue Ranger",
+      "color_family": "blue",
+      "color": [30, 80, 220],
+      "shades": [[22, 50, 135], [28, 70, 180], [45, 95, 220]]
+    },
+    {
+      "max": 18,
+      "sprite": "",
       "badge": "Y",
       "name": "Yellow Ranger",
       "color_family": "yellow",
-      "color_family_singleton": true,
-      "color": [255, 220, 30]
+      "color": [255, 220, 30],
+      "shades": [[150, 120, 20], [210, 170, 28], [255, 215, 45]]
     },
     {
-      "max": 25,
+      "max": 24,
       "sprite": "",
       "badge": "P",
       "name": "Pink Ranger",
       "color_family": "pink",
-      "color_family_singleton": true,
-      "color": [255, 100, 160]
+      "color": [255, 100, 160],
+      "shades": [[150, 55, 95], [210, 75, 130], [255, 105, 160]]
     },
     {
-      "max": 45,
+      "max": 30,
       "sprite": "",
       "badge": "BK",
       "name": "Black Ranger",
       "color_family": "black",
-      "color_family_singleton": true,
-      "color": [50, 50, 55]
+      "color": [50, 50, 55],
+      "shades": [[25, 25, 30], [40, 40, 46], [60, 60, 66]]
     },
     {
-      "max": 75,
+      "max": 36,
       "sprite": "",
       "badge": "G",
       "name": "Green Ranger",
       "color_family": "green",
-      "color_family_singleton": true,
-      "color": [0, 170, 60]
+      "color": [0, 170, 60],
+      "shades": [[0, 105, 50], [0, 145, 60], [20, 180, 80]]
     },
     {
-      "max": 120,
+      "max": 42,
       "sprite": "",
       "badge": "W",
       "name": "White Ranger",
       "color_family": "white",
-      "color_family_singleton": true,
-      "color": [230, 230, 240]
+      "color": [230, 230, 240],
+      "shades": [[155, 160, 175], [195, 200, 215], [235, 238, 245]]
     },
     {
-      "max": 180,
+      "max": 48,
       "sprite": "",
       "badge": "AU",
       "name": "Gold Ranger",
       "color_family": "gold",
-      "color_family_singleton": true,
-      "color": [255, 200, 50]
+      "color": [255, 200, 50],
+      "shades": [[155, 115, 25], [210, 155, 35], [255, 205, 65]]
     },
     {
-      "max": 280,
+      "max": 54,
       "sprite": "",
       "badge": "MZ",
       "name": "Megazord",
       "color_family": "steel",
-      "color_family_singleton": true,
-      "color": [140, 150, 190]
+      "color": [140, 150, 190],
+      "shades": [[85, 95, 125], [115, 125, 160], [150, 160, 200]]
     },
     {
-      "max": 400,
+      "max": 60,
       "sprite": "",
       "badge": "DZ",
       "name": "Dragonzord",
       "color_family": "emerald",
-      "color_family_singleton": true,
-      "color": [60, 180, 90]
+      "color": [60, 180, 90],
+      "shades": [[35, 105, 60], [50, 145, 78], [70, 185, 100]]
     },
     {
       "max": 999999,
@@ -98,8 +98,8 @@
       "badge": "UZ",
       "name": "Ultrazord",
       "color_family": "platinum",
-      "color_family_singleton": true,
-      "color": [200, 210, 240]
+      "color": [200, 210, 240],
+      "shades": [[120, 130, 160], [160, 175, 210], [205, 215, 245]]
     }
   ],
   "blocked": {

@@ -392,6 +392,25 @@ function calibrationPayload(step) {
     case "error":
       payload = { hook_event_name: "StopFailure", session_id: "visualhud-calibration" };
       break;
+    case "plan":
+      payload = {
+        hook_event_name: "PreToolUse",
+        tool_name: "Calibration",
+        session_id: "visualhud-calibration",
+        permission_mode: "plan",
+      };
+      break;
+    case "compacting":
+      payload = { hook_event_name: "PreCompact", session_id: "visualhud-calibration", trigger: "calibration" };
+      break;
+    case "subagent":
+      payload = {
+        hook_event_name: "SubagentStart",
+        session_id: "visualhud-calibration",
+        agent_type: "Calibration",
+        agent_id: "visualhud-calibration",
+      };
+      break;
     default:
       payload = null;
   }

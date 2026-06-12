@@ -33,6 +33,7 @@ Theme changes are repo-local and take effect on the next hook.
 ## Rules
 
 - Pokemon and TMNT are shipped first-party themes.
-- Batman, Power Rangers, and Sonic are parked future themes until the theme contract stays boring.
+- Power Rangers is shipped colors-only; validate it like the other bundled JSON themes.
+- Batman and Sonic are parked future themes until the theme contract stays boring.
 - Do not add placeholder art for missing sprites. Use source-backed assets or park the theme extension.
 - Keep context/token pressure as an overlay; it must not erase the active stage color or sprite.

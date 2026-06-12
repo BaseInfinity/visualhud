@@ -15,6 +15,7 @@ Batman, Power Rangers, or any other skin.
 - [ ] Replace any remaining weak one-off art crops found during the live visual pass with better source-backed crops.
 - [ ] **Batman** (parked) — next branded theme candidate after TMNT hardening is visually accepted.
 - [x] **Power Rangers** — shipped as colors-only theme; sprite art to be added later.
+- [x] **Power Rangers shade-ramp and dwell pass** — MMPR stages now ramp within each ranger/zord color and use balanced colors-only dwell thresholds instead of flashing through unrelated saturated colors during the first tool calls.
 - [ ] **Sonic** (parked) — future speed/progress theme candidate after TMNT hardening, installer, and Windows renderer tracks are stable.
 - [ ] Windows Terminal/PowerShell stays a separate renderer track; do not mix that portability work into TMNT theme quality.
 
@@ -47,6 +48,7 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 ## Theme System Features
 - [ ] **TMNT roster packs** — support selectable packs inside one theme, e.g. `heroes`, `villains`, or `arcade` under `tmnt` instead of separate `tmnt-heroes`/`tmnt-villains` themes
 - [ ] **Theme creator workflow** — add a guided `/theme`/`visualhud theme create` flow that scaffolds `themes/<name>/theme.json`, sprite folders, calibration/contact-sheet proof, and agent instructions from `THEMES.md`
+- [x] **Theme calibration covers optional lifecycle states** — `visualhud theme calibrate` now includes theme opt-ins for plan, compacting, and subagent states, so colors-only themes like Power Rangers get the same reviewable lifecycle proof as sprite-backed themes.
 - [ ] **Mix & match colors** — random palette selection from color pools across themes
 - [ ] **Sprite pools** — don't hardcode evolution lines; define pools per color/stage category, random pick each session
 - [x] **Easy theme swapping** — `visualhud theme list/current/set/reset`
@@ -74,6 +76,7 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 - [x] **Context/token usage alert overlay** — warning at 70%+ and critical at 85%+ via badge/title/user var without overriding stage color/sprite
 - [ ] **Ranger Formation window choreography** — `visualhud ranger formation` should activate iTerm2, raise/unminimize all iTerm windows, arrange at most six visible sessions on a single laptop display, and cascade/overlap the rest so solo one-monitor workflows stay manageable.
 - [ ] **Voice/dictation workflow docs** — document the recommended macOS setup for using Dictation/Voice Control with Codex/Claude terminals, including double-tap Control dictation and always-on Voice Control tradeoffs.
+- [ ] **Claude `/insights` with Fable max** — run `/insights` at least once in this repo using Claude with the Fable model at max reasoning/effort, then record any VisualHUD/agent-workflow findings back into the roadmap or follow-up issues.
 - [x] **Cost usage tracking** — engine parses `transcript_path` JSONL out-of-band, sums `input_tokens + cache_creation_input_tokens + cache_read_input_tokens + output_tokens` across all `type:assistant` lines, persists running total under `VISUALHUD_STATE_DIR` / temp state as `claude-cooking-tokens_*`, and emits iTerm2 user var `hudCost` for status-bar consumption. Threshold-based visual warnings by spend are deferred to v1.2.1.
 - [ ] **Kindle-style time estimation** — "~2 min left" based on historical sessions
 - [ ] **Sound effects** — optional theme-matched sounds on state changes (Pokemon cries, etc.)

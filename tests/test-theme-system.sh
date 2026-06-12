@@ -126,6 +126,8 @@ assert_contains "Theme docs define max-threshold stages" '"max"' "$THEMES_DOC"
 assert_contains "Theme docs define sprite-backed states" '"sprite"' "$THEMES_DOC"
 assert_contains "Theme docs define color families" '"color_family"' "$THEMES_DOC"
 assert_contains "Theme docs define stage shades" '"shades"' "$THEMES_DOC"
+assert_contains "Theme docs require shade ramps for fast-start themes" "Fast-start themes with early thresholds" "$THEMES_DOC"
+assert_contains "Theme docs require balanced dwell for many-hue colors-only themes" "balanced dwell thresholds" "$THEMES_DOC"
 assert_contains "Theme docs define shade sprite variants" '"shade_sprites"' "$THEMES_DOC"
 assert_contains "Theme docs require branded shade sprites to be distinct portraits" "not just crop-only zooms" "$THEMES_DOC"
 assert_contains "Theme docs define progress bar as shared visual status strip" "shared visual progress strip" "$THEMES_DOC"
@@ -151,6 +153,7 @@ assert_file_exists "TMNT contact sheet screenshot is checked in" "$ROOT_DIR/docs
 assert_contains "README documents Windows status" "Windows Terminal" "$README_DOC"
 assert_contains "README points theme authors to tests" "bash tests/test-theme-system.sh" "$README_DOC"
 assert_contains "README documents per-shade sprite variants" "shade_sprites" "$README_DOC"
+assert_contains "README documents colors-only dwell pacing" "balanced stage" "$README_DOC"
 assert_contains "README documents matte stripping for source sprites" "neutral corner mattes" "$README_DOC"
 assert_contains "README documents repo-local theme switch command" "./visualhud theme set" "$README_DOC"
 assert_contains "README documents theme switch without restart" "next hook" "$README_DOC"
@@ -166,7 +169,8 @@ assert_contains "README records Sonic as a future theme candidate" "Sonic" "$REA
 assert_contains "README documents Windows status renderer" "Windows Terminal/PowerShell is supported for Codex hook install" "$README_DOC"
 assert_contains "Roadmap prioritizes TMNT hardening before new themes" "## TMNT Hardening Before New Themes" "$ROADMAP_DOC"
 assert_contains "Roadmap parks Batman theme candidate" "**Batman** (parked)" "$ROADMAP_DOC"
-assert_contains "Roadmap parks Power Rangers theme candidate" "**Power Rangers** (parked)" "$ROADMAP_DOC"
+assert_contains "Roadmap marks Power Rangers as shipped colors-only theme" "**Power Rangers** — shipped as colors-only theme" "$ROADMAP_DOC"
+assert_contains "Roadmap marks Power Rangers balanced dwell shipped" "Power Rangers shade-ramp and dwell pass" "$ROADMAP_DOC"
 assert_contains "Roadmap parks Sonic theme candidate" "**Sonic** (parked)" "$ROADMAP_DOC"
 assert_contains "Roadmap marks Pokemon as shipped first-party theme" "**Pokemon** — shipped first-party theme" "$ROADMAP_DOC"
 assert_contains "Roadmap marks TMNT as shipped first-party theme" "**TMNT** — shipped first-party theme" "$ROADMAP_DOC"
@@ -178,6 +182,7 @@ assert_contains "Roadmap marks easy theme swapping shipped" "[x] **Easy theme sw
 assert_contains "Roadmap tracks theme creator workflow" "**Theme creator workflow**" "$ROADMAP_DOC"
 assert_contains "Roadmap tracks animated demo asset" "**Animated demo asset**" "$ROADMAP_DOC"
 assert_contains "Roadmap parks TDLC for hard terminal visual testing" "TDLC" "$ROADMAP_DOC"
+assert_contains "Roadmap tracks Claude Fable max insights pass" "Claude \`/insights\` with Fable max" "$ROADMAP_DOC"
 assert_contains "Testing docs include calibration test" "test-theme-calibration" "$TESTING_DOC"
 assert_contains "Architecture documents Claude adapter" "visualhud-claude.sh" "$ARCH_DOC"
 assert_contains "Architecture documents terminal surface palette" "SetColors=tab" "$ARCH_DOC"
@@ -313,6 +318,65 @@ assert_jq "Pokemon lifecycle and context states use filled unique non-stage spri
     and (($state_sprites | unique | length) == ($state_sprites | length))
     and all($state_sprites[]; . as $sprite | ($stage_sprites | index($sprite) | not))
 '
+# shellcheck disable=SC2016
+assert_jq "Power Rangers remains a shipped colors-only theme until source-backed sprites land" "$ROOT_DIR/themes/power-rangers/theme.json" '
+  ([
+    .stages[].sprite,
+    .blocked.sprite,
+    .review.sprite,
+    .done.sprite,
+    .idle.sprite,
+    .error.sprite,
+    (.plan.sprite // ""),
+    (.compacting.sprite // ""),
+    (.subagent.sprite // ""),
+    (.context_alerts.warning.sprite // ""),
+    (.context_alerts.critical.sprite // "")
+  ] | all(. == ""))
+  and ([.stages[].name] == [
+    "Red Ranger",
+    "Blue Ranger",
+    "Yellow Ranger",
+    "Pink Ranger",
+    "Black Ranger",
+    "Green Ranger",
+    "White Ranger",
+    "Gold Ranger",
+    "Megazord",
+    "Dragonzord",
+    "Ultrazord"
+  ])
+'
+# shellcheck disable=SC2016
+assert_jq "Power Rangers uses shade ramps instead of singleton color flashes" "$ROOT_DIR/themes/power-rangers/theme.json" '
+  all(.stages[]; (
+    (.color_family_singleton != true)
+    and (.shades | type == "array")
+    and (.shades | length >= 2)
+    and all(.shades[]; (type == "array") and (length == 3) and all(.[]; . >= 0 and . <= 255))
+  ))
+  and (.stages[0].shades | length == 2)
+  and (.stages[1].shades | length == 3)
+  and (.stages[2].shades[0] == [150, 120, 20])
+'
+
+assert_jq "Power Rangers colors-only stages use balanced dwell pacing" "$ROOT_DIR/themes/power-rangers/theme.json" '
+  [.stages[0:10][].max] == [6, 12, 18, 24, 30, 36, 42, 48, 54, 60]
+'
+
+while IFS= read -r fast_theme_file; do
+    assert_jq "$(basename "$(dirname "$fast_theme_file")") fast-start stages use shade ramps" "$fast_theme_file" '
+      if ((.stages | length) >= 3 and .stages[0].max <= 2 and .stages[1].max <= 5 and .stages[2].max <= 12) then
+        all(.stages[]; (
+          (.color_family_singleton != true)
+          and (.shades | type == "array")
+          and (.shades | length >= 2)
+        ))
+      else
+        true
+      end
+    '
+done < <(find "$ROOT_DIR/themes" -mindepth 2 -maxdepth 2 -name theme.json | sort)
 echo ""
 
 echo "--- Test 3: Pokemon visual smoke renders filled lifecycle/context sprites ---"

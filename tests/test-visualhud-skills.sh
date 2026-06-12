@@ -85,6 +85,8 @@ assert_contains "Update skill reruns WezTerm helper" "setup-wezterm.ps1" "$UPDAT
 assert_contains "Theme skill lists themes" ".visualhud/visualhud theme list" "$THEME_DOC"
 assert_contains "Theme skill sets themes" ".visualhud/visualhud theme set" "$THEME_DOC"
 assert_contains "Theme skill documents calibration" ".visualhud/visualhud theme calibrate" "$THEME_DOC"
+assert_contains "Theme skill marks Power Rangers shipped colors-only" "Power Rangers is shipped colors-only" "$THEME_DOC"
+assert_not_contains "Theme skill does not park shipped Power Rangers" "Batman, Power Rangers, and Sonic are parked" "$THEME_DOC"
 assert_contains "Feedback skill is privacy-first" "Do not scan source code" "$FEEDBACK_DOC"
 assert_contains "Feedback skill records issues locally first" ".visualhud/feedback" "$FEEDBACK_DOC"
 LEGACY_HOME_MARKER="~"

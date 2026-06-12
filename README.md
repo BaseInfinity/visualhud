@@ -512,8 +512,14 @@ tool 5 -> [255, 175, 70]
 This is deliberate stage-local shading rather than cross-stage interpolation.
 Stages can also define `"shade_sprites"` with one sprite per shade when the art
 should advance with the color. TMNT uses this for character-color variants, and
-future themes such as Batman and Power Rangers should use the same
-JSON-plus-sprites contract instead of changing `engine.sh`.
+future sprite-backed theme work such as Batman or Power Rangers art should use
+the same JSON-plus-sprites contract instead of changing `engine.sh`.
+Fast-start themes should also use shade ramps by default; otherwise early hook
+events can read as flashing between unrelated bright colors instead of steady
+progress.
+Colors-only themes with many unrelated hue families should use balanced stage
+dwell thresholds, because the terminal color is the main visible state until
+sprite art exists.
 
 ## Token Usage Indicator (Separate from Task Progress)
 

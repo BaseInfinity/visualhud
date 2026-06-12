@@ -17,6 +17,7 @@ PASS=0
 FAIL=0
 TOTAL=0
 export VISUALHUD_THEMES_DIR="$ROOT_DIR/themes"
+export VISUALHUD_THEME="pokemon"
 
 json_helper() {
     node "$JSON_HELPER" "$@"
@@ -49,6 +50,7 @@ cleanup() {
     unset VISUALHUD_TTY VISUALHUD_CONTEXT_USED_PERCENT VISUALHUD_CODEX_SESSION_FILE CODEX_HOME
     unset VISUALHUD_REAPPLY_DELAY
     export VISUALHUD_THEMES_DIR="$ROOT_DIR/themes"
+    export VISUALHUD_THEME="pokemon"
 }
 
 final_cleanup() {

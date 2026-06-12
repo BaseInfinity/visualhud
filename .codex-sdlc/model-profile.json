@@ -6,14 +6,14 @@
       "main_reasoning": "xhigh",
       "review_model": "gpt-5.5",
       "review_reasoning": "xhigh",
-      "tradeoff": "Smaller/faster main model for routine work while keeping xhigh reasoning and maximum-depth review."
+      "tradeoff": "Smaller/faster main model for routine work while keeping xhigh main reasoning and xhigh review."
     },
     "maximum": {
       "main_model": "gpt-5.5",
       "main_reasoning": "xhigh",
       "review_model": "gpt-5.5",
       "review_reasoning": "xhigh",
-      "tradeoff": "Highest available model profile with higher latency and token usage in exchange for maximum stability and depth."
+      "tradeoff": "Higher latency and token usage in exchange for maximum stability and depth."
     }
   },
   "policy": {

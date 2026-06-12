@@ -77,6 +77,8 @@ Repo-local theme swapping exists. The remaining work is install/runtime sync and
 - [x] **Cost usage tracking** — engine parses `transcript_path` JSONL out-of-band, sums `input_tokens + cache_creation_input_tokens + cache_read_input_tokens + output_tokens` across all `type:assistant` lines, persists running total under `VISUALHUD_STATE_DIR` / temp state as `claude-cooking-tokens_*`, and emits iTerm2 user var `hudCost` for status-bar consumption. Threshold-based visual warnings by spend are deferred to v1.2.1.
 - [ ] **Kindle-style time estimation** — "~2 min left" based on historical sessions
 - [ ] **Sound effects** — optional theme-matched sounds on state changes (Pokemon cries, etc.)
+- [ ] **Claude Code statusline integration** — customize `/statusline` to show VisualHUD stage/theme info alongside native cost/context data by reading engine state files from the statusline script
+- [ ] **Claude Code `/color` + `/rename` integration** — explore programmatic session coloring and naming; `/rename` can be set via `SessionStart` hook's `sessionTitle` output; `/color` is manual-only today
 
 ## Distribution
 - [x] **One-command Codex repo install** — `npx -y visualhud@latest install codex` installs repo-local hooks, runtime, themes, sprites, and skills

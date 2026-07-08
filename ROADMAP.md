@@ -7,6 +7,7 @@ the engine and Claude Code's own TUI chrome isn't being driven at all. Fix the c
 and tap into CC's newly discovered theming capabilities.
 
 ### Phase 1: Fix What's Broken
+- [ ] **Dual-hook race: sprite/color mismatch (blue Charmeleon bug)** — global `~/.claude/hooks/cooking-status.sh` AND project `visualhud-claude.sh`→`engine.sh` both fire on every event with independent counters but a shared `STAGE_FILE`, so one hook sets the color (e.g. blue, high count) while the other sets the sprite (e.g. Charmeleon, low count). Fix: global hook must yield when a project-level VisualHUD engine is present (one source of truth per session)
 - [ ] **Sync production hook with engine** — `~/.claude/hooks/cooking-status.sh` is missing 4 of 6 `SetColors` sequences (`tab`, `black`, `selbg`, `br_black`). Port from `engine.sh:emit_iterm_status`
 - [ ] **Verify colors work on current CC version** — test with CC v2.1.173+ fullscreen TUI to confirm iTerm2 escape sequences still apply through the alternate screen buffer
 - [ ] **Fix `gh auth`** — re-authenticate GitHub CLI to unblock issue tracking

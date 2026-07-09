@@ -1,5 +1,54 @@
 # VisualHUD Roadmap
 
+## CURRENT FOCUS: Claude Code Theme Integration (July 2026)
+
+VisualHUD colors are broken in Claude Code sessions — the production hook is behind
+the engine and Claude Code's own TUI chrome isn't being driven at all. Fix the colors
+and tap into CC's newly discovered theming capabilities.
+
+### Phase 1: Fix What's Broken
+- [ ] **Sync production hook with engine** — `~/.claude/hooks/cooking-status.sh` is missing 4 of 6 `SetColors` sequences (`tab`, `black`, `selbg`, `br_black`). Port from `engine.sh:emit_iterm_status`
+- [ ] **Verify colors work on current CC version** — test with CC v2.1.173+ fullscreen TUI to confirm iTerm2 escape sequences still apply through the alternate screen buffer
+- [ ] **Fix `gh auth`** — re-authenticate GitHub CLI to unblock issue tracking
+
+### Phase 2: Claude Code Custom Theme Hot-Reload
+CC supports custom JSON theme files in `~/.claude/themes/` with instant hot-reload.
+~40 color tokens including prompt border, diff colors, shimmer animations, subagent
+colors. VisualHUD can make the entire CC UI match the current evolution stage.
+
+- [ ] **Research CC theme token map** — document all ~40 color tokens and what they control visually
+- [ ] **Ship VisualHUD base themes** — write theme JSONs for Pokemon, TMNT, Power Rangers that match their color palettes
+- [ ] **Dynamic stage-matched theme switching** — when stage changes, write new theme JSON -> CC hot-reloads -> entire CC UI matches current VisualHUD stage
+- [ ] **Settings.json theme key swap** — CC watches settings file; swap `theme` key for instant theme switch per stage
+
+### Phase 3: StatusLine Integration
+CC's `statusLine` setting supports full ANSI truecolor and receives rich JSON (cost,
+rate limits, context%, git, vim mode, session name). Currently shows basic info with
+no VisualHUD awareness.
+
+- [ ] **VisualHUD-aware statusLine script** — read engine state files, show stage/theme/progress alongside native CC data
+- [ ] **ANSI-colored stage indicator** — color the stage name to match the current theme color
+- [ ] **Context/cost/rate-limit display** — leverage CC's JSON input for the usage tracking features already on the roadmap
+
+### Phase 4: Hook terminalSequence Integration
+CC allowlists OSC 0/2 (tab titles), OSC 9 (notifications), OSC 9;4 (tab progress)
+in hook `terminalSequence` output. Currently unused by VisualHUD.
+
+- [ ] **Tab title via terminalSequence** — set tab title through CC's allowlisted path instead of raw escape sequences
+- [ ] **Desktop notifications on stage transitions** — OSC 9 for done/error/milestone stages
+- [ ] **Tab progress indicator** — OSC 9;4 to show visual progress in the tab itself
+
+### Blocked (Waiting on Anthropic)
+- [ ] **`/color` programmatic API** — manual-only today; watching GH issue #58588
+- [ ] **`/rename` mid-session** — can set at launch via `claude --name` but no mid-session API
+
+### Codex Comparison
+Codex has no custom themes, no statusLine, no terminalSequence. VisualHUD's Codex
+adapter already does everything possible via iTerm2 directly. No new integration
+surface to tap into on the Codex side.
+
+---
+
 ## TMNT Hardening Before New Themes
 
 Current theme priority is TMNT quality, not another branded theme. The goal is

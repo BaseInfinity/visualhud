@@ -27,6 +27,7 @@ shellcheck_normalized() {
 bash tests/test-state-dir-portability.sh
 bash tests/test-visualhud-cli.sh
 bash tests/test-visualhud-install.sh
+bash tests/test-visualhud-install-global.sh
 bash tests/test-windows-runtime-no-jq.sh
 bash tests/test-wezterm-renderer.sh
 bash tests/test-visualhud-skills.sh

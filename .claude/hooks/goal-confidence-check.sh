@@ -12,6 +12,7 @@
 # pattern as model-effort-check.sh.
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
 source "$HOOK_DIR/_find-sdlc-root.sh"
 
 # Plugin + project copies both register this hook → plugin yields (#236).

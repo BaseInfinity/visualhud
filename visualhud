@@ -374,8 +374,72 @@ install_claude_settings_json() {
     mv "$tmp" "$settings_json"
 }
 
+write_claude_hook_wrapper_global() {
+    local global_root="$1"
+    local wrapper="$global_root/.claude/hooks/visualhud-claude.sh"
+    local visualhud_root="$global_root/.visualhud"
+    mkdir -p "$(dirname "$wrapper")"
+    cat > "$wrapper" <<EOF
+#!/bin/bash
+# VisualHUD installed Claude Code hook wrapper (GLOBAL DEFAULT).
+#
+# Fires for every Claude Code project on this machine. Yields immediately
+# when the active project has its own \`visualhud install claude --target\`
+# install, so the two never race against each other on the same session
+# (the project-local install always wins).
+
+set -euo pipefail
+
+SELF="$wrapper"
+PROJECT_DIR="\${CLAUDE_PROJECT_DIR:-}"
+if [ -n "\$PROJECT_DIR" ]; then
+    PROJECT_HOOK="\$PROJECT_DIR/.claude/hooks/visualhud-claude.sh"
+    if [ -f "\$PROJECT_HOOK" ]; then
+        PROJECT_HOOK_REAL="\$(cd "\$(dirname "\$PROJECT_HOOK")" 2>/dev/null && pwd -P)/\$(basename "\$PROJECT_HOOK")"
+        SELF_REAL="\$(cd "\$(dirname "\$SELF")" 2>/dev/null && pwd -P)/\$(basename "\$SELF")"
+        if [ "\$PROJECT_HOOK_REAL" != "\$SELF_REAL" ]; then
+            cat > /dev/null
+            exit 0
+        fi
+    fi
+fi
+
+export VISUALHUD_ENGINE="$visualhud_root/engine.sh"
+export VISUALHUD_THEMES_DIR="$visualhud_root/themes"
+export VISUALHUD_SET_BG="$visualhud_root/set_bg.py"
+
+exec bash "$visualhud_root/.claude/hooks/visualhud-claude.sh"
+EOF
+    chmod +x "$wrapper"
+}
+
+install_claude_settings_json_global() {
+    local global_root="$1"
+    local settings_json="$global_root/.claude/settings.json" tmp command
+    # Unlike the per-project command, this pins the resolved global root
+    # directly: there is exactly one global install location, and the
+    # generated wrapper already lives at a fixed path, so lazy
+    # $CLAUDE_PROJECT_DIR expansion at fire time is wrong here — it would
+    # point back at the *firing* project's own wrapper, not this one.
+    #
+    # Edge case: if $global_root is itself a git worktree that already ran
+    # `install claude --target`, mergeClaudeHooks' idempotency check ("does
+    # any hook already reference visualhud-claude.sh") sees that existing
+    # lazy-$CLAUDE_PROJECT_DIR entry and skips adding the pinned one, so the
+    # global install becomes silently ineffective there. Rare (dotfiles-repo
+    # at $HOME); not handled today.
+    command="bash -c 'bash \"$global_root/.claude/hooks/visualhud-claude.sh\" 2>/dev/null || true'"
+    mkdir -p "$(dirname "$settings_json")"
+    if [ ! -f "$settings_json" ]; then
+        printf '{"hooks":{}}\n' > "$settings_json"
+    fi
+    tmp="${settings_json}.tmp.$$"
+    json_helper merge-claude-hooks "$settings_json" "$command" > "$tmp"
+    mv "$tmp" "$settings_json"
+}
+
 install_claude() {
-    local target="" theme="pokemon" platform="" target_root runtime_dir
+    local target="" theme="pokemon" platform="" target_root runtime_dir global=0
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -403,6 +467,9 @@ install_claude() {
                 fi
                 shift
                 ;;
+            --global)
+                global=1
+                ;;
             *)
                 printf 'Unknown install option: %s\n' "$1" >&2
                 usage >&2
@@ -412,7 +479,11 @@ install_claude() {
         shift
     done
 
-    target="${target:-.}"
+    if [ "$global" -eq 1 ] && [ -n "$target" ]; then
+        printf '"--global" cannot be combined with "--target".\n' >&2
+        return 2
+    fi
+
     platform="${platform:-$(detect_platform)}"
     case "$platform" in
         macos|darwin)
@@ -433,6 +504,23 @@ install_claude() {
         return 1
     fi
 
+    if [ "$global" -eq 1 ]; then
+        target_root="${VISUALHUD_GLOBAL_ROOT:-$HOME}"
+        runtime_dir="$target_root/.visualhud"
+        copy_claude_runtime "$target_root"
+        printf '%s\n' "$theme" > "$runtime_dir/theme"
+        write_claude_hook_wrapper_global "$target_root"
+        install_claude_settings_json_global "$target_root"
+
+        printf 'Installed VisualHUD Claude hooks globally in: %s\n' "$target_root"
+        printf 'Active theme: %s\n' "$theme"
+        printf 'Runtime: %s\n' "$runtime_dir"
+        printf 'This is now the default HUD for every Claude Code project. A project with its own "visualhud install claude --target <repo>" install always takes precedence.\n'
+        printf 'If iTerm2 visuals are not enabled yet, run: %s/setup-iterm2.sh\n' "$runtime_dir"
+        return 0
+    fi
+
+    target="${target:-.}"
     target_root=$(target_repo_root "$target")
     runtime_dir="$target_root/.visualhud"
     copy_claude_runtime "$target_root"

@@ -23,7 +23,7 @@ HOOK_DIR="${BASH_SOURCE[0]%/*}"
 source "$HOOK_DIR/_find-sdlc-root.sh"
 dedupe_plugin_or_project "${BASH_SOURCE[0]}" || { [ ! -t 0 ] && cat > /dev/null; exit 0; }
 
-[ ! -t 0 ] && INPUT=$(cat) || INPUT=""
+[ ! -t 0 ] && cat > /dev/null
 
 # Determine project root: prefer $CLAUDE_PROJECT_DIR, fall back to cwd
 ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
@@ -69,8 +69,7 @@ if [ -n "${SDLC_DRY_RUN_HANDOFF_STATUS:-}" ]; then
     STATUS="$SDLC_DRY_RUN_HANDOFF_STATUS"
     case "$STATUS" in
         PENDING_REVIEW|PENDING_RECHECK)
-            HOLD_REASONS="${HOLD_REASONS}  - Codex review is ${STATUS}. Round-1 evidence lives in this context — compacting now loses what round-2 needs to re-verify.
-    Resolve: wait for CERTIFIED (or escalate) before /compact."$'\n'
+            HOLD_REASONS="${HOLD_REASONS}  - Codex review is ${STATUS}. Round-1 evidence lives in this context — compacting now loses what round-2 needs to re-verify."$'\n'"    Resolve: wait for CERTIFIED (or escalate) before /compact."$'\n'
             ;;
     esac
 elif [ -f "$HANDOFF" ]; then
@@ -179,8 +178,7 @@ elif [ -f "$HANDOFF" ]; then
             fi
             fi
             if [ "$HEALED" -ne 1 ]; then
-                HOLD_REASONS="${HOLD_REASONS}  - Codex review is ${STATUS}. Round-1 evidence lives in this context — compacting now loses what round-2 needs to re-verify.
-    Resolve: wait for CERTIFIED (or escalate) before /compact."$'\n'
+                HOLD_REASONS="${HOLD_REASONS}  - Codex review is ${STATUS}. Round-1 evidence lives in this context — compacting now loses what round-2 needs to re-verify."$'\n'"    Resolve: wait for CERTIFIED (or escalate) before /compact."$'\n'
             fi
             ;;
     esac
@@ -197,18 +195,15 @@ GITDIR="$ROOT/.git"
 DRY_RUN_GIT_HANDLED=0
 case "${SDLC_DRY_RUN_GIT_STATE:-}" in
     rebase)
-        HOLD_REASONS="${HOLD_REASONS}  - Git rebase in progress. Compacting mid-rebase loses the operation's context.
-    Resolve: finish or abort the rebase before /compact."$'\n'
+        HOLD_REASONS="${HOLD_REASONS}  - Git rebase in progress. Compacting mid-rebase loses the operation's context."$'\n'"    Resolve: finish or abort the rebase before /compact."$'\n'
         DRY_RUN_GIT_HANDLED=1
         ;;
     merge)
-        HOLD_REASONS="${HOLD_REASONS}  - Git merge in progress. Compacting mid-merge loses the operation's context.
-    Resolve: finish or abort the merge before /compact."$'\n'
+        HOLD_REASONS="${HOLD_REASONS}  - Git merge in progress. Compacting mid-merge loses the operation's context."$'\n'"    Resolve: finish or abort the merge before /compact."$'\n'
         DRY_RUN_GIT_HANDLED=1
         ;;
     cherry-pick)
-        HOLD_REASONS="${HOLD_REASONS}  - Git cherry-pick in progress. Compacting mid-cherry-pick loses the operation's context.
-    Resolve: finish or abort the cherry-pick before /compact."$'\n'
+        HOLD_REASONS="${HOLD_REASONS}  - Git cherry-pick in progress. Compacting mid-cherry-pick loses the operation's context."$'\n'"    Resolve: finish or abort the cherry-pick before /compact."$'\n'
         DRY_RUN_GIT_HANDLED=1
         ;;
 esac
@@ -226,16 +221,13 @@ if [ "$DRY_RUN_GIT_HANDLED" -eq 0 ] && [ -d "$GITDIR" ]; then
     # HOLDs that blocked manual /compact for users whose previous rebase had
     # completed (hit live 2026-05-05). `git status` keys on the dirs too.
     if [ -d "$GITDIR/rebase-merge" ] || [ -d "$GITDIR/rebase-apply" ]; then
-        HOLD_REASONS="${HOLD_REASONS}  - Git rebase in progress. Compacting mid-rebase loses the operation's context.
-    Resolve: finish or abort the rebase before /compact."$'\n'
+        HOLD_REASONS="${HOLD_REASONS}  - Git rebase in progress. Compacting mid-rebase loses the operation's context."$'\n'"    Resolve: finish or abort the rebase before /compact."$'\n'
     fi
     if [ -e "$GITDIR/MERGE_HEAD" ]; then
-        HOLD_REASONS="${HOLD_REASONS}  - Git merge in progress. Compacting mid-merge loses the operation's context.
-    Resolve: finish or abort the merge before /compact."$'\n'
+        HOLD_REASONS="${HOLD_REASONS}  - Git merge in progress. Compacting mid-merge loses the operation's context."$'\n'"    Resolve: finish or abort the merge before /compact."$'\n'
     fi
     if [ -e "$GITDIR/CHERRY_PICK_HEAD" ]; then
-        HOLD_REASONS="${HOLD_REASONS}  - Git cherry-pick in progress. Compacting mid-cherry-pick loses the operation's context.
-    Resolve: finish or abort the cherry-pick before /compact."$'\n'
+        HOLD_REASONS="${HOLD_REASONS}  - Git cherry-pick in progress. Compacting mid-cherry-pick loses the operation's context."$'\n'"    Resolve: finish or abort the cherry-pick before /compact."$'\n'
     fi
 fi
 

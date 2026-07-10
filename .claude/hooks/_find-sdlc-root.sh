@@ -27,6 +27,7 @@ find_partial_sdlc_root() {
     SDLC_ROOT=""
     while [ "$check_dir" != "/" ] && [ "$check_dir" != "$HOME" ] && [ -n "$check_dir" ]; do
         if [ -f "$check_dir/SDLC.md" ] || [ -f "$check_dir/TESTING.md" ]; then
+            # shellcheck disable=SC2034  # output parameter for callers
             SDLC_ROOT="$check_dir"
             return 0
         fi

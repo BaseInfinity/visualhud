@@ -36,7 +36,7 @@ VisualHUD is a visual status engine for Claude Code, Codex, and iTerm2 that tran
 - **Theme engine**: Reads `theme.json`, drives iTerm2 escape sequences (planned)
 - **State**: File-based per-session state via `ITERM_SESSION_ID`
 - **Sprites**: Static PNGs (512x512) in theme directories
-- **Production hook**: `~/.claude/hooks/cooking-status.sh`
+- **Production hook**: `~/.claude/hooks/visualhud-claude.sh` (global default install via `visualhud install claude --global`; a project's own `visualhud install claude --target <repo>` install always takes precedence)
 - **Codex adapter**: `.codex/hooks/visualhud-codex.sh`
 
 ## Code Style

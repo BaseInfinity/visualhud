@@ -1,6 +1,6 @@
 # Claude Code SDLC Setup Wizard
 
-> **Contribute**: This wizard is community-driven. PRs welcome at [github.com/BaseInfinity/agentic-ai-sdlc-wizard](https://github.com/BaseInfinity/agentic-ai-sdlc-wizard) - your discoveries help everyone.
+> **Contribute**: This wizard is community-driven. PRs welcome at [github.com/BaseInfinity/claude-sdlc-wizard](https://github.com/BaseInfinity/claude-sdlc-wizard) - your discoveries help everyone.
 
 > **For Humans**: This wizard helps you implement a battle-tested SDLC enforcement system for Claude Code. It will scan your project, ask questions, and walk you through setup step-by-step. Works for solo developers, teams, and organizations alike.
 
@@ -22,6 +22,8 @@ You set it up, Claude follows it. The magic is that structured human engineering
 
 **The result:** Claude follows a disciplined engineering process automatically. You just review and approve.
 
+> **Built for Claude Code.** Using OpenAI's Codex CLI instead? See [`codex-sdlc-wizard`](https://github.com/BaseInfinity/codex-sdlc-wizard) — same SDLC enforcement, ported.
+
 ---
 
 ## The Vision
@@ -37,7 +39,7 @@ As Claude Code improves, the wizard absorbs those improvements and removes its o
 **But here's the key:** This isn't a one-size-fits-all answer. It's a starting point that helps you find YOUR answer. Every project is different. The self-evaluating loop (plan → build → test → review → improve) needs to be tuned to your codebase, your team, your standards. The wizard gives you the framework — you shape it into something bespoke.
 
 **The living system:**
-- CI self-heal captures friction signals as GitHub issues for pattern analysis
+- The local shepherd captures friction signals during active sessions
 - You approve changes to the process
 - Both sides learn over time
 - The system improves the system (recursive improvement)
@@ -91,13 +93,41 @@ When your AI tools update, how do you know if the update is safe?
 
 This prevents both false positives (crying wolf) and false negatives (missing real regressions).
 
-**How We Apply This:**
-- Weekly workflow tests new Claude Code versions before recommending upgrade
-- Version-pinned gate: installs the specific CC version and passes it via `path_to_claude_code_executable` so E2E actually runs the new binary
-- Phase A: Does new CC version break SDLC enforcement?
-- Phase B: Do changelog-suggested improvements actually help?
-- Green CI = safe to upgrade. Red = stay on current version until fixed
-- Results shown in PR with statistical confidence
+**How We Apply This (post-ROADMAP #231 Phase 3a, v1.51.0+):**
+- Weekly workflow detects new Claude Code versions and opens an auto-update PR
+- Maintainer runs the version-test locally on Max before merging:
+  ```
+  npm i -g @anthropic-ai/claude-code@<new_version>
+  gh pr checkout <auto_update_pr>
+  tests/e2e/local-shepherd.sh <pr> --compare-baseline
+  ```
+- Phase A semantics (regression): score delta vs main shows whether the new CC version breaks our SDLC enforcement
+- Phase B semantics (improvement): include changelog-suggested doc changes in the PR before running the shepherd
+- Green delta = safe to upgrade. Red = stay on current version until fixed
+- Results posted as a check-run + PR comment with provenance (host, claude version, execution_path)
+
+**Historical:** through v1.50.0, this was a CI cron job (`version-test` in `weekly-update.yml`, $8-20/run) that auto-installed the new version and ran Phase A/B Tier 1+2. Deleted in v1.51.0 because it ran on every release detection regardless of relevance, with zero merged artifacts in 30 days.
+
+### Benchmark Ceiling Effect (Known Issue — April 2026)
+
+**Our E2E benchmark currently has zero discriminating power.** Both Opus 4.6 and 4.7 scored perfect 10/10 on the `add-feature` scenario (3 trials each, `high` effort). A cross-model audit (Codex GPT-5.4, xhigh reasoning) rated the benchmark methodology **2/10, NOT CERTIFIED** and identified 4 P0 critical issues:
+
+| Finding | Severity | Problem |
+|---------|----------|---------|
+| **Fake trials** | P0 | The workflow runs the simulation ONCE, then re-scores the same output N times. "Trials" measure judge jitter, not model variance |
+| **Answer key leaked** | P0 | The simulation prompt tells the model exactly what's scored ("You MUST use TodoWrite... scored by automated checks"). This tests obedience to rubric, not SDLC judgment |
+| **No independent verification** | P0 | "Tests pass" is self-reported from the transcript. The evaluator never re-runs `npm test` on the final code |
+| **Binary rubric** | P0 | Every criterion is YES/NO. The evaluator is explicitly designed for "near-zero variance." On an easy coached task, scores collapse to 10/10 |
+
+**Three concrete fixes to break the ceiling:**
+
+1. **Remove rubric leakage** — Don't tell the model what's scored in the simulation prompt. Let the wizard hooks and docs drive behavior naturally. Score hidden behaviors from traces, not coached compliance
+2. **Make correctness the majority of the score** — After simulation, run an external verifier: re-run `npm test` on the modified fixture, add hidden tests the model didn't know about, inspect the actual diff. Replace transcript-only `clean_code` with diff-based quality checks
+3. **Real trials on calibrated scenarios** — Each trial must be a fresh end-to-end simulation run on a fresh checkout. Select scenarios by pilot difficulty so top models don't all saturate (similar to Aider's hard-subset methodology). The current single-coached-toy-run approach is measuring nothing
+
+**What external benchmarks do differently:** SWE-Bench gives a real issue plus a full repo snapshot, applies the agent's patch, and runs the repo's actual tests to score `% resolved`. Aider's polyglot benchmark was explicitly rebuilt because the old one saturated — it uses 225 harder tasks chosen to preserve headroom. Our benchmark lacks real task difficulty calibration, independent execution-based correctness, multi-task breadth, and headroom management.
+
+**Status:** This is tracked as item #96 (E2E score audit) on the roadmap. Until fixed, the benchmark measures process compliance coaching, not model quality differentiation.
 
 ---
 
@@ -113,7 +143,7 @@ These aren't preferences - they're **how AI agents stay on track**:
 |----------------|--------------------------|
 | **TDD Red-Green-Pass** | AI agents need concrete pass/fail feedback. Without failing tests first, Claude can't verify its work. This is the feedback loop that keeps implementation correct. |
 | **Testing Diamond** | Integration tests catch real bugs. Unit tests with mocks can "pass" while production fails. AI agents need tests that actually validate behavior. |
-| **Confidence Levels** | Prevents Claude from guessing when uncertain. LOW confidence = ASK USER. This stops runaway bad implementations. |
+| **Confidence Levels** | Prevents Claude from guessing when uncertain. LOW confidence = escalate (Fable, then Codex) before interrupting a human. This stops runaway bad implementations. |
 | **TodoWrite Visibility** | You need to see what Claude is doing. Without visibility, Claude can go off-track without you knowing. |
 | **Planning Before Coding** | Claude must understand before implementing. Skipping planning = wasted effort and wrong approaches. |
 
@@ -150,7 +180,7 @@ You CAN change these, but understand the trade-offs:
 | **Testing shape** | Diamond (integration-heavy) | Pyramid (unit-heavy) = mocks can hide real bugs, AI gets false confidence |
 | **TDD strictness** | Strict (test first always) | Flexible = AI may skip tests, no verification of correctness |
 | **Planning mode** | Required for implementation | Skipping = Claude codes without understanding, wasted effort |
-| **Confidence thresholds** | LOW < 60% = must ask | Higher threshold = Claude proceeds when unsure, mistakes |
+| **Confidence thresholds** | LOW < 60% = must escalate | Higher threshold = Claude proceeds when unsure, mistakes |
 
 **If you change these:** The wizard will warn you. You can override, but you're accepting the risk.
 
@@ -191,7 +221,7 @@ This frames the wizard as a partnership, not a constraint.
 1. Have a process that Claude follows consistently
 2. Make the process visible (TodoWrite, confidence levels)
 3. Enforce quality gates (tests pass, review before commit)
-4. Let Claude ask when uncertain
+4. Let Claude escalate when uncertain (models first, human last)
 5. **Customize what makes sense, keep what keeps AI on track**
 
 ### Leverage Official Tools (Don't Reinvent)
@@ -211,7 +241,7 @@ When Anthropic provides official plugins or tools that handle something:
 | **Claude Code v2.1.69+** | Required for InstructionsLoaded hook, skill directory variable, and Tasks system |
 | **Git repository** | Files should be committed for team sharing |
 
-**Blank repos (no CLAUDE.md, no code):** The wizard works on empty repos. Run `npx agentic-sdlc-wizard init` — it installs hooks, skills, and the wizard doc. On first session, the hooks detect missing SDLC files and redirect to `/setup-wizard`, which generates CLAUDE.md, SDLC.md, TESTING.md, and ARCHITECTURE.md interactively. You do NOT need to run Claude's built-in `/init` first — the setup wizard handles everything.
+**Blank repos (no CLAUDE.md, no code):** The wizard works on empty repos. Run `npx -y agentic-sdlc-wizard@latest init` — it installs hooks, skills, and the wizard doc. (The `@latest` pin guards against stale npx caches per #358.) On first session, the hooks detect missing SDLC files and redirect to `/claude-setup-wizard`, which generates CLAUDE.md, SDLC.md, TESTING.md, and ARCHITECTURE.md interactively. You do NOT need to run Claude's built-in `/init` first — the setup wizard handles everything.
 
 ---
 
@@ -219,14 +249,31 @@ When Anthropic provides official plugins or tools that handle something:
 
 Claude Code's **effort level** controls how much thinking the model does before responding. Higher effort = deeper reasoning but more tokens.
 
-| Level | When to Use | How to Set |
-|-------|-------------|------------|
-| `high` | **Default for all SDLC work.** Features, bug fixes, refactoring, tests, reviews | `effort: high` in skill frontmatter (already set) |
-| `max` | LOW confidence, FAILED 2x, architecture decisions, complex debugging, cross-model reviews | `/effort max` (session only — resets next session) |
+> ⚠️ **SDLC requires model-appropriate effort, not a blanket setting.** Below the model's own sweet spot = degraded reasoning, shallow TDD, weak self-review. **Above** it (`max` on a model that only supports up to `xhigh`, or `max` on a model where it overthinks) wastes tokens for no quality gain — this is not a "more is always better" knob. See `AI_SETUP_LANES.md` for the current per-model recommendation.
 
-**Why `high` is the default:** The `/sdlc` skill sets `effort: high` in its frontmatter, so every SDLC invocation automatically uses high effort. This gives thorough reasoning without the unbounded token cost of `max`.
+| Model | Recommended Effort | Why |
+|-------|--------------------|-----|
+| Opus 5 (recommended default, trial) | `xhigh` | Anthropic's own recommendation for "difficult tasks and long-running asynchronous workflows" — Setup A's target use case, not `high`'s routine-work default. Effort tier is static per session, but adaptive reasoning modulates depth within it. Trial-flagged as of 2026-07-24 — see `AI_SETUP_LANES.md` |
+| Sonnet 5 (Simple/One-Off lane) | `medium`, escalate to `high`/`xhigh` for hard tasks | CodeRabbit testing: `medium` captures most of the upside at the lowest cost; blanket `xhigh`/`max` defaults add cost for marginal gains |
+| Opus 4.8 (escalation, pinned) | `xhigh` | `max` triggers excessive reasoning on 4.7/4.8 — documented 40-60x cache-token jump vs `high` (see "Opus 4.6" row below) |
+| Fable 5 (advisor / subagent fallback) | `high` (driver), `xhigh` (subagent fallback) | Adaptive thinking always on; server-side disabled as advisor currently — see "Advisor Model" below |
+| Opus 4.6 (pinned, stability profile) | `max` | The one model where `max` doesn't overthink — no `xhigh` support at all (only low/medium/high/max) |
+| OpenAI/Codex (cross-model reviewer) | `xhigh` default, escalate to `max`/Pro for unusually risky PRs | Lower reasoning misses subtle bugs the reviewer exists to catch; see `AI_SETUP_LANES.md`'s Final Review Policy for when to escalate |
 
-**When to escalate to `max`:**
+**Strict effort behavior (Opus 4.7+, carried forward in 4.8):**
+- **`xhigh` was introduced in 4.7** — sits between `high` and `max`, designed for coding and agentic work (30+ minute tasks with token budgets in the millions)
+- **Claude Code defaults to `xhigh`** on Opus 4.7+ for all plans
+- **Opus 4.7+ respects effort levels more strictly** than 4.6 — at lower levels it scopes work tighter instead of going above and beyond. If you see shallow reasoning, raise effort rather than prompting around it
+- **`budget_tokens` is deprecated** on Opus 4.7+ — use adaptive thinking with effort instead
+- When running at `xhigh` or `max`, set a large `max_tokens` (64k+) so the model has room to think across subagents and tool calls
+
+**Why `high` was the previous CC-wide default (now largely superseded by the table above):** Claude Code uses **adaptive thinking** to dynamically allocate reasoning budget per turn. On Pro and Max plans, the default effort level was **medium (85)**, which causes the model to under-allocate reasoning on complex multi-step tasks — leading to shallow analysis, missed edge cases, and "lazy" outputs. This was [confirmed by Anthropic engineer Boris Cherny](https://github.com/anthropics/claude-code/issues/42796) and is documented at [code.claude.com](https://code.claude.com/docs/en/model-config). API, Team, and Enterprise plans default to high effort and are not affected.
+
+**Don't rely on the CC default — set effort yourself, matched to your model.** Anthropic's [2026-04-23 post-mortem](https://www.anthropic.com/engineering/april-23-postmortem) is independent third-party evidence that CC has flipped reasoning_effort defaults across versions. The default has changed before and will change again. The wizard's `model-effort-check.sh` hook warns when effort falls below the model-appropriate floor at session start. Set effort per-session with `/effort`, not a shell-rc or settings `env` block — persisting it that way silently overrides a later `/effort` change after you switch models (a real incident, documented in `SDLC.md`'s Lessons Learned).
+
+**Nuclear option — disable adaptive thinking entirely:** Set `CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING=1` in your environment or settings.json `env` block. This forces a fixed reasoning budget per turn instead of letting the model dynamically allocate. Use this if you observe persistent quality issues even at the model-appropriate effort ceiling. See [Claude Code model config docs](https://code.claude.com/docs/en/model-config) for details.
+
+**When to escalate effort:**
 - You hit LOW confidence on your approach — deeper thinking may find clarity
 - You've failed the same thing twice — something non-obvious is wrong
 - Architecture decisions with wide blast radius
@@ -234,13 +281,29 @@ Claude Code's **effort level** controls how much thinking the model does before 
 - Cross-model review analysis (reading and evaluating external reviewer findings)
 
 **How it works:**
-- `/effort max` changes effort for the current session only (resets next session)
-- `effort: high` in SKILL.md frontmatter persists — every `/sdlc` invocation uses `high`
+- `/effort <level>` changes effort for the current session only (resets next session)
+- An `effort:` field in a skill's frontmatter persists across every invocation of that skill — the `/sdlc` skill deliberately does NOT set one, since the right effort depends on which model is driving, not which skill is running
 - You can also type `ultrathink` in any prompt for a single high-effort turn
 
-**Cost note:** `max` uses significantly more tokens than `high`. Use it when the problem justifies it, not as a default.
+**Cost note:** higher effort uses more tokens. Match effort to your model per the table above — a blanket `max` wastes tokens on models where it overthinks, without any quality gain to show for it.
 
-> See also: the **Effort** column in the [Confidence Check table](#confidence-check-required) below for per-confidence-level guidance on when to escalate to `max`.
+> See also: the **Effort** column in the [Confidence Check table](#confidence-check-required) below for per-confidence-level guidance on when to escalate.
+
+### Anti-Laziness Guidance for CLAUDE.md
+
+If you notice Claude Code producing shallow outputs at your model's recommended effort (see "Recommended Effort Level" above), add these instructions to your project's `CLAUDE.md`. These target the **specific mechanisms** behind quality degradation — adaptive thinking and effort levels — rather than vague directives:
+
+```markdown
+## Quality Anchoring
+- This project sets effort per-session with /effort, matched to the active model
+  (see AI_SETUP_LANES.md). Do not reduce reasoning depth below that level.
+- Adaptive thinking may under-allocate your thinking budget on complex tasks. When working on
+  multi-file changes, architecture decisions, or debugging: reason through the full problem
+  before acting, even if the system prompt suggests taking the "simplest approach first."
+- If you catch yourself skipping steps, re-read the task requirements and verify completeness.
+```
+
+**Why this works:** Claude Code's hidden system prompt includes "Go straight to the point. Try the simplest approach first." This is good for simple queries but causes the model to under-invest in reasoning on complex SDLC tasks. The instructions above don't fight the system prompt — they provide task-specific context that justifies deeper reasoning. Note that CLAUDE.md instructions can be partially overridden by the system prompt, so the per-session `/effort` level (not a skill-frontmatter field — the `/sdlc` skill deliberately omits one, since effort is model-aware) remains the primary defense; `hooks/model-effort-check.sh` nudges at session start if it drops below your model's floor.
 
 ---
 
@@ -261,6 +324,14 @@ Claude Code's **effort level** controls how much thinking the model does before 
 
 **Rollback if issues**: Set `CLAUDE_CODE_ENABLE_TASKS=false` environment variable.
 
+#### Known CC gotcha: `cleanupPeriodDays` and TodoWrite retention (CC 2.1.117+)
+
+CC 2.1.117 expanded the `cleanupPeriodDays` setting to also cover `~/.claude/tasks/` — the directory where the Tasks system persists in-progress TodoWrite state across sessions. If `cleanupPeriodDays` is too low (CC's default has been as aggressive as 7 days in some versions), an SDLC checklist for a paused long-running feature can be silently pruned out from under you.
+
+**Wizard pins a safe default**: `cli/templates/settings.json` ships `"cleanupPeriodDays": 30`. The wizard's SDLC skill makes TodoWrite step 1 of every task, so the floor matters. Recommendation: keep it at **30 or higher** if you ever pause work for more than a week. If a task list disappears mid-cycle, check this setting first.
+
+**To override**: set `cleanupPeriodDays` to a higher number in your project's `.claude/settings.json`. The CLI's smart-merge preserves user overrides on `init --force`.
+
 ### Skill Arguments with $ARGUMENTS (v2.1.19+)
 
 **What changed**: Skills can now accept parameters via `$ARGUMENTS` placeholder.
@@ -271,7 +342,7 @@ Claude Code's **effort level** controls how much thinking the model does before 
 ---
 name: sdlc
 description: Full SDLC workflow for implementing features, fixing bugs, refactoring code
-argument-hint: [task description]
+argument-hint: "[task description]"
 ---
 
 ## Task
@@ -293,6 +364,22 @@ Claude Code now has built-in auto-memory that persists context across sessions. 
 
 **No changes needed**: The wizard's hooks and skills work alongside auto-memory. Memory stores preferences and context; the wizard enforces process.
 
+### AGENTS.md interop (cross-tool standard, ROADMAP #205)
+
+`AGENTS.md` is the cross-tool agent-instructions standard adopted by Cursor, Continue.dev, Aider, and other agentic IDEs ([CC issue #6235](https://github.com/anthropics/claude-code/issues/6235), 276 comments). It plays the same role as `CLAUDE.md` does for Claude Code, but reads as agent-agnostic.
+
+**Wizard behavior** (v1.42.0, phase a only):
+
+- **Setup skill detects existing AGENTS.md** during Step 1 auto-scan. If found, Step 4.5 surfaces a 3-way decision: dual-maintain (default, recommended), merge (manual in phase a), or skip. The user's choice is recorded as a one-line comment in their project's `SDLC.md` for their own reference. **`/claude-update-wizard` does NOT parse this comment** — that wiring is phase (d) work, not v1.42.0 scope.
+- **No automatic merge / symlink yet** — phase (a) is detection + decision surfacing only. Option B in the prompt is "record your intent, do the copy by hand"; the wizard does not perform any merge in this phase.
+
+**Deferred phases** (not in v1.42.0 scope):
+
+- **Phase (b)**: when generating `CLAUDE.md` fresh (no AGENTS.md exists), offer to ALSO write AGENTS.md (symlinked or content-duplicated). Requires choosing a sync strategy.
+- **Phase (d)**: cross-document-consistency drift test — fail CI if `CLAUDE.md` and `AGENTS.md` drift apart on key sections (Commands, Architecture, etc.).
+
+**Why phase (a) only**: phase (a) ships detection signal value with zero new merge logic. The dual-maintain decision is reversible per-project; users who pick A get a sensible default and can opt up to phase (b) when it ships. Multi-tool sync is a real engineering problem (which file is source of truth? on edit, propagate which way?) that deserves its own design pass before automating.
+
 ### Built-in Commands (v2.1.59-v2.1.76)
 
 New built-in commands available to use alongside the wizard:
@@ -307,9 +394,53 @@ New built-in commands available to use alongside the wizard:
 
 **Tip**: `/simplify` pairs well with the self-review phase. Run it after implementation as an additional quality check.
 
-### Skill Effort Frontmatter (v2.1.80+)
+### Advisor Model (v2.1.170+)
 
-Skills can now set an `effort` level in frontmatter. The wizard's `/sdlc` skill uses `effort: high` to ensure Claude gives full attention to SDLC tasks.
+**What changed**: `advisorModel` in settings.json configures a stronger model that Claude Code automatically consults at key decision points — before committing to an approach, when stuck on recurring errors, or before declaring a task done. Replaces manual `Agent(model: "fable")` subagent spawning for planning.
+
+**Three ways to enable:**
+
+| Method | Scope | Persists? |
+|--------|-------|-----------|
+| `"advisorModel": "fable"` in `.claude/settings.json` | Project | Yes (committed, shared with team) |
+| `/advisor fable` | User (global `~/.claude/settings.json`) | Yes (all projects) |
+| `--advisor fable` CLI flag | Session | No |
+
+**Recommended pairings:**
+
+| Driver | Advisor | Lane |
+|--------|---------|------|
+| Opus 5 (`opus`) | Fable (`"fable"`) | Setup A — default (trial) |
+| Sonnet 5 (`sonnet`) | Fable (`"fable"`) | Setup B — Simple/One-Off |
+| Sonnet via opusplan | Opus 5 (`"claude-opus-5"`) | Setup C — OpusPlan Hybrid |
+| Opus 4.8 (`claude-opus-4-8`, pinned) | Fable (`"fable"`) | Escalation tier |
+
+**Settings precedence:** Managed > CLI flags > Local (`.claude/settings.local.json`) > Project (`.claude/settings.json`) > User (`~/.claude/settings.json`). The wizard writes project-level by default — never nukes global settings. Setup skill Step 9.5 asks if you also want global.
+
+**Important:** Fable does NOT appear in the `/advisor` interactive picker, and as of 2026-07-24 is **server-side disabled as an advisor entirely** — "Claude Code doesn't offer Fable 5 as the advisor," per `code.claude.com/docs/en/advisor`, pending an Anthropic-controlled rollout. This is not a transient incident; restarting the session doesn't fix it. Set `advisorModel: "fable"` anyway (it activates automatically once the rollout returns), and in the meantime fall back to a Fable subagent (`Agent({model: "fable", effort: "xhigh"})`) at every point you'd have called `advisor()`.
+
+**Billing:** Advisor queries in interactive sessions are Max-bundled (same pool as the driver). The advisor does not trigger headless/credit-pool billing.
+
+**To update:** Run `! claude update` from inside a CC session to get v2.1.170+. The `!` prefix runs shell commands inline — no need to exit.
+
+### Skill Frontmatter Fields (v2.1.80+)
+
+Skills support these frontmatter fields:
+
+| Field | Purpose | Example |
+|-------|---------|---------|
+| `name` | Skill name (matches `/command`) | `name: sdlc` |
+| `description` | Trigger description for auto-invocation | `description: Full SDLC workflow...` |
+| `effort` | Set reasoning effort level | `effort: high` |
+| `paths` | Restrict skill to specific file patterns | `paths: ["src/**/*.ts", "tests/**"]` |
+| `context` | Context mode (`fork` = isolated subagent) | `context: fork` |
+| `argument-hint` | Hint for `$ARGUMENTS` placeholder (quote it — bare brackets parse as a YAML array and break strict loaders like Copilot CLI, #444) | `argument-hint: "[task description]"` |
+| `disable-model-invocation` | Prevent skill from being auto-invoked by model | `disable-model-invocation: true` |
+
+**Key fields explained:**
+- **`effort:`** — Use sparingly on skills that run under many different driver models. The wizard's own `/sdlc` skill deliberately omits this field — the right effort level depends on which model is driving (see "Recommended Effort Level" above), not on which skill is running, so a fixed frontmatter value would fight `/effort`'s per-session, per-model guidance.
+- **`paths:`** — Limits when a skill activates based on files being worked on. Useful for language-specific or directory-specific skills.
+- **`context: fork`** — Runs the skill in an isolated subagent context. The subagent gets its own context window, so it won't pollute the main conversation. Useful for review skills or analysis that should run independently.
 
 ### InstructionsLoaded Hook (v2.1.69+)
 
@@ -322,6 +453,29 @@ Skills can now reference companion files using `${CLAUDE_SKILL_DIR}`. Useful if 
 ### Hook Metadata (v2.1.69+)
 
 Hook events now include `agent_id` and `agent_type` fields. Hooks can behave differently for subagents vs the main agent if needed.
+
+### Hook `if` Conditionals (v2.1.85+)
+
+The `if` field on individual hook handlers filters by tool name AND arguments using permission rule syntax. The hook process only spawns when the condition matches — reducing unnecessary process spawns.
+
+```json
+{
+  "type": "command",
+  "if": "Write(src/**) Edit(src/**) MultiEdit(src/**)",
+  "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/tdd-pretool-check.sh"
+}
+```
+
+| Field | Level | Matches On | Syntax |
+|-------|-------|------------|--------|
+| `matcher` | Group (all hooks in array) | Tool name only | Regex (`Write\|Edit`) |
+| `if` | Individual handler | Tool name + arguments | Permission rule (`Edit(src/**)`) |
+
+**Pattern examples:** `Edit(*.ts)`, `Write(src/**)`, `Bash(git *)`. Same syntax as `permissions.allow` in settings.json.
+
+**Only works on tool-use events:** `PreToolUse`, `PostToolUse`, `PostToolUseFailure`. Adding `if` to non-tool events prevents the hook from running.
+
+**CUSTOMIZE:** Replace `src/**` with your source directory pattern. The wizard generates this based on your project structure detected in Step 0.4.
 
 ### Security Hardening (v2.1.49-v2.1.78)
 
@@ -341,6 +495,64 @@ Several fixes that strengthen wizard enforcement:
 
 ---
 
+## Known CC Gotchas
+
+This section documents Claude Code failure modes that have been observed in the wild — typically surfaced via post-mortems, GitHub issues, or our own catches data. Each entry has a workaround and a permanent fix when one exists.
+
+### Extended-thinking + caching + idle sessions can drop thinking blocks (post-mortem 2026-04-23)
+
+[Anthropic's 2026-04-23 post-mortem](https://www.anthropic.com/engineering/april-23-postmortem) describes a caching bug that "continuously dropped thinking blocks from subsequent requests" — surfaced primarily as silent quality degradation in long sessions. The failure mode mixed three ingredients:
+
+1. **Extended thinking enabled** (high/xhigh/max effort triggers thinking-block production)
+2. **Prompt caching active** (CC re-uses cached prompt prefixes across turns)
+3. **Idle sessions** (context pruning during idle pulls thinking blocks out of the cache window)
+
+When a cached prompt prefix is re-served after idle pruning, downstream thinking blocks can be silently absent — the model produces shorter, less-considered responses despite the requested effort level. Symptom: a session that was reasoning deeply earlier suddenly returns terse answers without obvious cause.
+
+**Workaround**: if you hit suspicious shallow reasoning mid-session — especially after a long idle gap — start a fresh session with `claude --continue` to reset cache state. The wizard's PreCompact hook gates manual `/compact` precisely because compacting at bad seams can also pull thinking blocks out of context.
+
+**Detection signal**: the wizard's `model-effort-check.sh` loud-warns below `medium` — the hook's real cross-model floor, since it can't tell which model is active and `medium` is a valid, intended default for Setup B's Sonnet 5. Above that floor, match effort to your actual lane: Opus 5 (Setup A) starts at `xhigh`, Sonnet 5 (Setup B) starts at `medium` and escalates only when a task proves harder (see "Recommended Effort Level" above). Combine with token-spike anomaly detection (ROADMAP #220) once shipped.
+
+### Prompt brevity caps can compound across turns (post-mortem 2026-04-23)
+
+The same post-mortem documented that a length-limit prompt change (one of several brevity edits, including a line like `"keep text between tool calls to ≤25 words"`) correlated with a measurable ~3% drop on one evaluation. The post-mortem attributes the drop to the broader length-limit prompt change, not to that single sentence alone.
+
+**Wizard policy** (audited 2026-04-26): the wizard's SKILL.md files and hook stdout do **not** impose compounding brevity constraints — no `≤N words`, `<N words`, `be concise`, or `keep brief` instructions to Claude. The wizard's own response-style guidance is in CC's user-level instructions, not injected into every system prompt.
+
+**Regression guard**: `tests/test-postmortem-lessons.sh` greps every `skills/*/SKILL.md` and `hooks/*.sh` for these patterns and fails CI if a future PR introduces one. The check is case-insensitive and ignores shell comments (`#`) but treats Markdown content (including headings) as instructions to Claude. Add new skills with this in mind — terseness for the user is fine, terseness as a system-prompt constraint is not.
+
+### `cleanupPeriodDays` and TodoWrite retention (CC 2.1.117+)
+
+See the dedicated subsection under [Tasks System](#tasks-system-v2116) (above, in Claude Code Feature Updates) for the full breakdown. Short version: pin `cleanupPeriodDays: 30` or higher in `.claude/settings.json` if you ever pause SDLC work for more than a week. The wizard ships this default in `cli/templates/settings.json` and the CLI's smart-merge preserves user overrides on `init --force`.
+
+### MCP-tool hooks audit (ROADMAP #218, CC 2.1.118)
+
+CC 2.1.118 introduced `type: "mcp_tool"` for hooks — a hook can now directly invoke an MCP tool instead of running a bash script. **Audit (2026-04-26) of the 5 wizard hooks that existed at the time concluded: none migrate, all stay bash.** This subsection documents the per-hook reasoning so future audits don't redo the work; if a future PR migrates a hook to MCP, update this entry with the new rationale rather than deleting it. **Not yet re-audited**: 3 hooks shipped since 2026-04-26 (`codex-gate-check.sh`, `token-spike-check.sh`, `codex-review-stop-check.sh`) — the project now registers 8 hooks total (see `.claude/settings.json`), but this table only covers the original 5.
+
+**Decision criteria applied** (any one rules out MCP):
+
+1. **Portability** — bash hooks port to the **shipped** sibling wizards (`codex-sdlc-wizard` for Codex CLI, `claude-gdlc-wizard` for the Game Development Life Cycle variant) and to a **planned** OpenCode sibling (ROADMAP #91, not yet shipped) without rewrite. MCP hooks are CC-specific. Cross-host / cross-domain portability is an XDLC requirement.
+2. **Fail-closed gating** — hooks that block an action (exit 2 from PreCompact) need a fail-closed contract: any error in the hook MUST keep the block in place. CC docs ([code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks)) confirm `mcp_tool` hooks CAN gate via `decision: "block"` JSON output, but **MCP server errors are non-blocking by design** — if the MCP server is down/slow/buggy, the action proceeds. That breaks the fail-closed contract. Bash exit 2 fails closed.
+3. **Local-only state** — hooks that read/write `~/.cache/sdlc-wizard/` or `.reviews/handoff.json` don't surface state across tool boundaries. MCP adds a wire format without consumers.
+
+**Per-hook decision** (each row applies at least one criterion explicitly):
+
+- **`sdlc-prompt-check.sh`** (UserPromptSubmit, ~137 lines) — emits the SDLC BASELINE text on every prompt (fires-once-per-session sentinel), plus a claude-setup-wizard redirect when SDLC.md/TESTING.md are missing. Decision: **Stay bash.** Portability criterion: same script ships to Codex sibling unchanged. Local-state criterion: sentinel cache is local-only. **#236(b) 2026-07-06:** the ROADMAP #195 effort-bump signal log described here previously was removed — never fired in ~2 months of live use.
+- **`instructions-loaded-check.sh`** (~291 lines) — InstructionsLoaded event; wizard-version + CC-version staleness nudges (both npm-cached daily), cross-model-review staleness check, autocompact compound-misconfig check, dual-channel-install check. Decision: **Stay bash.** Portability criterion: Codex sibling has its own equivalent of session-start validation; bash port is direct. Local-state criterion: cache files are local. **#236(b) 2026-07-06:** the SDLC.md/TESTING.md missing-file warning previously described here was removed (redundant with `sdlc-prompt-check.sh`'s louder version).
+- **`tdd-pretool-check.sh`** (~129 lines) — PreToolUse on Write/Edit/MultiEdit; emits a TDD reminder, and (since #436) **blocks** with `exit 2` when a `src/**` write (or `SDLC_TDD_SRC_PATTERN`-overridden path, added #236(b) for this repo's own `src/`-less dogfooding) happens before any test file was touched this session (an edit-ordering proxy for TDD RED, session-scoped via a cache-dir sentinel). Decision: **Stay bash.** Fail-closed gating criterion applies now that this hook blocks: bash `exit 2` fails closed by definition, whereas an `mcp_tool` hook's block decision is lost if the MCP server errors — wrong default for a gate. Portability criterion: still trivially portable.
+- **`model-effort-check.sh`** (~87 lines) — SessionStart event; reads `CLAUDE_CODE_EFFORT_LEVEL` env var (falling back to `effortLevel` in the settings cascade), emits nothing when effort is `high`/`xhigh`/`max`/unset, otherwise a loud warning. Decision: **Stay bash.** Portability criterion: env-var read maps 1:1 to any agent runtime. Local-state criterion: not applicable, hook is stateless. **#236(b) 2026-07-06:** unset used to loud-warn too (CC's own default state) — now silent; only an explicit low-effort value or the settings-only-`max` quirk warns.
+- **`precompact-seam-check.sh`** (~101 lines) — PreCompact event (matcher: `manual`); blocks manual `/compact` with exit 2 + stderr message when a git rebase/merge/cherry-pick is in progress. Decision: **Stay bash.** Fail-closed gating criterion: bash exit 2 fails closed by definition; an MCP `mcp_tool` hook returning `decision: "block"` works on the happy path, but if the MCP server crashes/times out the action proceeds — that flips the safety property from fail-closed to fail-open. For a hook whose entire job is to prevent context loss at bad seams, fail-open is the wrong default. **#236(b) 2026-07-06:** this hook used to also block on `.reviews/handoff.json` being `PENDING_*` (mid cross-model-review-round), with 3 self-heal paths mitigating that branch's false-positive rate — removed; every real firing on record was a false positive, never a true positive.
+
+**When to revisit this audit:**
+
+- A future hook genuinely needs cross-tool structured state surfacing (e.g., a "score history reader" that an MCP-aware skill consumes directly).
+- Anthropic deprecates bash hooks in favor of `mcp_tool` (currently both are first-class).
+- Codex / OpenCode siblings gain native MCP-tool hook support (then portability is no longer an MCP-rules-out).
+
+Until then, default answer for new hooks is bash.
+
+---
+
 ## Prove It's Better
 
 **Don't reinvent the wheel.** Use native/built-in features UNLESS you prove your custom version is better. If you can't prove it, delete yours.
@@ -355,6 +567,14 @@ This applies to everything: native Claude Code commands vs custom skills, framew
 5. Custom > native? **Keep yours. Document WHY.** Re-evaluate when native improves.
 
 **For the wizard's CI/CD:** When the weekly-update workflow detects a new Claude Code feature that overlaps with a wizard feature, the CI should automatically run E2E with both versions and recommend KEEP CUSTOM / SWITCH TO NATIVE / TIE.
+
+**This applies to YOUR OWN additions too — not just native vs custom:**
+- Adding a new skill? Prove it fills a gap nothing else covers. Write quality tests.
+- Adding a new hook? Prove it improves scores or catches real issues.
+- Adding a new workflow? Prove the automation ROI exceeds maintenance cost.
+- Existence tests ("file exists", "has frontmatter") are NOT proof. They prove the file was created, not that it works.
+
+**Evidence:** ci-analyzer skill was added in v1.20.0 with 4 existence-only tests, zero quality validation, and overlap with the third-party `/claude-automation-recommender`. Deleted in next release. This gap led to the Prove It Gate enforcement in the SDLC skill.
 
 ---
 
@@ -410,6 +630,8 @@ After planning, you get a free `/compact` - Claude's plan is preserved in the su
 4. You run `/compact` → frees context, plan preserved in summary
 5. Claude implements with clean context
 
+**Plan Auto-Approval:** For HIGH confidence (95%+) tasks that are single-file or trivial (config tweak, small bug fix, string change) with no new patterns — skip plan approval and go straight to TDD. Claude still announces the approach but doesn't wait for approval. When in doubt, wait.
+
 ### 2. Confidence Levels Prevent Disasters
 
 Claude MUST state confidence before implementing:
@@ -418,9 +640,9 @@ Claude MUST state confidence before implementing:
 |-------|---------|------------------|
 | **HIGH (90%+)** | "I know exactly what to do" | Proceeds after your approval |
 | **MEDIUM (60-89%)** | "Solid approach, some unknowns" | Highlights uncertainties |
-| **LOW (<60%)** | "I'm not sure" | **ASKS YOU before proceeding** |
-| **FAILED 2x** | "Something's wrong" | **STOPS and asks for help** |
-| **CONFUSED** | "I don't understand why this is failing" | **STOPS, describes what was tried** |
+| **LOW (<60%)** | "I'm not sure" | **Escalates before asking you** |
+| **FAILED 2x** | "Something's wrong" | **Escalates to Fable, then Codex** |
+| **CONFUSED** | "I don't understand why this is failing" | **Escalates, describing what was tried** |
 
 **Why this matters**: You have domain expertise. When Claude is uncertain, asking you takes 30 seconds. Guessing wrong takes 30 minutes to fix.
 
@@ -465,10 +687,87 @@ Here's the "Testing Diamond" approach (recommended for AI agents):
 - **Confidence**: If integration tests pass, production usually works
 - **AI-friendly**: Give Claude concrete pass/fail feedback on real behavior
 
-**E2E vs Manual Testing:**
-- **E2E (automated)**: Playwright, Cypress - runs without human
-- **Manual testing**: Human sign-off at the very end
-- **Goal**: Zero manual testing. Only for final verification when 100% confident.
+**E2E vs Integration — The Critical Boundary:**
+- **E2E**: Tests that go through the user's actual UI/browser (Playwright, Cypress). ~5% of suite.
+- **Integration**: Tests that hit real systems via API without UI — real DB, real cache, real services. ~90% of suite.
+- **Unit**: Pure logic only — no DB, no API, no filesystem. ~5% of suite.
+- **The rule**: If your test doesn't open a browser or render a UI, it's not E2E — it's integration. Mislabeling leads to overinvestment in slow browser tests.
+
+#### Domain-Adaptive Testing Layers
+
+The Testing Diamond above is the Web/API default. Other project domains have fundamentally different testing layers. The setup wizard auto-detects your domain and generates the appropriate TESTING.md.
+
+**Domain Detection Patterns:**
+
+| Domain | File/Dir Indicators |
+|--------|-------------------|
+| **Firmware/Embedded** | Makefile with `flash`/`burn` targets, `.cfg` device configs, `/sys/` or `/dev/tty` references, `.c`/`.h` source, `platformio.ini`, `CMakeLists.txt` with embedded targets |
+| **Data Science** | `.ipynb` notebooks, `requirements.txt` with pandas/sklearn/tensorflow/torch, `data/` or `datasets/` dir, `models/` dir, Jupyter config |
+| **CLI Tool** | `package.json` with `"bin"` field (no React/Vue/Angular), `bin/` dir, `src/cli.*`, no `src/components/` |
+| **Web/API (default)** | Everything else — web frameworks, `src/components/`, Playwright/Cypress config, DB config. Fallback when no other domain matches |
+
+**Firmware/Embedded Testing Layers:**
+
+```
+        /\           ← Few HIL (Hardware-in-the-Loop: real device, flash + boot verify)
+       /  \
+      /    \
+     /------\
+    |        |       ← MANY SIL (Software-in-the-Loop: emulated hardware, QEMU, device sims)
+    |        |
+     \------/
+      \    /        ← Config Validation (device config parsing, constraint checks)
+       \  /
+        \/           ← Few Unit (parsers, formatters, math)
+```
+
+- **HIL (~5%)**: Hardware-in-the-Loop — flash to real device, verify boot, test hardware interfaces
+- **SIL (~60%)**: Software-in-the-Loop — emulated hardware via QEMU or device simulators. Best bang for buck
+- **Config Validation (~25%)**: Device config (.cfg) parsing, cross-device constraint checks, valid value ranges
+- **Unit (~10%)**: Pure logic only — parsers, formatters, math functions
+- **Mocking**: Mock hardware interfaces (`/dev/tty*`, GPIO), NEVER mock config parsers
+- NO browser tests, NO database mocking
+
+**Data Science Testing Layers:**
+
+```
+        /\           ← Few Model Evaluation (accuracy/precision/recall on holdout sets)
+       /  \
+      /    \
+     /------\
+    |        |       ← MANY Pipeline Integration (end-to-end with test datasets)
+    |        |
+     \------/
+      \    /        ← Data Validation (schema checks, distribution drift, missing values)
+       \  /
+        \/           ← Few Unit (pure transformations, feature engineering)
+```
+
+- **Model Evaluation (~10%)**: Accuracy, precision, recall, F1 on holdout test sets. Catches model degradation
+- **Pipeline Integration (~60%)**: End-to-end pipeline runs with test datasets. Best bang for buck
+- **Data Validation (~20%)**: Schema checks, distribution drift detection, missing value handling, type enforcement
+- **Unit (~10%)**: Pure transformations, feature engineering functions, data cleaning logic
+- **Mocking**: Mock external data sources (APIs, S3), NEVER mock data transformations
+- NO browser tests, NO traditional API endpoint testing
+
+**CLI Tool Testing Layers:**
+
+```
+     /------\
+    |        |       ← MANY CLI Integration (full invocations, real args, real filesystem)
+    |        |
+    |        |
+     \------/
+      \    /        ← Behavior (exit codes, stdout/stderr content, file creation)
+       \  /
+        \/           ← Few Unit (arg parsing, formatters, pure logic)
+```
+
+- **CLI Integration (~80%)**: Full CLI invocations with real arguments and real filesystem. Best bang for buck
+- **Behavior (~10%)**: Exit codes, stdout/stderr output validation, file creation/modification verification
+- **Unit (~10%)**: Argument parsing, output formatters, pure logic
+- **Mocking**: Mock network calls, NEVER mock filesystem operations
+- NO browser tests, usually NO database
 
 **But your team decides:**
 
@@ -667,11 +966,260 @@ Two tools for managing context — use the right one:
 - `/clear` after 2+ failed corrections on the same issue (context is polluted with bad approaches — start fresh with a better prompt)
 - After committing a PR, `/clear` before starting the next feature
 
-**Auto-compact** fires automatically at ~95% context capacity. You don't need to manage this manually — Claude Code handles it. The SDLC skill suggests `/compact` during CI idle time as a "context GC" opportunity.
+**Auto-compact** fires automatically at ~95% context capacity. Claude Code handles this by default — but the default threshold may not be ideal for all use cases (see "Autocompact Tuning" below). The SDLC skill suggests `/compact` during CI idle time as a "context GC" opportunity.
 
 **What survives `/compact`:** Key decisions, code changes, task state (as a summary). What can be lost: detailed early-conversation instructions not in CLAUDE.md, specific file contents read long ago.
 
 **Best practice:** Put persistent instructions in CLAUDE.md (survives both `/compact` and `/clear`), not in conversation.
+
+### Compact at Seams, Not Thresholds (PreCompact hook)
+
+**The threshold is the trigger, not the decision.** 25-30% remaining (~70% used) is the commonly-cited "sweet spot" but ignores *what you're doing* at that moment. Compacting mid-Codex-round loses the round-1 evidence and certify conditions that round-2 needs to re-verify. Compacting mid-rebase strands the operation without the context that was setting it up.
+
+A **seam** is a point where losing conversational context is safe:
+- Commit boundary (change persisted to git)
+- Codex `CERTIFIED` (review cycle closed)
+- PR merged (work shipped)
+- ROADMAP item marked DONE
+
+The wizard's `PreCompact` hook (`hooks/precompact-seam-check.sh`) enforces this for **manual** `/compact` only — it reads `.reviews/handoff.json` and blocks with `HOLD` + exit 2 when status is `PENDING_REVIEW` / `PENDING_RECHECK`, and also blocks when a git rebase, merge, or cherry-pick is in progress. Auto-compact is **not** gated — blocking it could push past 100% context and lose everything. Requires Claude Code **v2.1.105+** (PreCompact event introduced 2026-04-13).
+
+**What's NOT checked:** in-progress TodoWrite tasks. Claude Code does not persist TodoWrite state to a file readable from a hook, so "finish the current todo first" is on you, not the hook. Watch the TodoWrite panel before you `/compact`.
+
+Override: resolve the blocker (certify the review, finish the rebase), or temporarily disable the hook in `.claude/settings.json`. Don't suppress the warning reflexively — the warning is the point.
+
+### Autocompact Tuning
+
+Override the default auto-compact threshold with environment variables. Per official docs ([model-config](https://code.claude.com/docs/en/model-config#sonnet-5-context-window), [env-vars](https://code.claude.com/docs/en/env-vars)): `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` is applied as a percentage of `CLAUDE_CODE_AUTO_COMPACT_WINDOW` — which itself defaults to the model's own tuned threshold, not necessarily the raw context capacity. **The override can only lower the threshold; values above the model's default have no effect.** For a rigorous benchmarking methodology to validate these thresholds, see [AUTOCOMPACT_BENCHMARK.md](AUTOCOMPACT_BENCHMARK.md).
+
+| Variable | What It Does | Default |
+|----------|-------------|---------|
+| `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` | Trigger compaction at this % of `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (1-100). Lower-only. | Model-dependent (see below) |
+| `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | Override context capacity in tokens used for compaction math | Model's context window — **except Sonnet 5**, which has its own default |
+
+**Sonnet 5 specifics:** Sonnet 5 always runs at 1M context (no 200K variant, no `[1m]` suffix needed) and proactively compacts at its own tuned default of **~967K tokens (96.7%)** — not the generic 1M ceiling. `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=75` on Sonnet 5 fires at ~75% *of that 967K*, i.e. ~725K tokens — earlier and safer than the native default, not later. **Do not carry over an `opus[1m]`-era `30%` setting to Sonnet 5** — that figure was derived for `opus[1m]`'s older extended-context opt-in, never re-derived for Sonnet 5's smarter native default, and is needlessly conservative here (verified 2026-07-05).
+
+**Opus 5 specifics (Setup A):** `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` only causes *earlier* compaction where Claude Code compacts **proactively** — per [env-vars](https://code.claude.com/docs/en/env-vars): when `CLAUDE_CODE_AUTO_COMPACT_WINDOW` is set, in cloud sessions, on Sonnet 4.6/Opus 4.6 without extended context, and on Sonnet 5 at its own default threshold. The docs' example of the non-proactive bucket is a local session on **Opus 4.8** ("auto-compaction triggers when the conversation reaches the model's context limit"); they give no Opus-5-specific threshold or behavior either way. **Claude Code documents no Opus-5-specific proactive threshold or percentage — so Setup A sets no `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` at all.** On Max, bare `opus` auto-upgrades to 1M ([model-config](https://code.claude.com/docs/en/model-config)); that establishes *capacity*, not proactive mode, and does not license a percentage. If you want a deliberately earlier boundary on 1M Opus, `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (e.g. `500000`) is the documented knob — but setting it *makes* compaction proactive, at which point a PCT override compounds with it (#207). Pick one, never both. `/compact` at a phase boundary works regardless of model.
+
+> **`env` is global, not per-model.** `env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` in `.claude/settings.json` applies to whichever model runs under that file — and, per the same doc row, "to both main conversations and subagents". Switching drivers does **not** switch its value: a file carrying Setup B's `75` keeps supplying `75` after you switch to Opus. No static `env` object can express "75 for Sonnet, none for Opus" — if you want per-model tuning, edit the key when you change persistent pins, or keep separate settings profiles.
+
+**Opt-in (issue #198):** The SDLC Wizard CLI ships `.claude/settings.json` with **no** `model`, `advisorModel`, or `env` pin so Claude Code's auto-mode stays enabled. The setup skill's Step 9.5 offers four choices: no pin (default, auto-mode), Opus 5 + Fable advisor (recommended if pinning at all, Setup A, trial as of 2026-07-24), OpusPlan Hybrid with a Fable advisor (Setup C), and Sonnet 5 Simple/One-Off + Fable advisor (Setup B). Opus 4.8 itself is a pinned escalation model, not a persistent Step 9.5 pin — reach for it per-session via `/model claude-opus-4-8` when the driver gets stuck (see "Latest tier" below). Default is **No pin**. Pinning the model turns off per-turn auto-selection — a real tradeoff, so we ask.
+
+To opt in by hand, edit `.claude/settings.json` (Opus 5 example — the recommended default, trial as of 2026-07-24):
+
+```json
+{
+  "model": "opus",
+  "advisorModel": "fable",
+  "effortLevel": "xhigh"
+}
+```
+
+No `env` block: Claude Code documents no Opus-5 proactive threshold, so there is no supported percentage to set (see "Opus 5 specifics" above).
+
+For the older `claude-opus-4-6` pin instead (still valid for proven stability), a lower override *is* supported — Opus 4.6 without extended context is one of the documented proactive-compaction cases:
+
+```json
+{
+  "model": "claude-opus-4-6",
+  "advisorModel": "fable",
+  "env": {
+    "CLAUDE_CODE_EFFORT_LEVEL": "max",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "30"
+  }
+}
+```
+
+That block is the **legacy Opus 4.6 pin**, not Setup A. Setup A pins bare `opus` and sets no override — see "Opus 5 specifics" above for why a 1M window alone doesn't justify a percentage.
+
+**Recommended thresholds by use case:**
+
+| Use Case | AUTOCOMPACT % | Why |
+|----------|--------------|-----|
+| **Setup A default driver (trial as of 2026-07-24)** | **none** | No proactive-compaction threshold is documented for it, so no percentage is supported — see "Opus 5 specifics". Use `CLAUDE_CODE_AUTO_COMPACT_WINDOW` if you want an earlier boundary. |
+| Sonnet 5 (Simple/One-Off driver) | **75%** | Fires at ~75% of its native ~967K threshold (~725K tokens) — safe margin without being overly conservative. Verified against official docs 2026-07-05. |
+| General development (200K `opus`) | 75% | Leaves room for implementation after planning |
+| Complex refactors (200K `opus`) | 80% | Slightly more context before compaction |
+| CI pipelines | 60% | Short tasks, compact early to stay fast |
+| Short tasks | 60-70% | Less context needed, compact early |
+
+**Important:** Values above the default ~95% threshold have no effect — you can only trigger compaction *earlier*, not later. Noise (progress ticks, thinking blocks, stale reads) makes up 50-70% of session tokens, so threshold tuning matters less than noise reduction (scoped reads, subagents, `/compact` between phases).
+
+**Note:** These env vars may change as Claude Code evolves. Check [Claude Code settings docs](https://docs.anthropic.com/en/docs/claude-code/settings) for the latest supported configuration.
+
+### Benchmarking Methodology
+
+The thresholds above are community consensus — not empirically validated. For rigorous benchmarking of autocompact thresholds (measuring task quality, context preservation, and cost at each setting), see [AUTOCOMPACT_BENCHMARK.md](AUTOCOMPACT_BENCHMARK.md). It provides a controlled experimental methodology with a novel "canary fact" mechanism for measuring context preservation post-compaction.
+
+### 1M vs 200K Context Window
+
+Claude Code supports both 200K and 1M context windows. **This section is about Opus** — `opus[1m]` is an opt-in power-user pin, and ask yourself whether you actually need the headroom before setting it, because pinning the model at the top level disables Claude Code's auto-mode (see issue #198). **Sonnet 5 is a different case: it always runs at 1M natively** (no `[1m]` suffix, no opt-in decision, no auto-mode tradeoff) — see [`code.claude.com/docs/en/model-config#sonnet-5-context-window`](https://code.claude.com/docs/en/model-config#sonnet-5-context-window). The table below applies to choosing whether to pin Opus at 1M, not to Sonnet 5.
+
+| | 200K Context (default / auto-mode) | 1M Context (`opus[1m]`, opt-in) |
+|---|---|---|
+| **Best for** | Most work — auto-mode picks Sonnet/Opus per turn | Multi-feature / long plan+TDD+review cycles where a single session really crosses 100K+ |
+| **Typical usage** | 50-80K tokens per task | 50-80K typical, up to 200K+ for complex workflows |
+| **Cost** | Standard pricing | Anthropic currently lists the 1M window at standard pricing across the full context for supported Opus/Sonnet models — **verify current rates at [docs.anthropic.com/pricing](https://docs.anthropic.com/)** before assuming no premium |
+| **Auto-mode** | **Enabled** — Claude Code chooses model per turn | **Disabled** — top-level `model` tells CC you've chosen explicitly |
+| **Auto-compact** | Default ~95% works well | `opus[1m]` resolves to whichever Opus is current, so no fixed threshold is documented for it. The ~76K figure in [issue #34332](https://github.com/anthropics/claude-code/issues/34332) was observed on the older extended-context opt-in and has not been re-derived since — don't treat it as current behavior. See "Opus 5 specifics" above. |
+| **Suggested override (if you pin)** | `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=75` | None by default — no proactive threshold is documented for a current-Opus local session. If you want an earlier boundary, use `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (e.g. `400000`), which does make compaction proactive. Never set both (see below). |
+
+> **⚠ Do NOT set both.** `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` and `CLAUDE_CODE_AUTO_COMPACT_WINDOW` are alternatives, not complementary. Setting both compounds: `30% × 400000 = 120000` tokens, which is ~12% of a 1M window — autocompact fires almost immediately, destroying the headroom you opted in for. Pick one knob: either lower the trigger percentage (`PCT_OVERRIDE`) **on a model that compacts proactively** — Sonnet 5, or Sonnet 4.6/Opus 4.6 without extended context — OR cap the working window (`AUTO_COMPACT_WINDOW=400000`), which is the option that applies when no proactive threshold is documented for your model. The `instructions-loaded-check.sh` `InstructionsLoaded` hook (fires on session start/resume) detects this misconfig and prints the effective trigger so you can debug from the warning alone (#207).
+
+**Why `opus[1m]` is opt-in (issue #198):**
+- **Pinning disables auto-mode.** Max-plan users pay for Claude Code's per-turn model selection (Sonnet for cheap tasks, Opus for hard ones, plus weekly-limit smoothing). A top-level `model` gives that up.
+- **The 1M headroom has to earn it.** If your typical session stays under 150K, you're giving up auto-mode for headroom you're not using.
+- **⚠️ `opus[1m]` is NOT guaranteed to mean any specific version.** The alias auto-resolves to whichever Opus model Claude Code currently considers "latest" — that was Opus 4.6, then 4.8, and as of 2026-07-24 means **Opus 5**. If you specifically want Opus 4.6 (proven `max`-effort consistency) or Opus 4.8 (field-proven, pre-Opus-5), pin the explicit model string (`claude-opus-4-6` or `claude-opus-4-8`), not the `opus[1m]` alias.
+
+**Opt in when:** you routinely cross 100K tokens in a single session (plan → TDD → review → CI shepherd on one feature), you want guaranteed 1M context on whichever Opus is current (or `claude-opus-4-6` explicitly if you want Opus 4.6 specifically), and you're OK losing auto-mode.
+
+**Stay on auto-mode (default) when:** you're unsure, your work is mixed short/long, or you want Claude Code to do the model math for you.
+
+**How to opt in:** run `/model opus` in your session (transient) for the current default (Opus 5 on Max, auto-upgraded to 1M), `/model opus[1m]` to force 1M explicitly on other plans, or `/model claude-opus-4-6` if you specifically want Opus 4.6; set `"model"` to any of these values in `.claude/settings.json` for a persistent pin. Requires Claude Code v2.1.219+ for `opus` to resolve to Opus 5 (v2.1.154+ for the older `opus[1m]` alias, which still resolves to whichever Opus is current). The setup wizard's Step 9.5 also asks once, with default No.
+
+**How to opt out:** remove the `model` line from `.claude/settings.json`, or run `/model` and pick "Default (recommended)".
+
+**Cost awareness:** Larger windows let you consume more tokens in one session, and total cost always scales with tokens consumed regardless of tier. Use `/usage` to monitor (aliases: `/cost`, `/stats`) — a 900K-token session is meaningfully more expensive than an 80K one even at standard rates.
+
+**Autocompact pairing — no longer recommended for `opus[1m]`:** older versions of this doc told you to pair the `opus[1m]` pin with `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=30`. That pairing was derived for the original extended-context opt-in and has never been re-derived; since `opus[1m]` now resolves to the current Opus, the docs give no proactive threshold that the percentage would act on. **Set no override** unless you also set `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (which does make compaction proactive — and then the two compound, #207). Setup A pins bare `opus` and Step 9.5 writes no override at all. See "Opus 5 specifics" above.
+
+### OpusPlan Tier (Opus planner + Sonnet driver, #395) — Setup C
+
+This is **Setup C (OpusPlan Hybrid/Saver)** in `AI_SETUP_LANES.md`. CC's native `opusplan` alias gives you Opus reasoning during Plan Mode (Shift+Tab) and Sonnet execution — both Max-bundled, no API credit drain. `opusplan` follows the `opus` alias, currently Opus 5.
+
+| Layer | Setup C (OpusPlan) | Setup A (default, trial) | Setup B (Simple/One-Off) |
+|-------|--------------------|---------------------------|----------------------------|
+| Planner | Opus 5 `xhigh` (Plan Mode) | Opus 5 `xhigh` | Sonnet 5 `medium`→`high`→`xhigh` |
+| Driver | Sonnet 5 `medium` (execute mode) | Opus 5 `xhigh` | Sonnet 5 `medium`→`high`→`xhigh` |
+| Reviewer | GPT-5.6 Sol xhigh | GPT-5.6 Sol xhigh | GPT-5.6 Sol xhigh |
+
+**How to opt in:**
+```json
+{
+  "model": "opusplan"
+}
+```
+
+Set effort per-session with `/effort` (planner `xhigh`, driver `medium`, escalate `high`→`xhigh` only if the execution phase proves harder than expected) rather than a shell-rc env var — see "Recommended Effort Level" above for why. Pin `ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-8"` explicitly if you want Opus 4.8's field-proven planning behavior instead of Opus 5's.
+
+**⚠️ Avoid `sonnet[1m]`** — Sonnet with 1M context draws from usage credits ($3/$15 per Mtok), not your Max subscription (#390). Plain `sonnet` (200K) or `opusplan` stays on Max.
+
+**When to use OpusPlan (Setup C):** routine SDLC work, simple repos, cost-conscious sessions where you still want an Opus plan-mode pass. Press Shift+Tab before architecture/blast-radius decisions to get Opus reasoning. For most day-to-day work, Setup B (Sonnet 5 + Fable) is the simpler, lower-cost option — see "Choosing Your Model" in [README.md](../README.md).
+
+**When to reach for Setup A (default, Opus 5):** genuine autonomous/agentic work on complex repos, architecture decisions, ambiguous debugging — Opus 5's extra capability at higher quota cost, not a split planner/driver.
+
+**Prove-It Gate (#233 acceptance criterion):** mixed-mode ships only if pair-tested on 3+ simple repos shows Sonnet-coder + Opus-reviewer produces ≥ same SDLC scores as full-Opus baseline. The first version of the heuristic ships v1.38.0; pair-test results land in CHANGELOG before recommending mixed-mode as the default for any tier.
+
+**Tradeoffs (be honest):**
+- The Sonnet driver will drop some fine-grained self-review moves compared to an Opus-coder run — it's fast, less deliberate. The Opus planner and GPT-5.6 Sol reviewer catch them, but expect more "fix in round 2" cycles.
+- Mixed-mode disables auto-mode (same as any pinned model). The pin is per-session — to switch back, remove the `model` line.
+
+### Latest tier — Opus 4.8 (pinned escalation model, #395)
+
+The wizard's default is **Opus 5** (Setup A, trial as of 2026-07-24 — see "Choosing Your Model" in [README.md](../README.md) for the full evidence, including the accepted-risk framing). **Opus 4.8**, pinned explicitly (`claude-opus-4-8`), is the same-family-check escalation model: reach for it when the default driver stalls on architecture, a stuck bug, or anything needing a genuinely independent second pass — not as a daily driver. It ships SWE-Bench Pro / Terminal-Bench 2.1 gains, dynamic-workflows, and parallel-subagent-swarm features 4.6 doesn't have.
+
+**When Opus 4.8 is the right call:**
+- The driver is stuck (2+ failed attempts) and you want a fresh, deeper-reasoning pass
+- You use dynamic workflows / parallel subagent swarms — introduced in 4.8, not available in 4.6
+- You want Anthropic's newest benchmark wins (SWE-Bench Pro 69.2% vs 4.7's 64.3%, Terminal-Bench 2.1 74.6% vs 4.7's 66.1%) for a specific hard task
+- You haven't hit 4.7/4.8 token burn / false-green / dropped-constraint regressions in your own work
+
+**Tradeoffs (be honest):**
+- **Documented 40-60× cache token jump** vs 4.7 at HIGH effort ([AI Weekly](https://aiweekly.co/alerts/claude-opus-48-thinking-burns-900k-tokens-per-turn) — up to 900K cache tokens per turn). Burns Max 5-hour limits 2-3× faster than 4.6 — this is exactly why it's an escalation model, not a daily driver
+- Active GitHub regressions still open: false-greens ([#63861](https://github.com/anthropics/claude-code/issues/63861)), 2-3× token burn ([#64961](https://github.com/anthropics/claude-code/issues/64961)), 46K tokens for simple coding turn ([#64153](https://github.com/anthropics/claude-code/issues/64153)), dropped constraints ([#65932](https://github.com/anthropics/claude-code/issues/65932))
+- [Tech.yahoo review](https://tech.yahoo.com/ai/claude/articles/claude-opus-4-8-review-130106963.html): "Anthropic deliberately made Opus's new tokenizer less efficient" — not a transient bug, structural pricing change
+- Anthropic-supported until ≥ May 28, 2027 (longer runway than 4.6)
+
+**How to opt in for a session (escalate, don't pin globally):**
+
+`/model claude-opus-4-8` at the start of the session, then `/effort xhigh`. Reserve a global pin in `~/.claude/settings.json` for maintainers who've decided Opus 4.8 is their permanent driver, understanding the cost tradeoff above:
+```json
+{
+  "model": "claude-opus-4-8"
+}
+```
+
+On Max plans, Opus auto-upgrades to 1M context. No `[1m]` suffix needed.
+
+**Effort tuning for 4.8:** `xhigh` (see the per-model effort table in "Recommended Effort Level" above — Opus 4.8 is escalation-only, so it doesn't get its own `max` tier the way Opus 4.6 does).
+
+**Escape hatch:** remove the `model` line (or run `/model opus`) to return to Opus 5, the wizard's recommended default.
+
+### Community Feature-Discovery Scanner (roadmap #207)
+
+The weekly-update workflow watches Anthropic's official changelog + GitHub releases, but new CC slash-commands (e.g. a hypothetical `/insights`) often surface FIRST on Reddit, HN, or Discord weeks before they hit the changelog. `tests/e2e/scan-community.sh` ports the community-scan job out of CI (deleted per ROADMAP #231) into a maintainer-runnable script: pull transcripts manually, pipe through the scanner, triage the digest.
+
+**What it does:** extracts every `/[a-z][a-z0-9-]*` mention (length ≥ 4) from input text, dedupes against `tests/e2e/known-slash-commands.txt`, and emits a JSON digest with each unknown slash-command's count and one sample line for context.
+
+**Maintainer procedure:**
+
+```bash
+# 1. Capture transcripts. Save Reddit threads, HN comments, Discord exports,
+#    or CC GH Discussions to plain-text files. The scanner doesn't care about
+#    formatting — just the raw text.
+mkdir -p /tmp/community-scan-$(date +%Y-%m-%d)
+cd /tmp/community-scan-*
+# (paste / curl content into reddit.txt, hn.txt, discord.txt, etc.)
+
+# 2. Run the scanner. Multiple files are aggregated into one digest.
+bash /path/to/sdlc-wizard/tests/e2e/scan-community.sh *.txt > digest.json
+
+# 3. Triage. Anything in `candidates` is a slash-command the wizard's
+#    allowlist doesn't recognize — could be a new CC native command, a
+#    third-party plugin, or pure noise.
+jq '.candidates' digest.json
+```
+
+**Output shape:**
+
+```json
+{
+  "scan_date": "2026-04-24",
+  "input_files": ["reddit.txt", "hn.txt"],
+  "candidates": [
+    { "slash": "/insights", "count": 3, "sample": "Did you all see /insights in CC 2.2..." },
+    { "slash": "/newthing",  "count": 1, "sample": "I tried /newthing on a long session..." }
+  ]
+}
+```
+
+**Updating the allowlist:** when triage confirms a candidate is real and the wizard now accounts for it (either as a wizard skill or by documenting CC's native command), append it to `tests/e2e/known-slash-commands.txt` so the next scan stops surfacing it. The file is the single source of truth — no rebuild, no migration.
+
+**Why offline + deterministic:** the previous CI-based scan-community job burned $2-5/run via claude-code-action calls and produced one merged community-pattern PR in 30 days (ROADMAP #231 Phase 1 audit). Replacing it with a local regex scan + maintainer triage gives the same signal at zero API cost; the original `.github/prompts/analyze-community.md` prompt still exists for the LLM-summarization layer if a maintainer wants narrative analysis on top.
+
+**Regression test:** `tests/test-community-scanner.sh` covers detection of new commands, allowlist filtering (CC native + wizard skills), dedup + count behavior, empty-input edge case, JSON shape, stdin input, multi-file aggregation, sample-context inclusion, long-line sample window, case-insensitive extraction, and dash-leading filenames (14 tests). The fixtures under `tests/fixtures/community-scanner/` are seeded with `/newthing`, `/alpha`, `/beta`, `/gamma` mock mentions; if the scanner regresses the test fails on the missed slash.
+
+---
+
+### Verifying Prompt-Hook-Fires-Once (roadmap #224)
+
+CC 2.1.118 shipped a fix for `prompt` hooks double-firing when an agent-hook verifier subagent itself made tool calls. The bug would manifest as duplicate `SDLC BASELINE` injections per `UserPromptSubmit` — context bloat plus possible confusion. The dual-channel (project + plugin) double-print is already handled by `dedupe_plugin_or_project` in v1.37.1; this section is the runtime check for the *CC-internal* double-fire case.
+
+`hooks/sdlc-prompt-check.sh` ships an opt-in instrumentation: when the env var `SDLC_HOOK_FIRE_LOG` is set, every post-dedupe invocation appends one tab-separated record (`<unix-ts>\t<pid>\tsdlc-prompt-check`) to that log. Counting lines per prompt tells you whether CC fired the hook once or twice.
+
+**Maintainer procedure (real session):**
+
+```bash
+# 1. Pick a fresh log path
+export SDLC_HOOK_FIRE_LOG="$(mktemp /tmp/sdlc-fire-log.XXXXXX)"
+
+# 2. Restart Claude Code so the env propagates into spawned hooks
+#    (or set it in your shell rc / .envrc and start a fresh session)
+
+# 3. Run a normal SDLC session — including any task that triggers a verifier
+#    subagent (e.g., /code-review, /sdlc with multi-step planning)
+
+# 4. After N user prompts, count log lines:
+wc -l "$SDLC_HOOK_FIRE_LOG"
+#    Expect: N lines. >N indicates the CC double-fire bug regressed.
+
+# 5. Optional: tail the log live in another terminal to watch each fire:
+tail -f "$SDLC_HOOK_FIRE_LOG"
+```
+
+The instrumentation is opt-in — when the env var is unset, no log is written and no overhead is added. Unwritable log paths fail silently so a bad `SDLC_HOOK_FIRE_LOG` value never crashes the hook.
+
+**Regression test:** `tests/test-prompt-hook-fires-once.sh` covers the instrumentation contract (counter increments per invocation, opt-in semantics, log line shape, output stability, unwritable-path tolerance). It does *not* spawn Claude Code — that's a maintainer-runtime check by design. The test asserts the recording mechanism works so the maintainer's real-session count is trustworthy.
 
 ---
 
@@ -840,8 +1388,10 @@ For Claude to be effective at SDLC enforcement, your project should have these d
 1. Go to: `Settings > Branches > Add rule`
 2. Branch name pattern: `main` (or `master`)
 3. Enable the settings above (solo or team, as appropriate)
-4. Add required status checks: `validate`, `e2e-quick-check`
+4. Add required status checks: `validate` (E2E is advisory — see note below)
 5. Save changes
+
+> **Note (ROADMAP #212 Option 1, April 2026):** We no longer require `e2e-quick-check` as a blocking check. It burned Anthropic API credits on every PR, and branch protection pinned to GitHub Actions made local-maintainer check-run satisfaction impossible. E2E now runs advisory-only via `tests/e2e/local-shepherd.sh` on the maintainer's Max subscription. See `ROADMAP.md` #212 for the full rationale.
 
 **How to enable (CLI — solo dev):**
 ```bash
@@ -849,7 +1399,7 @@ gh api repos/OWNER/REPO/branches/main/protection --method PUT --input - << 'EOF'
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["validate", "e2e-quick-check"]
+    "contexts": ["validate"]
   },
   "enforce_admins": false,
   "required_pull_request_reviews": null,
@@ -864,7 +1414,7 @@ gh api repos/OWNER/REPO/branches/main/protection --method PUT --input - << 'EOF'
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["validate", "e2e-quick-check"]
+    "contexts": ["validate"]
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {
@@ -954,7 +1504,7 @@ After SDLC setup is complete, run `/claude-automation-recommender` for stack-spe
 | Category | Wizard Ships | Recommender Suggests |
 |----------|-------------|---------------------|
 | SDLC process (TDD, planning, review) | Enforced via hooks + skills | Not covered |
-| CI workflows (self-heal, PR review) | Templates + docs | Not covered |
+| CI workflows (PR review) | Templates + docs | Not covered |
 | MCP servers (context7, Playwright, DB) | Not covered | Per-stack suggestions |
 | Auto-formatting hooks (Prettier, ESLint) | Not covered | Per-stack suggestions |
 | Type-checking hooks (tsc, mypy) | Not covered | Per-stack suggestions |
@@ -1026,39 +1576,46 @@ Feature branches still recommended for solo devs (keeps main clean, easy rollbac
 
 **Back-and-forth:** User questions live in PR comments. Bot's response is always the latest sticky comment. Clean and organized.
 
-**CI monitoring question:**
-> "Should Claude monitor CI checks after pushing and auto-diagnose failures? (y/n)"
+**CI shepherd opt-in (only if CI detected during auto-scan):**
+> "Enable CI shepherd role? Claude will actively watch CI, auto-fix failures, and iterate on review feedback. (y/n)"
 
-- **Yes** → Enable CI feedback loop in SDLC skill, add `gh` CLI to allowedTools
-- **No** → Skip CI monitoring steps (Claude still runs local tests, just doesn't watch CI)
+- **Yes** → Enable full shepherd loop: CI fix loop + review feedback loop. Ask detail questions below
+- **No** → Skip CI shepherd entirely (Claude still runs local tests, just doesn't interact with CI after pushing)
 
-**What this does:**
-1. After pushing, Claude runs `gh pr checks` to watch CI status
-2. If checks fail, Claude reads logs via `gh run view --log-failed`
-3. Claude diagnoses the failure and proposes a fix
-4. Max 2 fix attempts, then asks user
-5. Job isn't done until CI is green
+**What the CI shepherd does:**
+1. **CI fix loop:** After pushing, Claude watches CI via `gh pr checks`, reads logs on **pass and fail** (`gh run view <RUN_ID> --log`, not just `--log-failed`), diagnoses and fixes failures, pushes again (max 2 attempts)
+2. **Log review on pass:** Passing CI can still hide warnings, skipped steps, degraded scores, or silent test exclusions. A green checkmark is necessary but not sufficient — always read the logs
+3. **Review feedback loop:** After CI passes and logs look clean, Claude reads automated review comments, implements valid suggestions, pushes and re-reviews (max 3 iterations)
+4. **Pre-release CI audit:** Before cutting any release, review CI runs across ALL PRs merged since last release. Look for warnings in passing runs, degraded scores, skipped suites. Use `gh run list` + `gh run view <ID> --log`
 
-**Recommendation:** Yes if you have CI configured. This closes the loop between
-"local tests pass" and "PR is actually ready to merge."
+**Recommendation:** Yes if you have CI configured. The shepherd closes the loop between "local tests pass" and "PR is actually ready to merge."
 
 **Requirements:**
 - `gh` CLI installed and authenticated
 - CI/CD configured (GitHub Actions, etc.)
 - If no CI yet: skip, add later when you set up CI
 
+**Stored in SDLC.md metadata as:**
+```
+<!-- CI Shepherd: enabled -->
+```
+
+**Detail questions (only if CI shepherd is enabled):**
+
+**CI monitoring detail:**
+> "Should Claude monitor CI checks after pushing and auto-diagnose failures? (y/n)"
+
+- **Yes** → Enable CI feedback loop in SDLC skill, add `gh` CLI to `permissions.allow`
+- **No** → Skip CI monitoring steps (Claude still runs local tests, just doesn't watch CI)
+
 **CI review feedback question (only if CI monitoring is enabled):**
 > "What level of automated review response do you want?"
 
-| Level | Name | What autofix handles | Est. API cost |
-|-------|------|---------------------|---------------|
-| **L1** | `ci-only` | CI failures only (broken tests, lint) | ~$0.50/fix |
-| **L2** | `criticals` (default) | + Critical review findings (must-fix) | ~$1/fix |
-| **L3** | `all-findings` | + Every suggestion the reviewer flags | ~$2/fix |
-
-> **Cost note:** Higher levels mean more autofix iterations (each ~$0.50).
-> L3 typically adds 1-2 extra iterations per PR but produces cleaner code.
-> You can change this anytime by editing `AUTOFIX_LEVEL` in your ci-autofix workflow.
+| Level | Name | What the shepherd handles |
+|-------|------|--------------------------|
+| **L1** | `ci-only` | CI failures only (broken tests, lint) |
+| **L2** | `criticals` (default) | + Critical review findings (must-fix) |
+| **L3** | `all-findings` | + Every suggestion the reviewer flags |
 
 **What this does:**
 1. After CI passes, Claude reads the automated code review comments
@@ -1096,7 +1653,7 @@ Claude scans for:
 ├── Test frameworks: detected from config files and test patterns
 ├── Lint/format tools: from config files
 ├── CI/CD: .github/workflows/, .gitlab-ci.yml, etc.
-├── Feature docs: *_PLAN.md, *_DOCS.md, *_SPEC.md, docs/
+├── Feature docs: *_DOCS.md, docs/features/, docs/decisions/
 ├── README, CLAUDE.md, ARCHITECTURE.md
 │
 ├── Deployment targets (for ARCHITECTURE.md environments):
@@ -1113,7 +1670,7 @@ Claude scans for:
 │   ├── .github/workflows/deploy*.yml     → GitHub Actions deploy
 │   └── package.json scripts (deploy:*)   → npm deploy scripts
 │
-├── Tool permissions (for allowedTools):
+├── Tool permissions (for permissions.allow):
 │   ├── package.json           → Bash(npm *), Bash(node *), Bash(npx *)
 │   ├── pnpm-lock.yaml         → Bash(pnpm *)
 │   ├── yarn.lock              → Bash(yarn *)
@@ -1125,12 +1682,34 @@ Claude scans for:
 │   ├── docker-compose.yml     → Bash(docker *)
 │   └── .github/workflows/     → Bash(gh *)
 │
-└── Design system (for UI projects):
-    ├── tailwind.config.*      → Extract colors, fonts, spacing from theme
-    ├── CSS with --var-name    → Extract custom property palette
-    ├── .storybook/            → Reference as design source of truth
-    ├── MUI/Chakra theme files → Reference theming docs + overrides
-    └── /assets/, /images/     → Document asset locations
+├── Design system (for UI projects):
+│   ├── tailwind.config.*      → Extract colors, fonts, spacing from theme
+│   ├── CSS with --var-name    → Extract custom property palette
+│   ├── .storybook/            → Reference as design source of truth
+│   ├── MUI/Chakra theme files → Reference theming docs + overrides
+│   └── /assets/, /images/     → Document asset locations
+│
+└── Project domain (for domain-adaptive TESTING.md):
+    ├── Firmware/Embedded:
+    │   ├── Makefile with flash/burn targets
+    │   ├── .cfg device config files
+    │   ├── /sys/ or /dev/tty references in scripts
+    │   ├── .c/.h source files without web frameworks
+    │   ├── platformio.ini, CMakeLists.txt
+    │   └── No package.json with web frameworks
+    ├── Data Science:
+    │   ├── .ipynb notebook files
+    │   ├── requirements.txt with pandas/sklearn/tensorflow/torch
+    │   ├── data/ or datasets/ directory
+    │   ├── models/ directory
+    │   └── No Express/FastAPI/Rails web framework
+    ├── CLI Tool:
+    │   ├── package.json with "bin" field (no React/Vue/Angular deps)
+    │   ├── bin/ directory with executable scripts
+    │   ├── src/cli.* entry point
+    │   └── No src/components/, no browser test config
+    └── Web/API (default):
+        └── Everything else — fallback when no other domain matches
 ```
 
 **If Claude can't detect something, it asks.** Never assumes.
@@ -1233,9 +1812,11 @@ Recommendation: Your current tests rely heavily on mocks.
 
 ---
 
-## Step 1: Confirm or Customize
+## Step 1: Build Confidence Map and Fill Gaps
 
-Claude presents what it found. You confirm or override:
+Claude assigns a state to each configuration data point based on scan results. **RESOLVED (detected)** items are presented for bulk confirmation. **RESOLVED (inferred)** items are presented with inferred values for the user to verify. **UNRESOLVED** items become questions. **The number of questions is dynamic — it depends on how much the scan resolves.** Stop asking when ALL data points are resolved (detected, inferred+confirmed, or answered by user).
+
+Claude presents what it found, organized by resolution state:
 
 ### Project Structure (Auto-Detected)
 
@@ -1244,13 +1825,13 @@ Claude presents what it found. You confirm or override:
 Override? (leave blank to accept): _______________
 ```
 
-**Q2: Where do your tests live?**
+**Test directory** (detect from tests/, __tests__/, spec/, test file patterns)
 ```
 Examples: tests/, __tests__/, src/**/*.test.ts, spec/
 Your answer: _______________
 ```
 
-**Q3: What's your test framework?**
+**Test framework** (detect from jest.config, vitest.config, pytest.ini, etc.)
 ```
 Options: Jest, Vitest, Playwright, Cypress, pytest, Go testing, other
 Your answer: _______________
@@ -1258,31 +1839,31 @@ Your answer: _______________
 
 ### Commands
 
-**Q4: What runs your linter?**
+**Lint command** (detect from package.json scripts, Makefile, config files)
 ```
 Examples: npm run lint, pnpm lint, eslint ., biome check
 Your answer: _______________
 ```
 
-**Q5: What runs type checking?**
+**Type-check command** (detect from tsconfig.json, mypy.ini, etc.)
 ```
 Examples: npm run typecheck, tsc --noEmit, mypy, none
 Your answer: _______________
 ```
 
-**Q6: What runs all tests?**
+**Run all tests command** (detect from package.json "test" script, Makefile)
 ```
 Examples: npm run test, pnpm test, pytest, go test ./...
 Your answer: _______________
 ```
 
-**Q7: What runs a specific test file?**
+**Run single test file command** (infer from framework: jest → jest path, pytest → pytest path)
 ```
 Examples: npm run test -- path/to/test.ts, pytest path/to/test.py
 Your answer: _______________
 ```
 
-**Q8: What builds for production?**
+**Production build command** (detect from package.json "build" script, Makefile)
 ```
 Examples: npm run build, pnpm build, go build, cargo build
 Your answer: _______________
@@ -1290,7 +1871,7 @@ Your answer: _______________
 
 ### Deployment
 
-**Q8.5: How do you deploy? (auto-detected, confirm or override)**
+**Deployment setup** (auto-detected from Dockerfile, vercel.json, fly.toml, deploy scripts)
 ```
 Detected: [e.g., Vercel, GitHub Actions, Docker, none]
 
@@ -1313,19 +1894,19 @@ Your answer: _______________
 
 ### Infrastructure
 
-**Q9: What database(s) do you use?**
+**Database(s)** (detect from prisma/, .env DB vars, docker-compose services)
 ```
 Examples: PostgreSQL, MySQL, SQLite, MongoDB, none
 Your answer: _______________
 ```
 
-**Q10: Do you use caching (Redis, etc.)?**
+**Caching layer** (detect from .env REDIS vars, docker-compose redis service)
 ```
 Examples: Redis, Memcached, none
 Your answer: _______________
 ```
 
-**Q11: How long do your tests take?**
+**Test duration** (estimate from test file count, CI run times if available)
 ```
 Examples: <1 minute, 1-5 minutes, 5+ minutes
 Your answer: _______________
@@ -1333,7 +1914,7 @@ Your answer: _______________
 
 ### Output Preferences
 
-**Q12: How much detail in Claude's responses?**
+**Response detail level** (cannot detect — always ask if no preference found)
 ```
 Options:
 - Small   - Minimal output, just essentials (experienced users)
@@ -1351,7 +1932,7 @@ Stored in `.claude/settings.json` as `"verbosity": "small|medium|large"`.
 
 ### Testing Philosophy
 
-**Q13: What's your testing approach?**
+**Testing approach** (infer from existing test patterns — test-first files, coverage config)
 ```
 Options:
 - Strict TDD (test first always)
@@ -1362,7 +1943,7 @@ Options:
 Your answer: _______________
 ```
 
-**Q14: What types of tests do you want?**
+**Test types** (detect from existing test file patterns: *.test.*, *.spec.*, e2e/, integration/)
 ```
 (Check all that apply)
 [ ] Unit tests (pure logic, isolated)
@@ -1372,7 +1953,7 @@ Your answer: _______________
 [ ] Other: _______________
 ```
 
-**Q15: Your mocking philosophy?**
+**Mocking philosophy** (detect from jest.mock, unittest.mock usage patterns)
 ```
 Options:
 - Minimal mocking (real DB, mock external APIs only)
@@ -1387,7 +1968,7 @@ Your answer: _______________
 **If test framework detected (Jest, pytest, Go, etc.):**
 
 ```
-Q16: Code Coverage (Optional)
+Code Coverage (Optional)
 
 Detected: [test framework] with coverage configuration
 
@@ -1408,7 +1989,7 @@ Your answer: _______________
 **If no test framework detected (docs/AI-heavy project):**
 
 ```
-Q16: Code Coverage (Optional)
+Code Coverage (Optional)
 
 No test framework detected (documentation/AI-heavy project).
 
@@ -1428,19 +2009,20 @@ Your answer: _______________
 
 ---
 
-### Using Your Answers
+### How Configuration Data Points Map to Files
 
-Your answers map to these files:
+Each resolved data point (whether detected or confirmed by the user) maps to generated files:
 
-| Question | Used In |
-|----------|---------|
-| Q1 (source dir) | `tdd-pretool-check.sh` - pattern match |
-| Q2 (test dir) | `TESTING.md` - documentation |
-| Q3 (test framework) | `TESTING.md` - documentation |
-| Q4-Q8 (commands) | `CLAUDE.md` - Commands section |
-| Q9-Q10 (infra) | `CLAUDE.md` - Architecture section, `TESTING.md` - mock decisions |
-| Q11 (test duration) | `SDLC skill` - wait time note |
-| Q12 (E2E) | `TESTING.md` - testing diamond top |
+| Data Point | Used In |
+|-----------|---------|
+| Source directory | `tdd-pretool-check.sh` - pattern match |
+| Test directory | `TESTING.md` - documentation |
+| Test framework | `TESTING.md` - documentation |
+| Commands (lint, typecheck, test, build) | `CLAUDE.md` - Commands section |
+| Infrastructure (DB, cache) | `CLAUDE.md` - Architecture section, `TESTING.md` - mock decisions |
+| Test duration | `SDLC skill` - wait time note |
+| Test types (E2E) | `TESTING.md` - testing diamond top |
+| Project domain (firmware/data-science/CLI/web) | `TESTING.md` - domain-adaptive testing layers and mocking rules |
 
 ---
 
@@ -1482,18 +2064,20 @@ Create `.claude/settings.json`:
 ```json
 {
   "verbosity": "medium",
-  "allowedTools": [
-    "Read",
-    "Edit",
-    "Write",
-    "Glob",
-    "Grep",
-    "Task",
-    "Bash(npm *)",
-    "Bash(node *)",
-    "Bash(npx *)",
-    "Bash(gh *)"
-  ],
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "Task",
+      "Bash(npm *)",
+      "Bash(node *)",
+      "Bash(npx *)",
+      "Bash(gh *)"
+    ]
+  },
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -1511,6 +2095,7 @@ Create `.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
+            "if": "Write(src/**) Edit(src/**) MultiEdit(src/**)",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/tdd-pretool-check.sh"
           }
         ]
@@ -1522,7 +2107,7 @@ Create `.claude/settings.json`:
 
 ### Allowed Tools (Adaptive)
 
-The `allowedTools` array is auto-generated based on your stack detected in Step 0.4.
+The `permissions.allow` array is auto-generated based on your stack detected in Step 0.4. (Historical note: pre-#197 guidance used a top-level `allowedTools` array — that form silently disables Claude Code auto-mode, so the wizard writes `permissions.allow` now.)
 
 | If Detected | Tools Added |
 |-------------|-------------|
@@ -1562,7 +2147,10 @@ The `allowedTools` array is auto-generated based on your stack detected in Step 
 | Hook | When It Fires | Purpose |
 |------|---------------|---------|
 | `UserPromptSubmit` | Every message you send | Baseline SDLC reminder, skill auto-invoke |
-| `PreToolUse` | Before Claude edits files | TDD check: "Did you write the test first?" |
+| `PreToolUse` | Before Claude edits files | TDD check: "Did you write the test first?" Uses `if` field to only fire on source files |
+| `InstructionsLoaded` | On first SDLC.md/CLAUDE.md load | Staleness nudges (wizard version, review-protocol reminders, CC release alerts) |
+| `SessionStart` | On `claude` startup | Detect stale effort setting / model upgrades |
+| `PreCompact` (manual only) | When user runs `/compact` | **Seam gate** — blocks manual compact when `.reviews/handoff.json` is `PENDING_REVIEW`/`PENDING_RECHECK` or a git rebase/merge/cherry-pick is in progress. Auto-compact is NOT gated (blocking it risks pushing past 100% context and losing everything). Requires Claude Code v2.1.105+ |
 
 ### How Skill Auto-Invoke Works
 
@@ -1570,7 +2158,7 @@ The light hook outputs text that **instructs Claude** to invoke skills:
 
 ```
 AUTO-INVOKE SKILL (Claude MUST do this FIRST):
-- implement/fix/refactor/feature/bug/build/test/TDD → Invoke: Skill tool, skill="sdlc"
+- implement/fix/refactor/feature/bug/build/test/TDD/release/publish/deploy → Invoke: Skill tool, skill="sdlc"
 ```
 
 **This is text-based, not programmatic.** Claude reads this instruction and follows it. When Claude sees your message is an implementation task, it invokes the sdlc skill using the Skill tool. This loads the full SDLC guidance into context.
@@ -1598,12 +2186,12 @@ cat << 'EOF'
 SDLC BASELINE:
 1. TodoWrite FIRST (plan tasks before coding)
 2. STATE CONFIDENCE: HIGH/MEDIUM/LOW
-3. LOW confidence? ASK USER before proceeding
-4. FAILED 2x? STOP and ASK USER
+3. LOW confidence or FAILED 2x? Ladder: Fable -> Codex xhigh -> human LAST
+4. Never ask what a model can settle; confidence is not authorization
 5. 🛑 ALL TESTS MUST PASS BEFORE COMMIT - NO EXCEPTIONS
 
 AUTO-INVOKE SKILL (Claude MUST do this FIRST):
-- implement/fix/refactor/feature/bug/build/test/TDD → Invoke: Skill tool, skill="sdlc"
+- implement/fix/refactor/feature/bug/build/test/TDD/release/publish/deploy → Invoke: Skill tool, skill="sdlc"
 - DON'T invoke for: questions, explanations, reading/exploring code, simple queries
 - DON'T wait for user to type /sdlc - AUTO-INVOKE based on task type
 
@@ -1613,7 +2201,7 @@ Workflow phases:
 3. Implementation (TDD after compact)
 4. SELF-REVIEW (/code-review) → BEFORE presenting to user
 
-Quick refs: SDLC.md | TESTING.md | *_PLAN.md for feature
+Quick refs: SDLC.md | TESTING.md | *_DOCS.md for feature
 EOF
 ```
 
@@ -1625,6 +2213,8 @@ chmod +x .claude/hooks/sdlc-prompt-check.sh
 ---
 
 ## Step 5: Create the TDD Hook
+
+**Illustrative, not exhaustive:** this teaches the PreToolUse/exit-2 blocking mechanic with one hook. The wizard ships **8 production hooks total** — only this one and Step 4's light hook have hand-typed templates in this doc; the other 6 (`codex-gate-check.sh`, `instructions-loaded-check.sh`, `model-effort-check.sh`, `precompact-seam-check.sh`, `codex-review-stop-check.sh`, `token-spike-check.sh`) don't, because there's no substitute for the real files. **For the complete, always-in-sync set, run `npx agentic-sdlc-wizard@latest init`** instead of hand-building hooks 3-8 from prose descriptions elsewhere in this doc.
 
 Create `.claude/hooks/tdd-pretool-check.sh`:
 
@@ -1638,22 +2228,35 @@ TOOL_INPUT=$(cat)
 
 # Extract the file path being edited (requires jq)
 FILE_PATH=$(echo "$TOOL_INPUT" | jq -r '.tool_input.file_path // empty')
+MARKER="$CLAUDE_PROJECT_DIR/.claude/.tdd-test-touched"
+
+# A test file was touched — mark it and allow.
+if [[ "$FILE_PATH" =~ (\.test\.|\.spec\.|/__tests__/|/tests?/) ]]; then
+  touch "$MARKER" 2>/dev/null
+  exit 0
+fi
 
 # CUSTOMIZE: Change this pattern to match YOUR source directory
 # Examples: "/src/", "/app/", "/lib/", "/packages/", "/server/"
-if [[ "$FILE_PATH" == *"/src/"* ]]; then
-  # Output additionalContext that Claude will read
-  cat << 'EOF'
-{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "TDD CHECK: Are you writing IMPLEMENTATION before a FAILING TEST? If yes, STOP. Write the test first (TDD RED), then implement (TDD GREEN)."}}
-EOF
+# Match BOTH absolute (*/src/*) and cwd-relative (src/*) forms — a
+# leading-slash-only pattern silently no-ops on relative file_paths
+# like "src/app.js" (Codex finding, #436 round 1).
+if [[ "$FILE_PATH" == *"/src/"* || "$FILE_PATH" == "src/"* ]]; then
+  if [ ! -f "$MARKER" ]; then
+    # exit 2 + stderr = BLOCK. Claude Code only denies a tool call on exit 2
+    # with stderr output — exit 0 always allows regardless of stdout content.
+    echo "TDD RED REQUIRED: no test file touched yet. Write a failing test before implementing in src/." >&2
+    exit 2
+  fi
 fi
 
 # No output = allow the tool to proceed
 ```
 
 **CUSTOMIZE:**
-1. Replace `"/src/"` with your source directory pattern
+1. Replace `"/src/"` / `"src/"` with your source directory pattern (both forms — see comment above)
 2. Ensure `jq` is installed (or adapt to your preferred JSON parser)
+3. This minimal version tracks "a test was touched" with one marker file for the whole project, so once unlocked it stays unlocked. The wizard's actual shipped `hooks/tdd-pretool-check.sh` (in this repo) is session-scoped instead (resets each Claude Code session) and avoids `jq` for session-ID parsing — a plain `jq`-based extraction silently disabled this exact gate once when `jq` was missing (#436 round 1). Copy that file directly for the production-hardened version instead of hand-typing this one.
 
 **Make it executable:**
 ```bash
@@ -1671,8 +2274,8 @@ Create `.claude/skills/sdlc/SKILL.md`:
 ````markdown
 ---
 name: sdlc
-description: Full SDLC workflow for implementing features, fixing bugs, refactoring code, and creating new functionality. Use this skill when implementing, fixing, refactoring, adding features, or building new code.
-argument-hint: [task description]
+description: Full SDLC workflow for implementing features, fixing bugs, refactoring code, testing, releasing, publishing, and deploying. Use this skill when implementing, fixing, refactoring, testing, adding features, building new code, or releasing/publishing/deploying.
+argument-hint: "[task description]"
 ---
 # SDLC Skill - Full Development Workflow
 
@@ -1689,13 +2292,14 @@ TodoWrite([
   { content: "Find and read relevant documentation", status: "in_progress", activeForm: "Reading docs" },
   { content: "Assess doc health - flag issues (ask before cleaning)", status: "pending", activeForm: "Checking doc health" },
   { content: "DRY scan: What patterns exist to reuse?", status: "pending", activeForm: "Scanning for reusable patterns" },
+  { content: "Prove It Gate: adding new component? Research alternatives, prove quality with tests", status: "pending", activeForm: "Checking prove-it gate" },
   { content: "Blast radius: What depends on code I'm changing?", status: "pending", activeForm: "Checking dependencies" },
   { content: "Restate task in own words - verify understanding", status: "pending", activeForm: "Verifying understanding" },
   { content: "Scrutinize test design - right things tested? Follow TESTING.md?", status: "pending", activeForm: "Reviewing test approach" },
   { content: "Present approach + STATE CONFIDENCE LEVEL", status: "pending", activeForm: "Presenting approach" },
   { content: "Signal ready - user exits plan mode", status: "pending", activeForm: "Awaiting plan approval" },
   // TRANSITION PHASE (After plan mode, before compact)
-  { content: "Doc sync: update feature docs if code change contradicts or extends documented behavior", status: "pending", activeForm: "Syncing feature docs" },
+  { content: "Doc sync: update or create feature docs — MUST be current before commit", status: "pending", activeForm: "Syncing feature docs" },
   { content: "Request /compact before TDD", status: "pending", activeForm: "Requesting compact" },
   // IMPLEMENTATION PHASE (After compact)
   { content: "TDD RED: Write failing test FIRST", status: "pending", activeForm: "Writing failing test" },
@@ -1707,7 +2311,7 @@ TodoWrite([
   { content: "DRY check: Is logic duplicated elsewhere?", status: "pending", activeForm: "Checking for duplication" },
   { content: "Self-review: run /code-review", status: "pending", activeForm: "Running code review" },
   { content: "Security review (if warranted)", status: "pending", activeForm: "Checking security implications" },
-  { content: "Cross-model review (if configured — see below)", status: "pending", activeForm: "Running cross-model review" },
+  { content: "Cross-model review (REQUIRED for high-stakes)", status: "pending", activeForm: "Running cross-model review" },
   // CI FEEDBACK LOOP (After local tests pass)
   { content: "Commit and push to remote", status: "pending", activeForm: "Pushing to remote" },
   { content: "Watch CI - fix failures, iterate until green (max 2x)", status: "pending", activeForm: "Watching CI" },
@@ -1730,16 +2334,45 @@ TodoWrite([
 - Does test approach follow TESTING.md philosophies?
 - If introducing new test patterns, same scrutiny as code patterns
 
+## Prove It Gate (REQUIRED for New Additions)
+
+**Adding a new skill, hook, workflow, or component? PROVE IT FIRST:**
+
+1. **Research:** Does something equivalent already exist (native CC, third-party plugin, existing skill)?
+2. **If YES:** Why is yours better? Show evidence (A/B test, quality comparison, gap analysis)
+3. **If NO:** What gap does this fill? Is the gap real or theoretical?
+4. **Quality tests:** New additions MUST have tests that prove OUTPUT QUALITY, not just existence
+5. **Less is more:** Every addition is maintenance burden. Default answer is NO unless proven YES
+
+**Existence tests are NOT quality tests:**
+- BAD: "ci-analyzer skill file exists" — proves nothing about quality
+- GOOD: "ci-analyzer recommends lint-first when test-before-lint detected" — proves behavior
+
+**If you can't write a quality test for it, you can't prove it works, so don't add it.**
+
 ## Plan Mode Integration
 
 **Use plan mode for:** Multi-file changes, new features, LOW confidence, bugs needing investigation.
 
 **Workflow:**
 1. **Plan Mode** (editing blocked): Research → Write plan file → Present approach + confidence
-2. **Transition** (after approval): Doc sync (update feature docs if code contradicts/extends them) → Request /compact
+2. **Transition** (after approval): Doc sync (update or create feature docs — MUST be current before commit) → Request /compact
 3. **Implementation** (after compact): TDD RED → GREEN → PASS
 
 **Before TDD, MUST ask:** "Docs updated. Run `/compact` before implementation?"
+
+### Auto-Approval: Skip Plan Approval Step
+
+If ALL of these are true, skip plan approval and go straight to TDD:
+- Confidence is **HIGH (95%+)** — you know exactly what to do
+- Task is **single-file or trivial** (config tweak, small bug fix, string change)
+- No new patterns introduced
+- No architectural decisions
+
+When auto-approving, still announce your approach — just don't wait for approval:
+> "Confidence HIGH (95%). Single-file change. Proceeding directly to TDD."
+
+**When in doubt, wait for approval.** Auto-approval is for clear-cut cases only.
 
 ## Confidence Check (REQUIRED)
 
@@ -1747,11 +2380,40 @@ Before presenting approach, STATE your confidence:
 
 | Level | Meaning | Action | Effort |
 |-------|---------|--------|--------|
-| HIGH (90%+) | Know exactly what to do | Present approach, proceed after approval | `high` (default) |
-| MEDIUM (60-89%) | Solid approach, some uncertainty | Present approach, highlight uncertainties | `high` (default) |
-| LOW (<60%) | Not sure | ASK USER before proceeding | Consider `/effort max` |
-| FAILED 2x | Something's wrong | STOP. ASK USER immediately | Try `/effort max` |
-| CONFUSED | Can't diagnose why something is failing | STOP. Describe what you tried, ask for help | Try `/effort max` |
+| HIGH (90%+) | Know exactly what to do | Present approach, proceed after approval | Model default |
+| MEDIUM (60-89%) | Solid approach, some uncertainty | Present approach, highlight uncertainties | Model default |
+| LOW (<60%) | Not sure | Run the **Escalation Ladder** below | **Escalate effort now** — don't wait |
+| FAILED 2x | Something's wrong | Run the **Escalation Ladder** below | **Escalate effort now** — you're burning cycles at lower effort |
+| CONFUSED | Can't diagnose why something is failing | Run the **Escalation Ladder** below | **Escalate effort now** — stop spinning |
+
+"Model default" and "escalate" are model-aware, not a blanket `max` — see "Recommended Effort Level" above for the per-model table (Opus 5: `xhigh`; Sonnet 5: `medium`→`high`→`xhigh`; Opus 4.8: `xhigh`; Opus 4.6: `max`; Fable: `high`).
+
+**Dynamic bumping is NOT optional.** "Consider higher effort" is the same as "ignore this" in practice. If your confidence drops or tests fail twice, bump effort BEFORE the next attempt — spinning at low effort is an SDLC failure mode.
+
+### Escalation Ladder — the human is the LAST rung
+
+Low confidence does **not** mean "ask the user." It means "escalate," and the user is the third rung, not the first. Ask a human only for what no model can settle.
+
+1. **Fable** — `advisor()` before plans; if the advisor is unavailable, spawn a Fable subagent at `xhigh`.
+2. **Codex `xhigh`** — when Fable can't close the gap, or when a second, adversarially-framed opinion is what's needed.
+3. **The human** — priority, risk appetite, scope, spend, or anything irreversible or outward-facing. A merge gate that demands explicit confirmation *is* this rung, invoked by design rather than by uncertainty.
+
+**Diagnose the gap before escalating — the two causes need opposite responses:**
+
+| Cause | Looks like | Do |
+|---|---|---|
+| **Information-limited** | "I haven't looked that up yet" | Go look. A review round is wasted on what a file read or a doc fetch settles. |
+| **Evidence-limited** | "I looked; the sources genuinely underdetermine this" | Escalate. More effort from the *same* model cannot move it. |
+
+**The skipped-rung tell:** presenting the user with options while you already hold a lean means you skipped a rung. Act on the lean, or send it up to the next reviewer — don't outsource a model-answerable decision upward.
+
+**Act-don't-ask threshold.** When Fable ≥95% or Codex ≥95% (require **both** for policy-, release-, or consumer-adjacent changes, scaled to the change's complexity), proceed and report afterward instead of asking. Below that, or when the two reviewers disagree, keep escalating rather than defaulting to a question.
+
+> **Scope — confidence is not authorization.** This threshold applies **only** to decisions that are model-answerable, already authorized, and reversible. It **never** overrides an approval gate: human sign-off, anything with external effect (publishing, sending, posting), production deploys, deletions, new architectural patterns, releases, or policy changes. **Merge protections are non-overridable** — `gh pr merge --auto` stays banned unconditionally, and a merge gate demanding explicit confirmation is the human rung by design, not a low-confidence signal to be cleared by a high score. A model can be entirely confident about *how* to do something irreversible while having no idea whether it *should* — that judgement is the user's, and no confidence number substitutes for it.
+
+**Form your own view from both.** Two reviewers agreeing is not automatic truth — especially when they saw overlapping evidence. Where they diverge is the signal; check which side the primary sources actually support, and say so.
+
+**Honesty rule.** If you fix a reviewer's finding and choose to skip the confirming round, state that plainly. An unconfirmed fix is not a certification, and reporting it as one is exactly the false-green this protocol exists to prevent. Skipping a round can be the right call — silently implying it happened is not.
 
 ## Self-Review Loop (CRITICAL)
 
@@ -1777,12 +2439,14 @@ PLANNING → DOCS → TDD RED → TDD GREEN → Tests Pass → Self-Review
 4. Issues below 80 are likely false positives — skip unless obviously valid
 5. Address issues by going back through the proper SDLC loop
 
-## Cross-Model Review (If Configured)
+## Cross-Model Review (REQUIRED for High-Stakes)
 
-**When to run:** High-stakes changes (auth, payments, data handling), complex refactors, research-heavy work.
-**When to skip:** Trivial changes (typo fixes, config tweaks), time-sensitive hotfixes, risk < review cost.
+**When to run:** High-stakes changes (auth, payments, data handling), releases/publishes (version bumps, CHANGELOG, npm publish), complex refactors, research-heavy work.
+**When to skip (log justification):** Trivial changes (typo fixes, config tweaks), time-sensitive hotfixes, risk < review cost.
 
 **Prerequisites:** Codex CLI installed (`npm i -g @openai/codex`), OpenAI API key set.
+
+**Before requesting review, run `shellcheck` on any new or modified `.sh` file** (`shellcheck -s bash <files>`). This closes a real gap this repo hit directly (2026-07-21): a merge-safety-gate PR's own mutation-verified test suite passed cleanly, yet Codex's own review still caught bugs `shellcheck` would have flagged for free — including the classic `if [ $? -ne 0 ]` anti-pattern (SC2181), which is fragile against a line accidentally inserted between the command and the check. Mutation testing only proves your tests catch *deliberately broken variants you thought to try* — it can't catch a whole class of mechanical bugs a static analyzer finds instantly. Fix findings before submitting to Codex; don't spend a review round on what a free, instant, deterministic tool already tells you.
 
 ### Round 1: Initial Review
 
@@ -1794,9 +2458,11 @@ PLANNING → DOCS → TDD RED → TDD GREEN → Tests Pass → Self-Review
      "round": 1,
      "files_changed": ["src/auth.ts", "tests/auth.test.ts"],
      "review_instructions": "Review for security, edge cases, and correctness",
-     "artifact_path": ".reviews/feature-xyz-001/"
+     "artifact_path": ".reviews/feature-xyz-001/",
+     "pr_number": 205
    }
    ```
+   `pr_number` (optional) is the PreCompact self-heal opt-in (ROADMAP #209). When set, the `precompact-seam-check.sh` hook queries `gh pr view N --json state` on every manual `/compact` and treats MERGED as implicit CERTIFIED — so a forgotten PENDING handoff doesn't block every future compact. Omit for ad-hoc reviews not tied to a PR.
 2. Run the independent reviewer:
    ```bash
    codex exec \
@@ -1807,9 +2473,17 @@ PLANNING → DOCS → TDD RED → TDD GREEN → Tests Pass → Self-Review
       review the listed files. Output each finding with: an ID (1, 2, ...), \
       severity (P0/P1/P2), description, and a 'certify condition' stating \
       what specific change would resolve it. \
-      End with CERTIFIED or NOT CERTIFIED."
+      End with CERTIFIED or NOT CERTIFIED." \
+     < /dev/null
    ```
-3. If CERTIFIED → proceed to CI. If NOT CERTIFIED → go to Round 2.
+
+   > **Always append `< /dev/null`** to `codex exec` calls run from background, hooks, CI, or any non-interactive parent. Without it, codex blocks on stdin reads even when the prompt is given as an argument — the process sits at S/0% CPU indefinitely with a 0-byte `-o` output file (the file is only written on completion, so a hang gives zero visibility). Validated on codex-cli 0.130.0 / macOS 14, 2026-05-15. For live progress, use `scripts/codex-review-with-progress.sh` instead.
+
+   > **Always launch codex via `run_in_background: true` on the Bash tool.** The Bash tool clamps `timeout` to 600000 ms (10 min) regardless of the value passed, and force-kills the foreground process at that wall. Multi-artifact bundle reviews (release reviews per the checklist below, multi-finding rechecks, etc.) routinely run 6–30 minutes — they need background mode to complete. The wrapper `scripts/codex-review.sh` already has a 30-min stall watchdog (`STALL_SECONDS=1800`) as the real timeout control. A foreground call killed mid-review plus the Stop-hook re-invocation loop can burn 60+ minutes of session compute on what should be a single 7-minute run (issue #364, 2026-05-27 incident). The general rule: **any long-running wrapper invoked through the CC Bash tool — codex, slow builds, long test suites — should use `run_in_background: true` unconditionally and let the wrapper's own stall watchdog be the timeout authority.**
+
+   > **Never also append a trailing `&` inside the command string when using `run_in_background: true`.** These are two different backgrounding mechanisms — the Bash tool's own `run_in_background` flag, and the shell's native job-control `&` — and combining them double-backgrounds the process: the "completed" notification fires for the outer wrapper shell exiting immediately, not for the actual `codex exec` process, which is still running detached and unmonitored. This produces a convincing but false "review complete" signal — the transcript looks done, but no verdict has actually been written yet. Confirm real completion independently (e.g. `ps aux | grep codex`) before trusting a background-task notification that arrived suspiciously fast for a multi-minute xhigh review. Use `run_in_background: true` alone; never both.
+
+3. If CERTIFIED → **write `"commit_sha": "<git rev-parse HEAD>"` into `handoff.json` before proceeding to CI.** `hooks/codex-gate-check.sh` compares this SHA to current HEAD at commit time and treats a mismatch (or a missing field) as a stale certification (ROADMAP #437) — a CERTIFIED status string alone doesn't prove the certification still covers what's about to be committed. If NOT CERTIFIED → go to Round 2.
 
 ### Round 2+: Dialogue Loop
 
@@ -1849,21 +2523,26 @@ When the reviewer finds issues, respond per-finding instead of silently fixing e
       ACCEPTED → verify it was applied. \
       Do NOT raise new findings unless P0 (critical/security). \
       New observations go in 'Notes for next review' (non-blocking). \
-      End with CERTIFIED or NOT CERTIFIED."
+      End with CERTIFIED or NOT CERTIFIED." \
+     < /dev/null
    ```
 
-4. If CERTIFIED → done. If NOT CERTIFIED (rejected disputes or failed fixes) → fix rejected items and repeat.
+4. If CERTIFIED → **write/update `"commit_sha"` in `handoff.json` to current HEAD** (same reason as Round 1 step 3 — the gate hook checks it). If NOT CERTIFIED (rejected disputes or failed fixes) → fix rejected items and repeat.
 
 ### Convergence
 
-Max 3 recheck rounds (4 total including initial review). If still NOT CERTIFIED after round 4, escalate to the user with a summary of open findings. Don't spin indefinitely.
+3 recheck rounds (4 total including initial review) is the default budget for a typical change. If still NOT CERTIFIED after round 4, escalate to the user with a summary of open findings rather than spinning indefinitely.
+
+**Exception — known-large migrations:** the round cap is a heuristic against spinning on a shrinking tail of nitpicks, not a hard stop. Judge convergence by the *trend* in finding quality, not the round number: if every round is still surfacing a genuinely new, independently-verified, real issue — especially if severity is flat or increasing (later rounds finding live-code bugs, not just prose) — keep going past round 4. Only stop when a round returns CERTIFIED, or consecutive rounds return nothing but nitpicks/false positives. (Source: v1.84.0 release review — a repo-wide model-recommendation migration ran 11 rounds, each finding something real; round 8 found a mandatory-reading claude-setup-wizard template whose tutorial hook code had silently drifted from the real shipped hook (broken, non-blocking), more consequential than anything in rounds 1-3. Escalating at round 4 per the default heuristic would have shipped that bug. 2026-07-04.)
+
+**CERTIFIED is not the finish line.** A CERTIFIED verdict and a green CI run are different verification layers that catch different bug classes — a CERTIFIED review does not substitute for actually pushing and watching CI. Confirmed on the same v1.84.0 release: after round-11 CERTIFIED and a full local test sweep, real CI still caught 3 more genuine bugs the review never touched — a content regression in an unrelated section silently dropped by an earlier edit (caught by a pre-existing local test that simply hadn't been re-run since), an environment-specific CLI output-format change invisible to any local run against an older tool version, and a new test file committed without the executable bit (passes every local `bash tests/foo.sh` invocation, only fails when CI runs it as `./tests/foo.sh`). Budget for at least one more fix-push-recheck cycle after CERTIFIED, and don't treat CERTIFIED as license to skip reading the actual CI logs — see the CI Feedback Loop section below.
 
 ```
 Self-review passes → handoff.json (round 1, PENDING_REVIEW)
                             |
                    Reviewer: FULL REVIEW (structured findings)
                             |
-                   CERTIFIED? → YES → CI feedback loop
+                   CERTIFIED? → YES → write commit_sha → CI feedback loop
                             |
                             NO (findings with IDs + certify conditions)
                             |
@@ -1874,7 +2553,7 @@ Self-review passes → handoff.json (round 1, PENDING_REVIEW)
                             |
                    Reviewer: TARGETED RECHECK (previous findings only)
                             |
-                   All resolved? → YES → CERTIFIED
+                   All resolved? → YES → CERTIFIED (write commit_sha)
                             |
                             NO → fix rejected items, repeat
                             (max 3 rechecks, then escalate to user)
@@ -1882,7 +2561,41 @@ Self-review passes → handoff.json (round 1, PENDING_REVIEW)
 
 **Tool-agnostic:** The value is adversarial diversity (different model, different blind spots), not the specific tool. Any competing AI reviewer works.
 
-**Full protocol:** See the "Cross-Model Review Loop (Optional)" section below for key flags and reasoning effort guidance.
+**Full protocol:** See the "Cross-Model Review Loop" section below for key flags and reasoning effort guidance.
+
+### Release Review Focus
+
+Before any release/publish, add these to `review_instructions`:
+- **CHANGELOG consistency** — all sections present, no lost entries during consolidation
+- **Version parity** — package.json, SDLC.md, CHANGELOG, wizard metadata all match
+- **Stale examples** — hardcoded version strings in docs match current release
+- **Docs accuracy** — README, ARCHITECTURE.md reflect current feature set
+- **CLI-distributed file parity** — live skills, hooks, settings match CLI templates
+- **Policy Migration Inventory** — for a repo-wide blanket-recommendation migration (e.g. changing a default model, effort level, or policy referenced in many places), enumerate every surface it could touch *before* the first review round: skill frontmatter, setup/update wizard menus, live hooks, tutorial doc templates, CHANGELOG. Discovering surfaces one review round at a time is what turns a 4-5 round review into an 11-round one.
+
+Evidence: v1.20.0 cross-model review caught CHANGELOG section loss and stale wizard version examples that passed all tests and self-review. v1.84.0's Sonnet-5-default migration ran 11 rounds because each round surfaced a new, previously-uninventoried surface (skill frontmatter, then setup wizard, then a live hook, then tutorial templates) rather than catching them all upfront.
+
+### Multiple Reviewers (N-Reviewer Pipeline)
+
+When multiple reviewers comment on a PR (Claude, Codex, human reviewers), address each reviewer independently:
+
+1. **Read all reviews** — collect feedback from every active reviewer
+2. **Respond per-reviewer** — each reviewer has different blind spots. Address each one's findings separately
+3. **Resolve conflicts** — if reviewers disagree, pick the stronger argument, note why
+4. **Iterate until all approve** — don't merge until every active reviewer is satisfied
+5. **Max 3 iterations per reviewer** — escalate to user if a reviewer keeps finding new things
+
+The value of multiple reviewers: different models/humans catch different issues. No single reviewer is sufficient for high-stakes changes.
+
+### Custom Subagents (`.claude/agents/`)
+
+Claude Code supports custom subagents in `.claude/agents/`. These run as independent subprocesses focused on a single task:
+
+- **`sdlc-reviewer`** — SDLC compliance review (planning, TDD, self-review checks)
+- **`ci-debug`** — CI failure diagnosis (reads logs, identifies root cause)
+- **`test-writer`** — Quality test writing following TESTING.md philosophies
+
+**Skills vs agents:** Skills guide Claude's behavior for a task type. Agents are independent subprocesses that run autonomously and return results. Use agents when you want parallel work or a fresh context window.
 
 ## Test Review (Harder Than Implementation)
 
@@ -1922,7 +2635,7 @@ If tests fail:
 3. Fix appropriately (fix code, fix test, or delete dead test)
 4. Run specific test individually first
 5. Then run ALL tests
-6. Still failing? ASK USER - don't spin your wheels
+6. Still failing? Escalate to Fable, then Codex `xhigh` — ask the user only if they still can't resolve it
 
 **Flaky tests are bugs, not mysteries:**
 - Sometimes the bug is in app code (race condition, timing issue)
@@ -1961,16 +2674,34 @@ Sometimes the flakiness is genuinely in CI infrastructure (runner environment, G
 - **Keep quality gates strict** — the actual pass/fail decision must NOT have `continue-on-error`
 - **Separate "fail the build" from "nice to have"** — a missing PR comment is not a regression
 
+## Debugging Workflow (Systematic Investigation)
+
+When something breaks and the cause isn't obvious, follow this systematic debugging workflow:
+
+```
+Reproduce → Isolate → Root Cause → Fix → Regression Test
+```
+
+1. **Reproduce** — Can you make it fail consistently? If intermittent, stress-test (run N times). If you can't reproduce it, you can't fix it
+2. **Isolate** — Narrow the scope. Which file? Which function? Which input? Use binary search: comment out half the code, does it still fail?
+3. **Root cause** — Don't fix symptoms. Ask "why?" until you hit the actual cause. "It crashes on line 42" is a symptom. "Null pointer because the API returns undefined when rate-limited" is a root cause
+4. **Fix** — Fix the root cause, not the symptom
+5. **Regression test** — Write a test that fails without your fix and passes with it (TDD GREEN)
+
+**For regressions** (it worked before, now it doesn't): Use `git bisect` to find the exact breaking commit. `git bisect start`, `git bisect bad` (current), `git bisect good <known-good-commit>`. Narrows to the breaking commit in O(log n) steps.
+
+**Environment-specific bugs** (works locally, fails in CI/staging/prod): Check environment differences (env vars, OS version, dependency versions, file permissions). Reproduce the environment locally if possible. Add logging at the failure point — don't guess, observe.
+
 ## CI Feedback Loop — Local Shepherd (After Commit)
 
-**This is the "local shepherd" — the primary CI fix mechanism.** It runs in your active session with full context. The optional CI Auto-Fix bot (`.github/workflows/ci-autofix.yml`) is a fallback for unattended PRs only. When both are active, the bot detects your local pushes via SHA comparison and skips automatically.
+**This is the "local shepherd" — your CI fix mechanism.** It runs in your active session with full context.
 
-**The SDLC doesn't end at local tests.** CI must pass too.
+**The SDLC doesn't end at local tests.** CI must pass too. **NEVER AUTO-MERGE — do NOT run `gh pr merge --auto`.** Auto-merge fires before review feedback can be read; the shepherd loop below IS the process. (Evidence: PR #145 auto-merged before its review was read — a reviewer-found P1 dead-code bug shipped as a result.)
 
 ```
 Local tests pass -> Commit -> Push -> Watch CI
                                          |
-                              CI passes? -+-> YES -> Present for review
+                              CI passes? -+-> YES -> Read logs anyway -> Cross-model audit -> Present for review
                                          |
                                          +-> NO -> Fix -> Push -> Watch CI
                                                            |
@@ -1978,7 +2709,7 @@ Local tests pass -> Commit -> Push -> Watch CI
                                                            |
                                                    Still failing?
                                                            |
-                                                   STOP and ASK USER
+                                                   ESCALATE: Fable→Codex
 ```
 
 **How to watch CI:**
@@ -1998,8 +2729,10 @@ Local tests pass -> Commit -> Push -> Watch CI
    - Read failure logs: `gh run view <RUN_ID> --log-failed`
    - Diagnose root cause (same philosophy as local test failures)
    - Fix and push again
-4. Max 2 fix attempts - if still failing, ASK USER
-5. If CI passes - proceed to present final summary
+4. Max 2 fix attempts - if still failing, escalate (Fable → Codex `xhigh`) before asking the user
+5. **Read CI logs whether pass or fail — not just on failure.** A green checkmark hides warnings, skipped steps, and degraded scores (v1.24.0 shipped a degraded E2E score and a silently excluded test suite behind a passing check). Use `gh run view <RUN_ID> --log`, not just `--log-failed`.
+6. **Cross-model audit the CI logs** — same `codex exec` pattern as the Cross-Model Review Loop above. Prompt: *"Audit for silent failures, skipped tests, degraded metrics, warnings-that-should-be-errors."* Do this even when every check is green.
+7. Only after logs are read and audited — proceed to present final summary
 
 **Context GC (compact during idle):** While waiting for CI (typically 3-5 min), suggest `/compact` if the conversation is long. Think of it like a time-based garbage collector — idle time + high memory pressure = good time to collect. Don't suggest on short conversations.
 
@@ -2007,7 +2740,7 @@ Local tests pass -> Commit -> Push -> Watch CI
 - Your code broke it? Fix your code
 - CI config issue? Fix the config
 - Flaky? Investigate - flakiness is a bug
-- Stuck? ASK USER
+- Stuck? Escalate — Fable, then Codex `xhigh`; the user last
 
 ## CI Review Feedback Loop — Local Shepherd (After CI Passes)
 
@@ -2041,24 +2774,13 @@ CI passes -> Read review suggestions
 - **Ask first**: Present suggestions to user, let them decide which to implement
 - **Skip review feedback**: Ignore CI review suggestions, only fix CI failures
 
-## Shepherd vs. Bot: Two-Tier CI Fix Model
+## Explicit Merge Confirmation — and a Narrow, Conditional Exception
 
-| Aspect | Local Shepherd | CI Auto-Fix Bot |
-|--------|---------------|-----------------|
-| **When** | Active session (you're working) | Unattended (pushed and walked away) |
-| **Context** | Full: codebase, conversation, intent | Minimal: `--bare`, 200-line truncated logs |
-| **Cost** | Session tokens (marginal cost ~$0) | Separate API calls ($0.50-$2.00 per fix) |
-| **Noise** | 0 extra commits | 1+ `[autofix N/M]` commits per attempt |
-| **Quality** | High: full diagnosis, targeted fix | Lower: stateless, may repeat same approach |
-| **Speed** | Immediate: fix locally, push once | Delayed: workflow_run trigger + runner queue |
-| **Deconfliction** | N/A (is the primary) | SHA check: skips if branch advanced since failure |
+**The default: explicit `gh pr merge --squash` always needs the user's confirmation, every PR.** `gh pr merge --auto` (GitHub's own auto-merge-on-green feature) stays permanently, unconditionally banned regardless of anything below — it fires before review feedback can even be read (PR #145 incident: auto-merged unreviewed, shipped a P1 bug).
 
-**The shepherd is the default.** It runs as part of the SDLC checklist above whenever you push from an active session. The bot is optional and only adds value for:
-- Dependabot/Renovate PRs (no human session)
-- PRs where you push and walk away
-- Overnight CI runs
+**A narrow, conditional exception (2026-07-21)** lets an agent skip that one confirmation click — never the ban above — ONLY if ALL hold: CI's `validate` check is green (verified, not inferred); Codex xhigh reached CERTIFIED via a full adversarial dialogue (not a round-1 rubber stamp); a **fresh, diff-only reviewer subagent** (no prior session context) independently found **zero unresolved findings after at least one dialogue round**; and the PR touches none of a concrete denylist — CI/release workflows, hooks, agent-config directories, the SDLC policy document itself, CHANGELOG, or a package-version bump (any of which always needs confirmation, no exception). Even when it fires, the agent must tell the user immediately afterward what merged and why — this is "skip the click," never a silent merge.
 
-If you set up the bot, the SHA-based suppression ensures they never conflict.
+**Be honest with yourself about what's actually enforced.** Some of this repo's own conditions are mechanically verified by local tooling — but that tooling is intentionally repo-local and does **not** ship as part of the wizard install. If you want the same fail-closed guarantee rather than self-certified prose, build the equivalent for your own repo: a wrapper script that independently re-checks CI status against the PR's remote head SHA, scans the diff against your own denylist (including the wrapper and any gate hook themselves — a PR editing the merge policy must not be able to exempt itself from it), and binds the merge atomically to that SHA (e.g. `gh pr merge --match-head-commit <sha>`) to close the race between checking and merging. Absent that, treat every condition above as something your own agent must reason about and self-report against, not something guaranteed.
 
 ## DRY Principle
 
@@ -2141,6 +2863,53 @@ Options:
 
 ---
 
+### Browser Tooling Policy
+
+Three different jobs, three different tools. Conflating them is the source of recurring agent failures — `Playwright MCP` for an auth-heavy registrar dashboard wastes a session, browser-use for a deterministic regression test gives flaky CI.
+
+| Tool | Job | Profile model | When to pick |
+|------|-----|---------------|--------------|
+| **Playwright tests** | Deterministic regression suite, CI/release gate | Isolated by design — each test gets a clean browser context per [Playwright docs](https://playwright.dev/docs/browser-contexts) | Asserting expected user flows; running on every PR; gating deploy |
+| **Playwright MCP** | Live browser debugging, visual QA, DOM inspection | Default mode uses a **persistent Playwright-managed profile** at `ms-playwright/mcp-{channel}-{workspace-hash}` ([docs](https://playwright.dev/docs/getting-started-mcp#user-profile)) — NOT the user's regular Chrome profile. Other modes: `--isolated` (ephemeral context per session), `--user-data-dir=PATH` (caller-supplied dir), CDP attach (`--cdp-endpoint`), extension mode (attach to user's running browser tab) | One-off "look at this page" / "click this button and tell me what happens"; visual verification mid-session |
+| **Real-browser tooling** (browser-use, CDP-attach, Chrome profile) | Authenticated, profile-dependent, stateful operator flows | **When configured for real-browser mode** (e.g., browser-use `Browser.from_system_chrome()` or CLI `--profile`/`connect`), uses the user's actual Chrome profile (cookies, extensions, logged-in sessions). Default browser-use CLI runs headless Chromium — opt into the real-profile mode explicitly | Registrar dashboards (Porkbun, GoDaddy), DNS setup, cloud-provider consoles, wallet-adjacent Web3 flows, logged-in admin panels — anywhere preserving cookies/profile/extensions matters more than clean isolation |
+
+**The core insight:** Playwright tests' isolation is a *feature*, not a bug. Playwright MCP's persistent-managed-profile default is also a feature — it preserves session continuity across debug interactions in a SINGLE agent. The collision case is concurrent agents (#251) sharing the same managed profile. Real-browser tooling is the right call only when the task IS the user's authenticated session, and only when explicitly configured to attach to that profile.
+
+#### When to recommend real-browser tooling (#225)
+
+Trigger examples — if the task description includes any of these, suggest real-browser tooling (browser-use or CDP-attach) over Playwright MCP:
+
+- Registrar dashboards (domain purchase, DNS records, nameserver changes)
+- DNS setup / DNSLink / custom-domain configuration
+- Cloud/provider dashboards (AWS console, Cloudflare, Vercel, registrars)
+- Wallet-adjacent Web3 flows (token approvals, contract interactions in a logged-in MetaMask)
+- Logged-in admin panels (Stripe, Vercel, GitHub admin pages requiring 2FA-cached session)
+- Anywhere preserving cookies/profile/extensions matters more than clean isolation
+
+These all share a property: the agent's job IS the authenticated session. A clean automation browser is the wrong model.
+
+#### Playwright MCP profile-lock policy (#251)
+
+`Playwright MCP`'s default mode reuses a single persistent managed profile (`ms-playwright/mcp-{channel}-{workspace-hash}`) across stdio sessions — which is the right call for single-agent debugging because it preserves session continuity across calls, but breaks down when **multiple agents or MCP clients run concurrently** (two CC sessions, one CC + one Codex, etc.). Concurrent stdio sessions collide on the same Chrome user-data directory and corrupt each other's session state.
+
+**Upstream Playwright rejected default-isolated as the global default.** See [microsoft/playwright#40419](https://github.com/microsoft/playwright/issues/40419) and the discussion on [microsoft/playwright#40420](https://github.com/microsoft/playwright/pull/40420) — maintainer feedback: *"That's unfortunately very breaking."* Changing the default would silently break every existing single-agent setup that relies on the persistent managed profile.
+
+**Wizard policy (per-user, opt-in at the wizard layer, not upstream):**
+
+- **Single-agent / single MCP client (default):** Use Playwright MCP's default persistent-managed-profile mode. No special config required.
+- **Concurrent agents / multiple MCP clients:** Pick one of these per client to avoid profile-lock collisions: (a) `--isolated` (ephemeral context per session, no persistence), (b) `--user-data-dir=$TMPDIR/playwright-mcp-$AGENT_ID` (caller-supplied dir, isolated per agent), or (c) `--cdp-endpoint` to attach each agent to a separately-launched browser. None of these require an upstream breaking change.
+- **Real-browser / profile-dependent flows:** Don't use Playwright MCP at all — use real-browser tooling explicitly configured to attach to the user's profile (e.g., `browser-use` with `Browser.from_system_chrome()` or CLI `--profile`). The task is the session, not isolated automation.
+
+This rule is per-workflow, not global. Setup wizard does NOT auto-configure isolated profiles — adoption is explicit, gated on the user signaling concurrent-agent intent.
+
+#### Anti-patterns
+
+- **Using Playwright MCP for registrar dashboards** — its persistent managed profile is NOT your real Chrome profile, so your registrar's logged-in session/2FA cookies aren't there. You'll be re-logging in on every interaction. Use real-browser tooling configured for your real Chrome profile instead.
+- **Using profile-coupled / stateful browser tooling for deterministic CI tests** — when browser-use (or any tool) is configured to use a real Chrome profile, cached state, extension chrome, and stale cookies pollute the test. Use Playwright tests with isolated browser contexts for CI.
+- **Setting Playwright MCP `--isolated` globally as a default** — breaks single-agent flows that rely on the persistent managed profile for session continuity across debug interactions. Upstream Playwright rejected this for the same reason. Make it explicit per-workflow when concurrent agents are running.
+
+---
+
 ## Step 8: Create CLAUDE.md
 
 Create `CLAUDE.md` in your project root. This is your project-specific configuration:
@@ -2158,7 +2927,7 @@ Create `CLAUDE.md` in your project root. This is your project-specific configura
 
 ## Commands
 
-<!-- CUSTOMIZE: Replace with your actual commands from Q4-Q8 -->
+<!-- CUSTOMIZE: Replace with your actual detected/confirmed commands -->
 
 - Build: `[your build command]`
 - Run dev: `[your dev command]`
@@ -2191,10 +2960,10 @@ Create `CLAUDE.md` in your project root. This is your project-specific configura
 - Follow conventional commits: `type(scope): description`
 - NEVER commit with failing tests
 
-## Plan Docs
+## Feature Docs
 
-- Before coding a feature: READ its `*_PLAN.md` file
-- After completing work: UPDATE the plan doc
+- Before coding a feature: READ its `*_DOCS.md` file
+- After completing work: UPDATE the feature doc (or create one if 3+ files touched)
 
 ## Testing Notes
 
@@ -2245,7 +3014,7 @@ These are your full reference docs. Start with stubs and expand over time:
 
 ## Environments
 
-<!-- Claude auto-populates this from Q8.5 deployment detection -->
+<!-- Claude auto-populates this from deployment detection -->
 
 | Environment | URL | Deploy Command | Trigger |
 |-------------|-----|----------------|---------|
@@ -2286,13 +3055,35 @@ These are your full reference docs. Start with stubs and expand over time:
 
 **Claude follows this automatically.** After a deploy task, Claude runs through the Post-Deploy Verification table for the target environment. If any check fails, Claude suggests rollback and a new fix cycle.
 
+## Pipeline Liveness Audits — CI green ≠ data flowing
+
+A green CI badge only means "no step crashed." It does **not** mean "this pipeline is still producing the output it's supposed to produce." Long-running pipelines — scheduled benchmarks, nightly analytics jobs, weekly report generators, any workflow that appends to a log or dataset — can silently stop producing output while every run still reports success. Regression tests alone do not catch this: the fault lives between "green status" and "observable artifact."
+
+**Symptom to watch for:** a file, table, or dashboard that's supposed to be updated by a scheduled workflow stops advancing even though the workflow keeps running green.
+
+**Concrete example from this repo (2026-04-18):** `tests/e2e/score-history.jsonl` hadn't been appended to since 2026-03-30, yet weekly runs kept completing. Two stacked causes:
+
+1. On the 2026-04-13 run, a `CRITICAL MISS` caused `evaluate.sh` to exit 1 *with* a valid score payload; the tier2 wrapper aborted on the non-zero exit and dropped the trial (fix: PR #193 — disambiguate infra error from legitimate low-score exit via JSON payload, not exit code).
+2. On other runs, a separate PR-branch push race (`refs/pull/N/merge` checkout vs. `refs/heads/<branch>` push) silently dropped the new trial because `continue-on-error: true` was set on the push step.
+
+The second failure was silent (push step protected by `continue-on-error`); the first was a red CI run but nobody was watching weekly runs closely enough to notice the artifact had stopped advancing. Either way, the artifact's liveness would have caught the stall weeks earlier than a CI-badge-only review.
+
+**Audit pattern — run when you touch a pipeline, and when asked to check pipeline health:**
+
+1. **Identify the observable output** — the artifact the pipeline is supposed to produce (file, PR, issue, log row, dashboard row).
+2. **Check its liveness** — what's the last timestamp? If the pipeline runs weekly but the artifact is 3+ cycles stale, that's a stall, not a lull.
+3. **Walk backward from the artifact to CI** — find the step that writes it, read that specific step's logs (not just the top-level status), confirm the write actually happened.
+4. **When `continue-on-error: true` is present upstream of the write step**, treat that step as suspect by default — its failures are masked.
+
+**When Claude should run this.** Claude runs the liveness audit when it merges or edits a scheduled workflow, when it ships a change that writes to a long-running artifact, and whenever the user asks to check a pipeline's health. It is not a background task — if no one is looking, the audit does not happen.
+
 ## Rollback
 
 If deployment fails or post-deploy verification catches issues:
 
 | Environment | Rollback Command | Notes |
 |-------------|------------------|-------|
-| Preview | [auto-expires or redeploy] | Usually self-heals |
+| Preview | [auto-expires or redeploy] | Ephemeral — redeploy to fix |
 | Staging | `[your rollback command]` | [notes] |
 | Production | `[your rollback command]` | [critical - document clearly] |
 
@@ -2322,7 +3113,7 @@ If deployment fails or post-deploy verification catches issues:
 
 **SDLC.md:**
 ```markdown
-<!-- SDLC Wizard Version: 1.20.0 -->
+<!-- SDLC Wizard Version: 1.88.0 -->
 <!-- Setup Date: [DATE] -->
 <!-- Completed Steps: step-0.1, step-0.2, step-0.4, step-1, step-2, step-3, step-4, step-5, step-6, step-7, step-8, step-9 -->
 <!-- Git Workflow: [PRs or Solo] -->
@@ -2350,24 +3141,166 @@ See `.claude/skills/sdlc/SKILL.md` for the enforced checklist.
 - Survives file edits
 - Travels with the repo
 
-**TESTING.md:**
+**TESTING.md (domain-adaptive — generate the template matching the detected domain):**
+
+**Web/API (default):**
 ```markdown
 # Testing Guidelines
 
-See `TESTING.md` for TDD philosophy.
+## Testing Diamond
+
+Integration tests are best bang for buck. Mocks can "pass" while production fails.
+
+| Layer | What It Tests | % of Suite |
+|-------|--------------|------------|
+| E2E | Full user flow through browser (Playwright, Cypress) | ~5% |
+| Integration | Real DB, real cache, API-level — no UI | ~90% |
+| Unit | Pure logic — no DB, no API, no filesystem | ~5% |
 
 ## Test Commands
 
 - All tests: `[your command]`
 - Specific test: `[your command]`
 
+## Mocking Rules
+
+| Dependency | Mock? | Why |
+|------------|-------|-----|
+| Database | NEVER | Use test DB or in-memory |
+| Cache | NEVER | Use isolated test instance |
+| External APIs | YES | Real calls = flaky + expensive |
+| Time/Date | YES | Determinism |
+
 ## Fixtures
 
-Location: `[Claude will discover or ask - e.g., tests/fixtures/, test-data/]`
+Location: `[tests/fixtures/ or test-data/]`
 
 ## Lessons Learned
 
 <!-- Add testing gotchas as you discover them -->
+```
+
+**Firmware/Embedded (if detected):**
+```markdown
+# Testing Guidelines
+
+## Testing Layers (Firmware)
+
+SIL tests are best bang for buck. Real hardware tests are slow but prove the real thing works.
+
+| Layer | What It Tests | % of Suite |
+|-------|--------------|------------|
+| HIL | Hardware-in-the-Loop — real device, flash + boot verify | ~5% |
+| SIL | Software-in-the-Loop — emulated hardware (QEMU, device sims) | ~60% |
+| Config Validation | Device config parsing, constraint checks, valid ranges | ~25% |
+| Unit | Pure logic — parsers, formatters, math | ~10% |
+
+## Test Commands
+
+- All tests: `[your command, e.g., make test]`
+- Flash + verify: `[your flash command]`
+- Config validation: `[your config check command]`
+
+## Mocking Rules
+
+| Dependency | Mock? | Why |
+|------------|-------|-----|
+| Hardware interfaces (/dev/tty*, GPIO) | YES | Real hardware not always available |
+| Config parsers | NEVER | Config bugs brick devices |
+| Filesystem (/sys/, /proc/) | YES in CI | Real paths only exist on target |
+| Serial protocols | YES | Use loopback or emulator |
+
+## Device Matrix
+
+| Device | Config File | Status |
+|--------|------------|--------|
+| [device-a] | configs/device-a.cfg | [tested/untested] |
+
+## Lessons Learned
+
+<!-- Add firmware testing gotchas as you discover them -->
+```
+
+**Data Science (if detected):**
+```markdown
+# Testing Guidelines
+
+## Testing Layers (Data Science)
+
+Pipeline integration tests are best bang for buck. Model evaluation catches degradation.
+
+| Layer | What It Tests | % of Suite |
+|-------|--------------|------------|
+| Model Evaluation | Accuracy/precision/recall/F1 on holdout sets | ~10% |
+| Pipeline Integration | End-to-end pipeline runs with test datasets | ~60% |
+| Data Validation | Schema checks, distribution drift, missing values | ~20% |
+| Unit | Pure transformations, feature engineering | ~10% |
+
+## Test Commands
+
+- All tests: `[your command, e.g., pytest]`
+- Model evaluation: `[your eval command]`
+- Data validation: `[your validation command]`
+
+## Mocking Rules
+
+| Dependency | Mock? | Why |
+|------------|-------|-----|
+| External data sources (APIs, S3) | YES | Real calls = flaky + expensive |
+| Data transformations | NEVER | Transform bugs corrupt pipelines |
+| Model training | PARTIAL | Use small test datasets for speed |
+| Database/warehouse | YES in unit | Use test fixtures for integration |
+
+## Test Datasets
+
+Location: `[tests/data/ or tests/fixtures/]`
+- Keep test datasets small but representative
+- Include edge cases: missing values, wrong types, outliers
+
+## Lessons Learned
+
+<!-- Add data science testing gotchas as you discover them -->
+```
+
+**CLI Tool (if detected):**
+```markdown
+# Testing Guidelines
+
+## Testing Layers (CLI)
+
+CLI integration tests are best bang for buck. Test real invocations with real arguments.
+
+| Layer | What It Tests | % of Suite |
+|-------|--------------|------------|
+| CLI Integration | Full invocations with real args, real filesystem | ~80% |
+| Behavior | Exit codes, stdout/stderr content, file creation | ~10% |
+| Unit | Arg parsing, formatters, pure logic | ~10% |
+
+## Test Commands
+
+- All tests: `[your command]`
+- Specific test: `[your command]`
+
+## Mocking Rules
+
+| Dependency | Mock? | Why |
+|------------|-------|-----|
+| Filesystem | NEVER | CLI tools live on the filesystem |
+| Network calls | YES | Real calls = flaky |
+| Stdin/stdout | CAPTURE | Use child_process or subprocess |
+| Environment vars | SET per test | Determinism |
+
+## Behavior Contract
+
+| Input | Expected Exit Code | Expected Output |
+|-------|-------------------|----------------|
+| `--help` | 0 | Usage text |
+| (no args) | 1 | Error message |
+| `--version` | 0 | Version string |
+
+## Lessons Learned
+
+<!-- Add CLI testing gotchas as you discover them -->
 ```
 
 ---
@@ -2430,6 +3363,36 @@ Reference: `components/ui/` or Storybook
 - Extracted from your actual config (tailwind.config.js, CSS vars) - not guessed
 
 **If you have external design system:** Point to Storybook/Figma URL instead of duplicating.
+
+### BRANDING.md (If Branding Assets Detected)
+
+**Only generated if branding-related files are found:** BRANDING.md, brand/, logos/, style-guide.md, brand-voice.md, tone-of-voice.*, or UI/content-heavy project patterns.
+
+```markdown
+# Brand Guidelines
+
+## Brand Voice & Tone
+- [Detected from brand-voice.md or style guide, or ask user]
+- Formal/casual/technical/friendly
+- Target audience description
+
+## Naming Conventions
+- Product name: [official name, capitalization]
+- Feature names: [naming pattern]
+- Technical terminology: [glossary of project-specific terms]
+
+## Visual Identity
+- Logo usage: [reference to logo files or guidelines]
+- Color palette: [reference to DESIGN_SYSTEM.md if exists]
+- Typography: [font choices and usage]
+
+## Content Style
+- [Any content writing guidelines]
+- [Error message tone]
+- [User-facing copy standards]
+```
+
+**Why BRANDING.md?** Claude writing user-facing copy, error messages, or documentation needs to know the brand voice. Without this, output tone is inconsistent. Skip for backend-only or internal-tool projects.
 
 ---
 
@@ -2510,8 +3473,8 @@ All checks passed! Setup complete.
 7. Claude implements with TDD
 
 **When Claude should ask you:**
-- LOW confidence → Must ask before proceeding
-- FAILED 2x → Must stop and ask
+- LOW confidence → Must escalate (Fable → Codex) before interrupting a human
+- FAILED 2x → Must escalate (Fable → Codex) before interrupting a human
 - Multiple valid approaches → Should present options
 
 ---
@@ -2533,8 +3496,8 @@ All checks passed! Setup complete.
 |-------|---------------|
 | HIGH (90%+) | Proceed after approval |
 | MEDIUM (60-89%) | Highlight uncertainties |
-| LOW (<60%) | **ASK USER first** |
-| FAILED 2x | **STOP and ASK** |
+| LOW (<60%) | **Escalation ladder** — Fable → Codex xhigh → human last |
+| FAILED 2x | **Escalation ladder** — human is the last rung, not the first |
 
 ### Hook Summary
 
@@ -2583,7 +3546,7 @@ You've successfully set up the system when:
 - [ ] Claude auto-invokes sdlc skill for all tasks
 - [ ] Claude uses TodoWrite to track progress
 - [ ] Claude states confidence levels
-- [ ] Claude asks for clarification when LOW confidence
+- [ ] Claude escalates (Fable → Codex) when LOW confidence, before asking
 - [ ] TDD hook reminds about tests before editing source files
 - [ ] Claude requests /compact before implementation
 
@@ -2616,12 +3579,14 @@ Want me to file these? (yes/no/not now)
 
 | Learning Type | Update Where |
 |---------------|--------------|
-| Feature-specific gotchas, decisions | Feature docs (`*_PLAN.md`, `*_DOCS.md`) |
+| Feature-specific gotchas, decisions | Feature docs (`*_DOCS.md`, e.g., `AUTH_DOCS.md`) |
 | Testing patterns, gotchas | `TESTING.md` |
 | Architecture decisions | `ARCHITECTURE.md` |
 | Commands, general project context | `CLAUDE.md` (or `/revise-claude-md`) |
 
 **`/revise-claude-md` scope:** Only updates CLAUDE.md. It does NOT touch feature docs, TESTING.md, hooks, or skills. Use it for general project context that applies across the codebase.
+
+**Memory Audit Protocol:** Per-user memory at `~/.claude/projects/<proj>/memory/` accumulates private learnings. Some are portable technical lessons that belong in shared docs. The `/sdlc` skill's **Memory Audit Protocol** section (under "After Session (Capture Learnings)") defines a three-bucket classifier (`promote` / `keep` / `manual-review`) with a type-based denylist that keeps `user`/`reference` entries private and routes `project`/`feedback` entries to human review. Run at end-of-release or after debugging-heavy sessions. Human approves every promotion chunk-by-chunk before apply.
 
 **When to do mini-retro:** After features, tricky bugs, or discovering gotchas. Skip for one-line fixes or questions.
 
@@ -2635,13 +3600,15 @@ Want me to file these? (yes/no/not now)
 
 ### Feature Documentation
 
-Keep feature docs alongside code. Three patterns, use what fits:
+Feature docs are living documents — the single source of truth for each feature, kept current just like `TESTING.md` and `ARCHITECTURE.md`. Use `*_DOCS.md` as the standard pattern:
 
 | Pattern | When to Use | Example |
 |---------|-------------|---------|
-| `*_PLAN.md` / `*_DOCS.md` | Per-feature living docs | `AUTH_DOCS.md`, `PAYMENTS_PLAN.md` |
+| `*_DOCS.md` | Per-feature living docs (primary) | `AUTH_DOCS.md`, `PAYMENTS_DOCS.md`, `SEARCH_DOCS.md` |
 | `docs/decisions/NNN-title.md` (ADR) | Architecture decisions that need rationale | `docs/decisions/001-use-postgres.md` |
 | `docs/features/name.md` | Feature docs in a `docs/` directory | `docs/features/auth.md` |
+
+**When to create a feature doc:** If a feature touches 3+ files and no `*_DOCS.md` exists, create one. Keep it simple — what the feature does, key decisions, gotchas. The doc grows with the feature over time.
 
 **Feature doc template:**
 
@@ -2681,13 +3648,16 @@ What are the trade-offs? What becomes easier/harder?
 
 Store ADRs in `docs/decisions/`. Number sequentially. Claude reads these during planning to understand why things are built the way they are.
 
-**Keeping docs in sync with code:**
+**Keeping docs in sync with code (REQUIRED):**
 
-Docs drift when code changes but docs don't. The SDLC skill's planning phase detects this:
+Docs MUST be current before commit. Stale docs mislead future sessions, waste tokens, and cause wrong implementations. The SDLC skill enforces this:
 
 - During planning, Claude reads feature docs for the area being changed
-- If the code change contradicts what the doc says, Claude updates the doc
+- If the code change contradicts what the doc says → MUST update the doc
+- If the code change extends documented behavior → MUST add to the doc
+- If a `ROADMAP.md` exists → update it (mark items done, add new items). ROADMAP feeds CHANGELOG — keeping it current means releases write themselves
 - The "After Session" step routes learnings to the right doc
+- Plan files get closed out — if the session's work came from a plan, it gets deleted or marked complete so future sessions aren't misled
 - Stale docs cause low confidence — if Claude struggles, the doc may need updating
 
 **CLAUDE.md health:** Run `/claude-md-improver` periodically (quarterly or after major changes). It audits CLAUDE.md specifically — structure, clarity, completeness (6 criteria, 100-point rubric). It does NOT cover feature docs, TESTING.md, or ADRs — the SDLC workflow handles those.
@@ -2793,9 +3763,20 @@ Practical techniques to reduce token consumption without sacrificing quality.
 
 | Tool | What It Shows | When to Use |
 |------|---------------|-------------|
-| `/cost` | Session total: USD, API time, code changes | After a session to review spend |
+| `/usage` | Session cost, plan usage limits, and per-category breakdown (skill, subagent, plugin, MCP server). Aliases: `/cost`, `/stats` | After heavy subagent work, before/after workflow runs, when approaching rate limits |
+| `/status` | Settings panel — version, model, account, connectivity | Confirm setup before starting work |
 | `/context` | What's consuming context window space | When hitting context limits |
 | Status line | Real-time `cost.total_cost_usd` + token counts | Continuous monitoring |
+
+### Reading Usage Signals
+
+These signals are community-observed behavior on paid plans (Max/Team) — not in official CC docs. They are independent dimensions, not a single breakdown. A single session can contribute to all three. Run `/usage` to see the per-category breakdown.
+
+| Signal | What It Means | SDLC Action |
+|--------|---------------|-------------|
+| **Subagent-heavy** | Each subagent runs its own context. The advisor is a separate server-side consultation (full transcript forwarded, different token profile). Explore agents, full Agent delegates, and workflow agents each spawn separate contexts. | Expected in both A and B (Fable advisor/subagent-fallback fires per-decision). If unexpectedly high: use `subagent_type: "Explore"` for search (lighter), reserve full agents for implementation. |
+| **>150K context** | Sessions staying large between compactions. | **Context-window dependent.** Setup A (Opus 5, 1M auto-upgraded on Max): no `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` — none is documented to apply; use `CLAUDE_CODE_AUTO_COMPACT_WINDOW` if you want an earlier boundary (see Autocompact Tuning → "Opus 5 specifics"). Setup B (Sonnet 5, native 1M): recommended `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=75` fires at ~725K — >150K is expected and fine, the real question is whether the task needed that much headroom. `/compact` between planning and implementation regardless of lane. |
+| **8+ hour sessions** | Long-running sessions accumulate stale context. | `/clear` between unrelated tasks. Split multi-feature work into separate sessions. After committing a PR, start fresh. Background `/loop` sessions count toward this — audit which are still needed. |
 
 ### Reduce Consumption
 
@@ -2825,6 +3806,20 @@ claude_args: "--max-budget-usd 5.00 --max-turns 30"
 ### Advanced: OpenTelemetry
 
 For organization-wide cost tracking, enable `CLAUDE_CODE_ENABLE_TELEMETRY=1`. This exports per-request `cost_usd`, `input_tokens`, `output_tokens` to any OTLP-compatible backend (Datadog, Honeycomb, Prometheus).
+
+### Cache-Cost Surprises
+
+Anthropic prompt-cache reads bill at ~10% of normal input rate ($1.50/M vs $15/M on Opus). When cache hits drop unexpectedly, the same workload silently costs **10–20×** more — a pattern HN has documented multiple times. Two common triggers:
+
+1. **Mid-session edits to `CLAUDE.md`, `SDLC.md`, project settings, or any file the cached prefix references.** The cache key includes the project context; editing context invalidates the prefix and forces re-upload (`cache_creation` spikes, `cache_read` collapses).
+2. **Upstream caching bugs.** Anthropic's [2026-04-23 post-mortem](https://www.anthropic.com/engineering/april-23-postmortem) documented one bug that "continuously dropped thinking blocks from subsequent requests" — invisible until the invoice arrived.
+
+**Detection:** the wizard's `hooks/token-spike-check.sh` (ROADMAP #220, on-by-default for projects with a `.metrics/` directory) tracks per-session `costly_tokens = input + cache_creation + output` (excluding `cache_read`) and warns at `>2σ` over a rolling baseline. The cache-miss pattern (cache_read collapses → cache_creation spikes) shows up in `costly_tokens` directly. Test coverage in `tests/test-token-spike.sh:test_cache_miss_pattern_triggers_spike_warning` proves the absorption.
+
+**Practices to avoid silent cache-cost blowups:**
+- Avoid editing `CLAUDE.md`/`SDLC.md`/project settings mid-session when cache stability matters. If you must, accept the next request will re-upload the prefix.
+- Run `/usage` (or `/cost`) after long sessions to spot anomalies before they accumulate.
+- Inspect `.metrics/token-history.jsonl` directly when you suspect a regression — fields are documented at the top of `tests/e2e/token-analytics.sh`.
 
 ---
 
@@ -2889,104 +3884,24 @@ Claude: [fetches via gh api, discusses with you interactively]
 
 This is optional - skip if you prefer fresh reviews only.
 
-### CI Auto-Fix Loop (Optional — Bot Fallback)
-
-> **Two-tier model:** The SDLC skill's CI loops (above) are the "local shepherd" — they handle CI fixes during active sessions. This bot is the second tier: an unattended fallback for when no one is watching. The bot includes SHA-based suppression — if you push a fix locally before the bot runs, it skips automatically.
-
-Automatically fix CI failures and PR review findings. Claude reads the error context, fixes the code, commits, and re-triggers CI. Loops until CI passes AND review has no findings at your chosen level, or max retries hit.
-
-**The Loop:**
-```
-Push to PR
-    |
-    v
-CI runs ──► FAIL ──► ci-autofix: Claude reads logs, fixes, commits [autofix 1/3] ──► re-trigger
-    |
-    └── PASS ──► PR Review ──► has findings at your level? ──► ci-autofix: fixes all ──► re-trigger
-                      |
-                      └── APPROVE, no findings ──► DONE
-```
-
-**Safety measures:**
-- Never runs on main branch
-- Max retries (default 3, configurable via `MAX_AUTOFIX_RETRIES`)
-- `AUTOFIX_LEVEL` controls what findings to act on (`ci-only`, `criticals`, `all-findings`)
-- Restricted Claude tools (no git, no npm)
-- Self-modification ban (can't edit its own workflow file)
-- `[autofix N/M]` commit tags for audit trail
-- Sticky PR comments show status
-
-**Setup:**
-1. Create `.github/workflows/ci-autofix.yml`:
-
-```yaml
-name: CI Auto-Fix
-
-on:
-  workflow_run:
-    workflows: ["CI", "PR Code Review"]
-    types: [completed]
-
-permissions:
-  contents: write
-  pull-requests: write
-
-env:
-  MAX_AUTOFIX_RETRIES: 3
-  AUTOFIX_LEVEL: criticals  # ci-only | criticals | all-findings
-
-jobs:
-  autofix:
-    runs-on: ubuntu-latest
-    if: |
-      github.event.workflow_run.head_branch != 'main' &&
-      github.event.workflow_run.event == 'pull_request' &&
-      (
-        (github.event.workflow_run.name == 'CI' && github.event.workflow_run.conclusion == 'failure') ||
-        (github.event.workflow_run.name == 'PR Code Review' && github.event.workflow_run.conclusion == 'success')
-      )
-    steps:
-      # Count previous [autofix] commits to enforce max retries
-      # Download CI failure logs or fetch review comment
-      # Check findings at your AUTOFIX_LEVEL (criticals + suggestions)
-      # Run Claude to fix ALL findings with restricted tools
-      # Commit [autofix N/M], push, re-trigger CI
-      # Post sticky PR comment with status
-```
-
-2. Add `workflow_dispatch:` trigger to your CI workflow (so autofix can re-trigger it)
-3. Optionally configure a GitHub App for token generation (avoids `workflow_run` default-branch constraint)
-
-**Token approaches:**
-
-| Approach | When | Pros |
-|----------|------|------|
-| GITHUB_TOKEN + `gh workflow run` | Default | No extra setup |
-| GitHub App token | `CI_AUTOFIX_APP_ID` secret exists | Push triggers `synchronize` naturally |
-
-**Note:** `workflow_run` only fires for workflows on the default branch. The ci-autofix workflow is dormant until first merged to main.
-
-> **Template vs. this repo:** The template above uses `ci-autofix.yml` with `criticals` as a safe default for new projects. The wizard's own repo has evolved this into `ci-self-heal.yml` with `all-findings` — a more aggressive configuration we dogfood internally. Both naming conventions work; the behavior is identical.
-
----
-
-### Cross-Model Review Loop (Optional)
+### Cross-Model Review Loop (REQUIRED for High-Stakes)
 
 Use an independent AI model from a different company as a code reviewer. The author can't grade their own homework — a model with different training data and different biases catches blind spots the authoring model misses.
 
 **Why this works:** Two AI systems from different companies (e.g., Claude writes, GPT reviews) provide adversarial diversity. They have fundamentally different training, different failure modes, and different strengths. What one misses, the other catches.
 
-**Use the best model at the deepest reasoning.** This is your quality gate — don't economize on it. Always use the latest, most capable model available (currently GPT-5.4) at maximum reasoning effort (`xhigh`). Cheaper/faster models miss things. The whole point is catching what the authoring model couldn't.
+**Use the best model at the deepest reasoning.** This is your quality gate — don't economize on it. Always use the latest, most capable model available (**GPT-5.6 Sol if you have access**, otherwise Terra) at `xhigh` reasoning effort (non-negotiable — lower settings miss subtle errors; preserve this baseline rather than downgrading it on a model bump). Cheaper/faster models miss things. The whole point is catching what the authoring model couldn't. For unusually risky PRs, escalating to `max` or Pro mode is defensible — see `AI_SETUP_LANES.md`'s Final Review Policy — but `xhigh` is the default; no published data shows the higher tiers catching meaningfully more real bugs on ordinary PR review.
 
 **Prerequisites:**
 - Codex CLI installed: `npm i -g @openai/codex`
 - OpenAI API key configured: `export OPENAI_API_KEY=...`
+- Codex CLI picks up your OpenAI account's best available model automatically. If you have GPT-5.6 Sol access, `codex exec` uses it; otherwise it falls back to Terra. No config change needed on your side.
 - This is a local workflow tool — not required for CI/CD
 
 **The Protocol:**
 
 1. Create a `.reviews/` directory in your project
-2. After Claude completes its SDLC loop (self-review passes), write a handoff file:
+2. After Claude completes its SDLC loop (self-review passes), write a preflight doc (what you already checked) then a mission-first handoff file:
 
 ```jsonc
 // .reviews/handoff.json
@@ -2994,11 +3909,24 @@ Use an independent AI model from a different company as a code reviewer. The aut
   "review_id": "feature-xyz-001",
   "status": "PENDING_REVIEW",
   "round": 1,
+  "mission": "What changed and why — context for the reviewer",
+  "success": "What 'correctly reviewed' looks like",
+  "failure": "What gets missed if the reviewer is superficial",
   "files_changed": ["src/auth.ts", "tests/auth.test.ts"],
-  "review_instructions": "Review for security, edge cases, and correctness",
-  "artifact_path": ".reviews/feature-xyz-001/"
+  "verification_checklist": [
+    "(a) Verify input validation at auth.ts:45",
+    "(b) Verify test covers null-token edge case"
+  ],
+  "review_instructions": "Focus on security and edge cases. Assume bugs may be present until proven otherwise.",
+  "preflight_path": ".reviews/preflight-feature-xyz-001.md",
+  "artifact_path": ".reviews/feature-xyz-001/",
+  "pr_number": 205
 }
 ```
+
+The `mission/success/failure` fields give the reviewer context. Without them, you get generic "looks good" feedback. With them, reviewers dig into source files and verify specific claims. The `verification_checklist` tells the reviewer exactly what to verify — not "review this" but specific items with file:line references.
+
+`pr_number` (optional) is the PreCompact self-heal opt-in (ROADMAP #209). Set it when the review tracks a specific PR — the `precompact-seam-check.sh` hook queries `gh pr view N --json state` on every manual `/compact` and treats MERGED as implicit CERTIFIED, so a forgotten PENDING handoff doesn't lock you out of compaction after the PR ships. Omit for ad-hoc reviews not tied to a PR.
 
 3. Run the independent reviewer (Round 1 — full review). These commands use your Codex default model — configure it to the latest, most capable model available:
 
@@ -3011,10 +3939,15 @@ codex exec \
    review the listed files. Output each finding with: an ID (1, 2, ...), \
    severity (P0/P1/P2), description, and a 'certify condition' stating \
    what specific change would resolve it. \
-   End with CERTIFIED or NOT CERTIFIED."
+   End with CERTIFIED or NOT CERTIFIED." \
+  < /dev/null
 ```
 
-4. If CERTIFIED → done. If NOT CERTIFIED → enter the dialogue loop.
+> **Always append `< /dev/null`** to `codex exec` calls run from background, hooks, CI, or any non-interactive parent. Without it, codex blocks on stdin reads even when the prompt is given as an argument — the process sits at S/0% CPU indefinitely with a 0-byte `-o` output file. Validated on codex-cli 0.130.0 / macOS 14, 2026-05-15. For live progress visibility, use `scripts/codex-review-with-progress.sh` instead.
+
+> **Always launch via `run_in_background: true` on the Bash tool.** Same reason as the parallel callout in the Cross-Model Review Loop section above — Bash tool clamps `timeout` to 600000 ms (10 min) regardless of the value passed and force-kills foreground at the wall. Multi-artifact bundle reviews need background mode to complete. See issue #364 (2026-05-27 incident: 70 min session compute on a 7-min review).
+
+4. If CERTIFIED → **write `"commit_sha": "<git rev-parse HEAD>"` into `handoff.json`** — `hooks/codex-gate-check.sh` (ROADMAP #437) blocks a commit if this is missing or doesn't match current HEAD, so a bare `CERTIFIED` status isn't enough. Then done. If NOT CERTIFIED → enter the dialogue loop.
 
 **The Dialogue Loop (Round 2+):**
 
@@ -3069,7 +4002,8 @@ codex exec \
    ACCEPTED → verify it was applied. \
    Do NOT raise new findings unless P0 (critical/security). \
    New observations go in 'Notes for next review' (non-blocking). \
-   End with CERTIFIED or NOT CERTIFIED."
+   End with CERTIFIED or NOT CERTIFIED." \
+  < /dev/null
 ```
 
 **The key constraint:** Rechecks are scoped to previous findings only. The reviewer cannot block certification with new P2 observations discovered during recheck. This prevents scope creep and ensures convergence.
@@ -3083,7 +4017,7 @@ Claude writes code → self-review passes → handoff.json (round 1)
     |                              Reviewer: FULL REVIEW
     |                              (structured findings with IDs)
     |                                          |
-    |                              CERTIFIED? -+→ YES → Done
+    |                              CERTIFIED? -+→ YES → write commit_sha → Done
     |                                          |
     |                                          +→ NO (findings)
     |                                          |
@@ -3093,21 +4027,25 @@ Claude writes code → self-review passes → handoff.json (round 1)
     |                              Reviewer: TARGETED RECHECK
     |                              (previous findings only, no new P1/P2)
     |                                          |
-    |                              All resolved? → YES → CERTIFIED
+    |                              All resolved? → YES → CERTIFIED (write commit_sha)
     |                                          |
     └────────── Fix rejected items ←───────────┘
                     (max 3 rechecks, then escalate to user)
 ```
 
+**Every CERTIFIED path above writes `"commit_sha": "<git rev-parse HEAD>"` into `handoff.json`** — `hooks/codex-gate-check.sh` (ROADMAP #437) treats a missing or mismatched SHA as a stale certification, so a bare `CERTIFIED` status string is never enough on its own.
+
 **Key flags:**
 - `-c 'model_reasoning_effort="xhigh"'` — Maximum reasoning depth. This is where you get the most value. Testing showed `xhigh` caught 3 findings that `high` missed on the same content.
 - `-s danger-full-access` — Full filesystem read/write so the reviewer can read your actual code.
 - `-o .reviews/latest-review.md` — Save the review output for Claude to read back.
+- **Claude Code sandbox bypass required:** Codex's Rust binary needs access to macOS system configuration APIs (`SCDynamicStore`) during initialization. Claude Code's sandbox blocks this, causing `codex exec` to crash with `panicked: Attempted to create a NULL object`. When running from within Claude Code, use `dangerouslyDisableSandbox: true` on the Bash tool call. This only bypasses CC's sandbox for the Codex process — Codex's own sandbox (`-s danger-full-access`) still applies. Known issue: [openai/codex#15640](https://github.com/openai/codex/issues/5914).
 
 **Tool-agnostic principle:** The core idea is "use a different model as an independent reviewer." Codex CLI is the concrete example today, but any competing AI tool that can read files and produce structured feedback works. The value comes from the independence and different training, not the specific tool.
 
 **When to use this:**
 - High-stakes changes (auth, payments, data handling)
+- **Releases and publishes** (version bumps, CHANGELOG, npm publish) — see Release Review Checklist below
 - Research-heavy work where accuracy matters more than speed
 - Complex refactors touching many files
 - Any time you want higher confidence before merging
@@ -3116,6 +4054,45 @@ Claude writes code → self-review passes → handoff.json (round 1)
 - Trivial changes (typo fixes, config tweaks)
 - Time-sensitive hotfixes
 - Changes where the review cost exceeds the risk
+
+#### Release Review Checklist
+
+Before any release or npm publish, add these focus areas to the cross-model `review_instructions`:
+
+**Why:** Self-review and automated tests regularly miss release-specific inconsistencies. Evidence: v1.20.0 cross-model review caught 2 real issues (CHANGELOG section lost during consolidation, stale hardcoded version examples) that passed all tests and self-review.
+
+| Check | What to Look For | Example Failure |
+|-------|-------------------|-----------------|
+| CHANGELOG consistency | All sections present, no lost entries during consolidation | v1.19.0 section dropped when merging into v1.20.0 |
+| Version parity | package.json, SDLC.md, CHANGELOG, wizard metadata all match | SDLC.md says 1.19.0 but package.json says 1.20.0 |
+| Stale examples | Hardcoded version strings in docs/wizard match current release | Wizard examples showing v1.15.0 when publishing v1.20.0 |
+| Docs accuracy | README, ARCHITECTURE.md reflect current feature set | "8 workflows" when there are actually 7 |
+| CLI-distributed file parity | Live skills, hooks, settings match CLI templates | SKILL.md edited but cli/templates/ not updated |
+
+**Example `review_instructions` for releases:**
+```
+Review for release consistency: CHANGELOG completeness (no lost sections),
+version parity across package.json/SDLC.md/CHANGELOG/wizard metadata,
+stale hardcoded versions in examples, docs accuracy vs actual features,
+CLI-distributed file parity (skills, hooks, settings).
+```
+
+**This complements automated tests, not replaces them.** Tests catch exact version mismatches (e.g., `test_package_version_matches_changelog`). Cross-model review catches semantic issues tests cannot — a section silently dropped, examples using outdated but syntactically valid versions, docs describing features that no longer exist.
+
+#### Anti-patterns
+
+- **"Find at least N problems"** — incentivizes false positives. The reviewer will manufacture findings to hit the count.
+- **"Review this"** — too vague. Always pair with `verification_checklist` items that name file:line evidence to verify.
+- **1-10 score with no criteria** — every reviewer scores differently. Either define what 1, 5, 10 mean for *this* review, or drop the score and just produce CERTIFIED / NOT CERTIFIED with findings.
+- **Author reasoning visible to reviewer** — anchoring bias. The reviewer should see code + handoff, not the author's self-assessment of why it's correct.
+
+#### Multiple reviewers (Claude review + Codex + human)
+
+Run them in parallel; collect feedback via `gh api repos/OWNER/REPO/pulls/PR/comments` (single source of truth). Respond per-reviewer (different blind spots — don't merge feedback). On conflicts, pick the stronger argument with reasoning, not the louder voice. Cap iterations at 3 per reviewer to avoid infinite loops.
+
+#### Non-code domains (research, persuasion, medical content)
+
+Same handoff format. Adapt `review_instructions` (e.g. "verify each cited claim links to a primary source") and `verification_checklist` (specific claim → specific source). Add `"audience"` and `"stakes"` keys to the JSON so the reviewer knows what reading level / risk profile to apply.
 
 ---
 
@@ -3153,7 +4130,7 @@ Occasionally (not every task), Claude can ask:
 If Claude repeatedly struggles in a codebase area:
 - Low confidence is an indicator of a problem
 - Might be legacy code, bad docs, or just unfamiliar patterns
-- Claude should ask questions rather than guess wrong
+- Claude should escalate to a model, then ask, rather than guess wrong
 - Better to ask and be right than to assume and create rework
 
 **Don't be afraid to ask questions.** It prevents being wrong. This is a symbiotic relationship - the more interaction, the better both sides get.
@@ -3166,10 +4143,10 @@ If Claude repeatedly struggles in a codebase area:
 
 ### How to Update
 
-Use the `/update-wizard` skill for a guided, selective update experience:
-> `/update-wizard` — full guided update (shows changelog, per-file diff, selective adoption)
-> `/update-wizard check-only` — just show what changed, don't apply anything
-> `/update-wizard force-all` — apply all updates without per-file approval
+Use the `/claude-update-wizard` skill for a guided, selective update experience:
+> `/claude-update-wizard` — full guided update (shows changelog, per-file diff, selective adoption)
+> `/claude-update-wizard check-only` — just show what changed, don't apply anything
+> `/claude-update-wizard force-all` — apply all updates without per-file approval
 
 Or ask Claude directly:
 > "Check for SDLC wizard updates"
@@ -3183,8 +4160,8 @@ Claude fetches from these URLs (via WebFetch):
 
 | Resource | URL |
 |----------|-----|
-| CHANGELOG | `https://raw.githubusercontent.com/BaseInfinity/agentic-ai-sdlc-wizard/main/CHANGELOG.md` |
-| Wizard | `https://raw.githubusercontent.com/BaseInfinity/agentic-ai-sdlc-wizard/main/CLAUDE_CODE_SDLC_WIZARD.md` |
+| CHANGELOG | `https://raw.githubusercontent.com/BaseInfinity/claude-sdlc-wizard/main/CHANGELOG.md` |
+| Wizard | `https://raw.githubusercontent.com/BaseInfinity/claude-sdlc-wizard/main/CLAUDE_CODE_SDLC_WIZARD.md` |
 
 ### What Claude Does (4 Phases)
 
@@ -3194,7 +4171,7 @@ Claude fetches from these URLs (via WebFetch):
 ```
 If no version comment exists, treat as `0.0.0`.
 
-**Step 2: Fetch CHANGELOG first** from the CHANGELOG URL above. Parse all entries between user's installed version and the latest version. Show the user what changed. If versions match, say "You're up to date!" and stop.
+**Step 2: Fetch CHANGELOG first** from the CHANGELOG URL above. Parse all entries between user's installed version and the latest version. Show the user what changed. If versions match, run the global plugin-registration cleanup (see the `/claude-update-wizard` skill's Step 7.7 — `~/.claude/settings.json` hygiene is independent of file versions and must run even when up-to-date), then say "You're up to date!" and stop.
 
 **Step 3: Fetch full wizard and compare.** For each wizard step, check if the user already has it:
 
@@ -3249,7 +4226,7 @@ Walk through updates? (y/n)
 Store wizard state in `SDLC.md` as metadata comments (invisible to readers, parseable by Claude):
 
 ```markdown
-<!-- SDLC Wizard Version: 1.20.0 -->
+<!-- SDLC Wizard Version: 1.75.1 -->
 <!-- Setup Date: 2026-01-24 -->
 <!-- Completed Steps: step-0.1, step-0.2, step-1, step-2, step-3, step-4, step-5, step-6, step-7, step-8, step-9 -->
 <!-- Git Workflow: PRs -->
@@ -3286,8 +4263,8 @@ Every wizard step has a unique ID for tracking:
 | `step-9` | SDLC/TESTING/ARCH docs | 1.0.0 |
 | `question-git-workflow` | Git workflow preference | 1.2.0 |
 | `step-update-notify` | Optional: CI update notification | 1.13.0 |
-| `step-cross-model-review` | Optional: Cross-model review loop | 1.16.0 |
-| `step-update-wizard` | /update-wizard smart update skill | 1.18.0 |
+| `step-cross-model-review` | Cross-model review (REQUIRED for high-stakes) | 1.16.0 |
+| `step-update-wizard` | /claude-update-wizard smart update skill | 1.18.0 |
 
 When checking for updates, Claude compares user's completed steps against this registry.
 
@@ -3366,7 +4343,7 @@ jobs:
           echo "Installed wizard version: $INSTALLED"
 
           # Fetch latest CHANGELOG
-          curl -sL https://raw.githubusercontent.com/BaseInfinity/agentic-ai-sdlc-wizard/main/CHANGELOG.md -o /tmp/changelog.md
+          curl -sL https://raw.githubusercontent.com/BaseInfinity/claude-sdlc-wizard/main/CHANGELOG.md -o /tmp/changelog.md
 
           # Extract latest version (first ## [X.X.X] line)
           LATEST=$(grep -m1 -oE '\[[0-9]+\.[0-9]+\.[0-9]+\]' /tmp/changelog.md | tr -d '[]')
@@ -3498,7 +4475,7 @@ When something doesn't work:
 
 1. **"Plan before coding"** not "use exactly this planning template"
 2. **"Test your work"** not "use Jest with this exact config"
-3. **"Ask when uncertain"** not "if confidence < 60% then ask"
+3. **"Escalate when uncertain"** not "if confidence < 60% then ask"
 
 **Claude adapts the principles to YOUR stack.** Give Claude the philosophy, it figures out your tech details - your commands, your patterns, your workflow.
 
@@ -3588,6 +4565,30 @@ When Anthropic provides official plugins that overlap with this SDLC:
 
 **Re-run `claude-code-setup` periodically** (quarterly, or when your project expands in scope) to catch new automations — MCP servers, hooks, subagents — that weren't relevant at initial setup but are now.
 
+**API feature shepherd (self-maintenance, roadmap #100):**
+
+The wizard watches the **Anthropic API changelog** — not just Claude Code CLI releases — for new betas, tools, and agent features. The detector runs in `.github/workflows/weekly-api-update.yml`, is intentionally LLM-free, and only opens a tracking issue labeled `api-review-needed` when new entries appear at `platform.claude.com/docs/en/release-notes/api`.
+
+When that issue is open, the session-start hook nudges you. The session (not the workflow) does the deep research + adoption via the full SDLC loop. This mirrors the "local shepherd" pattern used for CI fixes: cheap Action-layer detection + session-time analysis beats expensive Action-layer LLM calls.
+
+The gap this closes: the advisor tool (API beta, `advisor-tool-2026-03-01`) shipped and was missed for several days before manual discovery. Detector would have flagged it on the next weekly tick. **Update (v1.81.0):** The API beta graduated to native CC support as `advisorModel` in settings.json (v2.1.170+). See [Advisor Model (v2.1.170+)](#advisor-model-v21170) above.
+
+**Complementary native skills worth knowing:**
+
+| Native Skill | What It Does | When to Run |
+|--------------|--------------|-------------|
+| `/less-permission-prompts` | Scans transcripts for common read-only Bash/MCP calls and proposes a prioritized allowlist | After a few sessions — reduces permission friction without auto mode |
+| `/permissions` | Pre-allow specific commands and check them into `.claude/settings.json` | Anytime you want an auditable team allowlist |
+| `/insights` | Local analyzer of your CC session history. Generates HTML report at `~/.claude/usage-data/report.html` + per-session facet JSON at `~/.claude/usage-data/facets/<session>.json`. Surfaces `underlying_goal`, `outcome`, `friction_counts`, `user_satisfaction_counts`, `brief_summary`, recurring friction patterns, suggested CLAUDE.md additions | Monthly — **qualitative-only**; see caveat below |
+| `/goal <condition>` (v2.1.139+) | Set a completion condition; Claude keeps working across turns until a separate evaluator pass (Haiku default) says it's met. Survives `--resume` (counters reset), not `/clear`. No disk writes — session-state only. Bound it yourself: `/goal "tests pass + git status clean, or stop after 20 turns"`. The evaluator judges the transcript only — it cannot run tools, so don't use `/goal` for "doneness" that lives off-transcript. Requires v2.1.143+ for the subagent-race fix. Composes cleanly with wizard hooks (`UserPromptSubmit`/`SessionStart`/`PreCompact` fire per turn) | Long-running goal-bound work — refactors, migrations, anything where "are we there yet?" has a checkable answer in the transcript |
+| `/code-review [effort] [--comment]` (v2.1.147+, renamed from `/simplify`) | Reports correctness bugs at chosen effort level; `--comment` posts findings as inline GitHub PR comments. Our /sdlc skill already invokes `/code-review`; the `--comment` flag streamlines CI shepherd workflows | Self-review during SDLC; PR review when shepherding |
+| `/usage` (v2.1.149+) | Per-category breakdown of limits usage — skills, subagents, plugins, per-MCP-server cost. Complement to `/context all` which shows per-skill per-model token estimates | When investigating session bloat / quota burn — pairs with `scripts/audit-session-load.sh` (#236) |
+| `/context all` (v2.1.139+) | Rounded token estimates per-skill per-model, names the providing plugin for plugin-sourced skills | Same as `/usage` — diagnose what's eating your context |
+
+These are shipped by Claude Code itself. The wizard doesn't reimplement them — it points you at them so you benefit from the native version's ongoing maintenance.
+
+**`/insights` caveat (do not over-claim):** the output is behavioral/qualitative only — friction counts, goal categories, satisfaction. It does NOT expose `cache_read_input_tokens`, cache-hit ratio, per-turn token breakdown, or model-version tracking. It is **not a substitute** for token-spike detection (ROADMAP #220 / `hooks/token-spike-check.sh`), which reads raw session JSONL (`~/.claude/projects/<proj>/<session>.jsonl`, `usage.cache_read_input_tokens` per turn). Use `/insights` for behavioral friction; use `#220`-class instrumentation for token/cache anomalies. They are complementary, not interchangeable. (Original research: ROADMAP #206, full writeup `.reviews/research-206-insights.md`.)
+
 ### When Claude Code Improves
 
 Claude Code is actively improving. When they add built-in features:
@@ -3599,6 +4600,26 @@ Claude Code is actively improving. When they add built-in features:
 | Built-in task tracking | TodoWrite reminders |
 
 Use the best tool for the job. If Claude Code builds it better, use theirs.
+
+---
+
+## Cowork Support
+
+**Claude Cowork** is a separate product from Claude Code — a desktop application for knowledge workers, not developers. It shares Claude Code's plugin format, so this wizard ships a Cowork-native subset: [`cowork/`](cowork/README.md).
+
+**What it provides:** 2 portable skills (`/sdlc-wizard-cowork:sdlc`, `/sdlc-wizard-cowork:feedback`) plus 3 **prompt-based hooks** — the Cowork equivalents of this wizard's bash hooks, since Cowork sessions have no shell access:
+
+| Cowork Hook | Claude Code Equivalent | Event |
+|-------------|------------------------|-------|
+| TDD check | `tdd-pretool-check.sh` | `PreToolUse` (Write/Edit/MultiEdit) |
+| SDLC baseline | `sdlc-prompt-check.sh` | `UserPromptSubmit` |
+| Completion check | *(new — no CC equivalent)* | `Stop` |
+
+**What's NOT ported and why** (CLI-specific, filesystem-dependent, or event-unavailable in Cowork): `instructions-loaded-check.sh`, `model-effort-check.sh`, `precompact-seam-check.sh`, the Setup/Update skills, cross-model review via `codex exec` (use ChatGPT/Codex web manually instead), and the CI shepherd (`gh pr`, `git push` — these happen outside a Cowork session).
+
+**Install:** as a plugin in Claude Desktop or claude.ai settings, pointing at `https://github.com/BaseInfinity/claude-sdlc-wizard/tree/main/cowork`. See [`cowork/README.md`](cowork/README.md) for full details, or `claude --plugin-dir ./cowork` for local testing.
+
+**Drift prevention:** the skills in `cowork/skills/` are copies of the canonical `skills/` — `tests/test-cowork-drift.sh` fails CI if they diverge, forcing this package to stay in sync whenever the canonical skills update.
 
 ---
 

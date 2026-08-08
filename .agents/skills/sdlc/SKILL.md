@@ -2,7 +2,7 @@
 name: sdlc
 description: Full software delivery lifecycle for implementation, bug fixes, refactors, testing, release, and publish work in this repo. Use when changing code or docs that should follow the repo's SDLC contract.
 argument-hint: [task description]
-effort: high
+effort: medium
 ---
 
 # SDLC Skill

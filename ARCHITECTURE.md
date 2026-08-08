@@ -5,7 +5,7 @@
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ Claude Code / Codex                                      │
-│  ├── Hook Events (PreToolUse, Stop, TaskCompleted, etc.)│
+│  ├── Hook Events (PreToolUse, PostToolUse, Stop, etc.)   │
 │  ├── Permission events                                   │
 │  └── settings.json / .codex/hooks.json                   │
 └──────────────┬──────────────────────────────────────────┘
@@ -19,8 +19,8 @@
                ▼
 ┌─────────────────────────────────────────────────────────┐
 │ engine.sh (theme-driven VisualHUD engine)                │
-│  ├── Reads event type + tool count                       │
-│  ├── Calculates stage (logarithmic progression)          │
+│  ├── Reads normalized lifecycle events                   │
+│  ├── Keeps tool count as internal telemetry              │
 │  ├── Reads selected theme JSON                           │
 │  ├── Sets iTerm2 visuals (escape sequences)              │
 │  └── Calls set_bg.py for background images               │
@@ -44,7 +44,7 @@
 │  ├── Muted UI surface   (OSC 1337;SetColors=br_black=)   │
 │  ├── Cursor color       (OSC 1337;SetColors=curbg=)      │
 │  ├── Title bar          (OSC 0; + SetUserVar hudProgress)│
-│  ├── Badge              (colored square progress bar)    │
+│  ├── Badge              (semantic state label)           │
 │  └── Background image   (iTerm2 Python API)              │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -76,7 +76,15 @@
 - Context/token alert marker: `claude-cooking-context_${SESSION_KEY}`
 - Active code-review/background-verification marker: `claude-cooking-review_${SESSION_KEY}`
 
-## 11-Stage Progression (Logarithmic)
+## Activity And Calibration
+
+Normal agent activity renders the theme's stable `working` state. The tool-call
+counter is telemetry, not completion, and therefore does not drive ordinary
+colors, sprites, titles, or determinate progress indicators. The historical
+11-stage logarithmic progression remains available to deterministic theme
+calibration and explicit legacy mode.
+
+## 11-Stage Calibration Progression (Logarithmic)
 
 The default Pokemon theme preserves the original progression:
 
@@ -98,16 +106,25 @@ The default Pokemon theme preserves the original progression:
 
 | State | Trigger | Sprite | Visual |
 |-------|---------|--------|--------|
-| BLOCKED | `permission_prompt` notification | Snorlax | Dark/muted colors |
+| HITL | `permission_prompt` notification | Snorlax | Explicit approval-required title and iTerm2 notification |
+| CHECK | Host-provided permission preflight | Pikachu | Neutral permission-check title; no HITL notification |
 | REVIEW | Code-review/background-verification task starts | Alakazam | Non-final review state |
 | ERROR | `StopFailure` event | Psyduck | Red warning |
 | DONE | `Stop` or review `TaskCompleted` | Mew | Completed state |
 | IDLE | `idle_prompt` notification | Eevee | Waiting state |
 
-Codex maps `PermissionRequest` to the `permission_prompt` notification, maps
-`SessionStart` to the done state so a new Codex session starts idle, and
-forwards `TaskCompleted` so review/background-verification work can leave the
-non-final review state only when the task actually completes.
+Codex maps `PermissionRequest` to a correlated `permission_prompt` because Codex exposes no later prompt-shown event. Stable content-derived keys survive Codex's changing event identifier shape, and a lock-protected pending set retains overlapping requests. Matching tool lifecycle events clear only their request without allowing unrelated concurrent tools to hide the remaining HITL state. The adapter also maps
+`SessionStart` to the done state so a new Codex session starts idle, and maps
+object-shaped `PostToolUse` responses with an explicit failure status to the
+engine's `PostToolUseFailure` event. Codex unified shell responses expose raw
+output without an exit status, so VisualHUD forwards completion without guessing
+failure from shell text. A foreground review-shaped `PostToolUse` with explicit object-shaped
+success evidence is normalized to the engine's `TaskCompleted` event so the
+review marker clears; unknown/raw results and commands with an asynchronous
+review shell segment remain in review, and failed review/plan calls do
+not decrement unrelated activity telemetry. Codex does not register
+Claude-only lifecycle names such as `TaskCompleted`, `CwdChanged`, or
+`PostToolUseFailure` directly.
 
 The Codex TMNT theme uses the same stage thresholds with a wider character/color
 spectrum: Leonardo blue, Michelangelo orange, Donatello purple, Raphael red,
@@ -130,7 +147,7 @@ Joy/Blissey, while TMNT maps critical context to Casey Jones.
 ## Key Technical Decisions
 
 - **Renderer split**: iTerm2 uses direct escape sequences for tab color, title, badge, selection/background/neutral surface palette and the Python API for background images. Windows Terminal/PowerShell uses title plus `OSC 9;4` progress status. WezTerm receives a `visualhudState` user var and applies per-window colors/backgrounds through Lua `window:set_config_overrides()`.
-- **Logarithmic scaling**: Tool calls don't map linearly to progress. Early calls feel fast, later stages are earned.
+- **Semantic default**: Ordinary work is stable and indeterminate. Logarithmic stages are retained for calibration and explicit legacy mode only.
 - **File-based state**: Simple, no dependencies, naturally per-session via env var.
 - **SetUserVar**: "Claude-proof" title that Claude Code can't overwrite with its own title.
 - **Delayed reapply**: Adapters set `VISUALHUD_REAPPLY_DELAY=0.12` by default so the engine re-emits title/color variables shortly after hook exit. This prevents Codex/Claude TUI repaints from leaving stale prompt-box or tab chrome colors.

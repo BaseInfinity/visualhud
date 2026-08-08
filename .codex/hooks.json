@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/bash-guard.sh\""
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/git-guard.cjs\""
           }
         ]
       }
@@ -51,8 +51,9 @@
         ]
       }
     ],
-    "TaskCompleted": [
+    "PostToolUse": [
       {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
@@ -75,11 +76,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/session-start.sh\""
-          },
-          {
-            "type": "command",
-            "command": "node .codex/hooks/session-start.cjs"
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/session-start.cjs\""
           }
         ]
       }
@@ -91,10 +88,15 @@
           {
             "type": "command",
             "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/visualhud-codex.sh\""
-          },
+          }
+        ]
+      },
+      {
+        "matcher": "^(manual|auto)$",
+        "hooks": [
           {
             "type": "command",
-            "command": "node .codex/hooks/compact-guard.cjs"
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/compact-guard.cjs\""
           }
         ]
       }
@@ -106,10 +108,37 @@
           {
             "type": "command",
             "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/visualhud-codex.sh\""
-          },
+          }
+        ]
+      },
+      {
+        "matcher": "^(manual|auto)$",
+        "hooks": [
           {
             "type": "command",
-            "command": "node .codex/hooks/compact-guard.cjs"
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/compact-guard.cjs\""
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/visualhud-codex.sh\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/visualhud-codex.sh\""
           }
         ]
       }

@@ -2,6 +2,7 @@
 "use strict";
 
 const fs = require("fs");
+const crypto = require("crypto");
 
 function readStdin() {
   return fs.readFileSync(0, "utf8");
@@ -247,18 +248,37 @@ function mergeCodexHooks(existing, command) {
     }
   };
 
+  const removeVisualHud = (name) => {
+    const groups = Array.isArray(data.hooks[name]) ? data.hooks[name] : [];
+    const retained = groups
+      .map((group) => ({
+        ...group,
+        hooks: (Array.isArray(group.hooks) ? group.hooks : []).filter(
+          (item) => !String(item.command || "").includes("visualhud-codex.sh"),
+        ),
+      }))
+      .filter((group) => group.hooks.length > 0);
+
+    if (retained.length > 0) {
+      data.hooks[name] = retained;
+    } else {
+      delete data.hooks[name];
+    }
+  };
+
   addMatcher("PreToolUse");
   addMatcher("PermissionRequest");
+  addMatcher("PostToolUse");
   addPlain("UserPromptSubmit");
   addPlain("Stop");
-  addPlain("TaskCompleted");
   addMatcher("SessionStart");
-  addPlain("CwdChanged");
   addMatcher("PreCompact");
   addMatcher("PostCompact");
   addMatcher("SubagentStart");
   addMatcher("SubagentStop");
-  addMatcher("PostToolUseFailure");
+  removeVisualHud("TaskCompleted");
+  removeVisualHud("CwdChanged");
+  removeVisualHud("PostToolUseFailure");
   return data;
 }
 
@@ -301,10 +321,116 @@ function mergeClaudeHooks(existing, command) {
   return data;
 }
 
+function hasFailedToolResponse(value) {
+  if (value == null || typeof value !== "object") return false;
+  if (value.isError === false || value.is_error === false) return false;
+  if (typeof value.exit_code === "number" && value.exit_code !== 0) return true;
+  if (value.isError === true || value.is_error === true || value.success === false || value.ok === false) return true;
+  if (typeof value.status === "string" && /^(error|failed|failure)$/i.test(value.status)) return true;
+  return false;
+}
+
+function hasSuccessfulToolResponse(value) {
+  if (value == null || typeof value !== "object") return false;
+  if (typeof value.exit_code === "number") return value.exit_code === 0;
+  if (value.isError === false || value.is_error === false) return true;
+  if (value.success === true || value.ok === true) return true;
+  if (typeof value.status === "string") return /^(ok|success|succeeded|completed)$/i.test(value.status);
+  return Array.isArray(value.content);
+}
+
+function canonicalValue(value) {
+  if (Array.isArray(value)) return value.map(canonicalValue);
+  if (value == null || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.keys(value).sort().map((key) => [key, canonicalValue(value[key])]),
+  );
+}
+
+function permissionKey(payload) {
+  const toolInput = payload.tool_input && typeof payload.tool_input === "object" ? { ...payload.tool_input } : {};
+  delete toolInput.description;
+  const identity = JSON.stringify(canonicalValue([payload.turn_id || "", payload.tool_name || "", toolInput]));
+  return `request:${crypto.createHash("sha256").update(identity).digest("hex").slice(0, 24)}`;
+}
+
+function codexSubcommand(words) {
+  const optionsWithValues = new Set([
+    "-a", "--add-dir", "--ask-for-approval", "-c", "--cd", "--config", "-C",
+    "--disable", "--enable", "-i", "--image", "--local-provider", "-m", "--model",
+    "-p", "--profile", "-s", "--sandbox",
+  ]);
+
+  for (let index = 1; index < words.length; index += 1) {
+    const word = String(words[index] || "");
+    if (word === "--") return String(words[index + 1] || "").toLowerCase();
+    if (!word.startsWith("-")) return word.toLowerCase();
+
+    const option = word.split("=", 1)[0];
+    if (!word.includes("=") && optionsWithValues.has(option)) index += 1;
+  }
+  return "";
+}
+
+function isDirectForegroundReviewPayload(payload) {
+  const command = getPath(payload, "tool_input.command");
+  if (typeof command !== "string") return false;
+
+  const words = [];
+  let word = "";
+  let quote = "";
+  let escaping = false;
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index];
+    if (escaping) {
+      word += char;
+      escaping = false;
+      continue;
+    }
+    if (char === "\\" && quote !== "'") {
+      escaping = true;
+      continue;
+    }
+    if (quote !== "") {
+      if (char === quote) {
+        quote = "";
+      } else {
+        word += char;
+      }
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === "#" && (index === 0 || /\s/.test(command[index - 1]))) {
+      break;
+    }
+    if (/[&|;()<`\r\n]/.test(char)) return false;
+    if (/\s/.test(char)) {
+      if (word !== "") {
+        words.push(word);
+        word = "";
+      }
+      continue;
+    }
+    word += char;
+  }
+  if (escaping || quote !== "") return false;
+  if (word !== "") words.push(word);
+
+  const executable = String(words[0] || "").split(/[\\/]/).pop().toLowerCase();
+  const directReviewSubcommand = words.slice(1).some((value) => value.toLowerCase() === "review");
+  const directCodexExecReview = executable === "codex"
+    && codexSubcommand(words) === "exec"
+    && isReviewPayload(payload);
+  return (executable === "codex" || executable === "claude") && (directReviewSubcommand || directCodexExecReview);
+}
+
 function codexPayload(payload) {
   switch (payload.hook_event_name || "") {
     case "PreToolUse":
-    case "PostToolUse":
+      return { ...payload, permission_key: permissionKey(payload) };
     case "PostToolUseFailure":
     case "UserPromptSubmit":
     case "Stop":
@@ -314,6 +440,21 @@ function codexPayload(payload) {
     case "SubagentStart":
     case "SubagentStop":
       return payload;
+    case "PostToolUse":
+      if (hasFailedToolResponse(payload.tool_response)) {
+        const reviewFailure = isReviewPayload(payload);
+        return {
+          ...payload,
+          hook_event_name: "PostToolUseFailure",
+          source_event: "PostToolUse",
+          rollback_activity: !reviewFailure && payload.permission_mode !== "plan",
+          review_failure: reviewFailure,
+          permission_key: permissionKey(payload),
+        };
+      }
+      return hasSuccessfulToolResponse(payload.tool_response) && isReviewPayload(payload) && isDirectForegroundReviewPayload(payload)
+        ? { ...payload, hook_event_name: "TaskCompleted", source_event: "PostToolUse", permission_key: permissionKey(payload) }
+        : { ...payload, permission_key: permissionKey(payload) };
     case "SessionStart":
       return {
         hook_event_name: "Stop",
@@ -330,10 +471,31 @@ function codexPayload(payload) {
         turn_id: payload.turn_id || "",
         tool_name: payload.tool_name || "",
         tool_input: payload.tool_input || {},
+        permission_key: permissionKey(payload),
       };
     default:
       return null;
   }
+}
+
+function themeLegend(theme) {
+  const states = [
+    ["WORKING", "working"],
+    ["PLAN", "plan"],
+    ["REVIEW", "review"],
+    ["CHECK", "permission"],
+    ["HITL", "blocked"],
+    ["ERROR", "error"],
+    ["DONE", "done"],
+    ["IDLE", "idle"],
+  ];
+  return states
+    .filter(([, key]) => theme[key] && typeof theme[key] === "object")
+    .map(([label, key]) => {
+      const state = theme[key];
+      return `${label}\t${state.badge || ""}\t${state.name || ""}`.trimEnd();
+    })
+    .join("\n");
 }
 
 function claudePayload(payload) {
@@ -358,9 +520,12 @@ function claudePayload(payload) {
 
 function calibrationPayload(step) {
   const kind = step.kind || "";
-  let count = "";
+  let count = 0;
   let payload;
   switch (kind) {
+    case "working":
+      payload = { hook_event_name: "PreToolUse", tool_name: "Calibration", session_id: "visualhud-calibration" };
+      break;
     case "stage":
     case "stage-shade":
       count = Number(step.trigger_count || 0);
@@ -380,6 +545,22 @@ function calibrationPayload(step) {
         hook_event_name: "Notification",
         notification_type: "permission_prompt",
         message: "VisualHUD calibration",
+        session_id: "visualhud-calibration",
+      };
+      break;
+    case "permission":
+      payload = {
+        hook_event_name: "Notification",
+        notification_type: "permission_check",
+        message: "VisualHUD calibration",
+        session_id: "visualhud-calibration",
+      };
+      break;
+    case "review":
+      payload = {
+        hook_event_name: "PreToolUse",
+        tool_name: "Bash",
+        tool_input: { command: "codex review --uncommitted" },
         session_id: "visualhud-calibration",
       };
       break;
@@ -493,6 +674,11 @@ try {
     case "theme-display-name": {
       const theme = readJsonFile(process.argv[3]);
       line(theme.name || process.argv[4] || "");
+      break;
+    }
+    case "theme-legend": {
+      const theme = readJsonFile(process.argv[3]);
+      line(themeLegend(theme));
       break;
     }
     case "progress-bar": {

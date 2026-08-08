@@ -18,6 +18,7 @@ FAIL=0
 TOTAL=0
 export VISUALHUD_THEMES_DIR="$ROOT_DIR/themes"
 export VISUALHUD_THEME="pokemon"
+export VISUALHUD_ACTIVITY_MODE="legacy"
 
 json_helper() {
     node "$JSON_HELPER" "$@"
@@ -41,16 +42,22 @@ EFFORT_FILE="$STATE_ROOT/claude-cooking-effort_${SESSION_KEY}"
 BG_CLEAR_FILE="$STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
 COMPACT_FILE="$STATE_ROOT/claude-cooking-compacting_${SESSION_KEY}"
 SUBAGENT_FILE="$STATE_ROOT/claude-cooking-subagent_${SESSION_KEY}"
+SUBAGENT_DIR="${SUBAGENT_FILE}.d"
+PERMISSION_FILE="$STATE_ROOT/claude-cooking-permission_${SESSION_KEY}"
+PERMISSION_DIR="${PERMISSION_FILE}.d"
+PERMISSION_ACTIVE_DIR="${PERMISSION_FILE}.active.d"
 TOKENS_FILE="$STATE_ROOT/claude-cooking-tokens_${SESSION_KEY}"
 
 cleanup() {
     rm -f "$COUNTER_FILE" "$STAGE_FILE" "$ATTENTION_FILE" "$CONTEXT_FILE" "$REVIEW_FILE" 2>/dev/null
-    rm -f "$MODEL_FILE" "$EFFORT_FILE" "$BG_CLEAR_FILE" "$COMPACT_FILE" "$SUBAGENT_FILE" "$TOKENS_FILE" 2>/dev/null
+    rm -f "$MODEL_FILE" "$EFFORT_FILE" "$BG_CLEAR_FILE" "$COMPACT_FILE" "$SUBAGENT_FILE" "$TOKENS_FILE" "$PERMISSION_FILE" 2>/dev/null
+    rm -rf "$SUBAGENT_DIR" "${SUBAGENT_DIR}.lock" "$PERMISSION_DIR" "$PERMISSION_ACTIVE_DIR" "${PERMISSION_DIR}.lock" 2>/dev/null
     unset VISUALHUD_THEME VISUALHUD_SET_BG VISUALHUD_SET_BG_LOG VISUALHUD_SPRITES_DIR
     unset VISUALHUD_TTY VISUALHUD_CONTEXT_USED_PERCENT VISUALHUD_CODEX_SESSION_FILE CODEX_HOME
     unset VISUALHUD_REAPPLY_DELAY
     export VISUALHUD_THEMES_DIR="$ROOT_DIR/themes"
     export VISUALHUD_THEME="pokemon"
+    export VISUALHUD_ACTIVITY_MODE="legacy"
 }
 
 final_cleanup() {
@@ -108,6 +115,14 @@ assert_file_not_exists() {
     fi
 }
 
+subagent_marker_count() {
+    if [ ! -d "$SUBAGENT_DIR" ]; then
+        printf '0'
+        return
+    fi
+    find "$SUBAGENT_DIR" -type f 2>/dev/null | wc -l | tr -d ' '
+}
+
 assert_contains() {
     local label="$1" needle="$2" haystack="$3"
     TOTAL=$((TOTAL + 1))
@@ -134,6 +149,24 @@ assert_not_contains() {
 
 # ============================================================
 echo "=== Test Suite: cooking-status.sh ==="
+echo ""
+
+# --- TEST 2b: Default activity is semantic, stable, and indeterminate ---
+echo "--- Test 2b: Default activity remains stable WORKING regardless of tool count ---"
+cleanup
+unset VISUALHUD_ACTIVITY_MODE
+WORKING_TTY="${TMPDIR:-/tmp}/visualhud-working-$$.log"
+export VISUALHUD_TTY="$WORKING_TTY"
+: > "$WORKING_TTY"
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
+done
+assert_eq "Tool activity remains available as internal telemetry" "20" "$(cat "$COUNTER_FILE")"
+assert_eq "Twenty tool calls keep one WORKING sprite" "pikachu" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_contains "Default activity title says WORKING" "WORKING" "$(cat "$WORKING_TTY" 2>/dev/null)"
+assert_not_contains "Indeterminate WORKING title has no fake progress blocks" "🟥" "$(cat "$WORKING_TTY" 2>/dev/null)"
+rm -f "$WORKING_TTY"
+export VISUALHUD_ACTIVITY_MODE="legacy"
 echo ""
 
 # --- TEST 1: Event dispatch — PreToolUse creates counter file ---
@@ -257,6 +290,26 @@ assert_eq "TaskCompleted after review can finally show Mew" "mew" "$(cat "$STAGE
 rm -f "$REVIEW_TTY"
 echo ""
 
+# --- TEST 3c: Review failures do not corrupt unrelated activity telemetry ---
+echo "--- Test 3c: Review completion/failure events clear the review marker honestly ---"
+cleanup
+printf '7' > "$COUNTER_FILE"
+printf 'review' > "$REVIEW_FILE"
+run_hook '{"hook_event_name":"PostToolUseFailure","tool_name":"Bash","rollback_activity":false,"tool_input":{"command":"codex review --uncommitted"},"session_id":"test"}'
+assert_eq "Failed review leaves unrelated activity count unchanged" "7" "$(cat "$COUNTER_FILE")"
+assert_file_not_exists "Failed review clears stale review marker" "$REVIEW_FILE"
+assert_eq "Failed review renders error sprite" "psyduck" "$(cat "$STAGE_FILE" 2>/dev/null)"
+
+printf 'review' > "$REVIEW_FILE"
+run_hook '{"hook_event_name":"PostToolUseFailure","tool_name":"Read","permission_mode":"plan","rollback_activity":false,"review_failure":false,"session_id":"test"}'
+assert_file_exists "Failed plan tool preserves an unrelated review marker" "$REVIEW_FILE"
+
+printf 'review' > "$REVIEW_FILE"
+run_hook '{"hook_event_name":"TaskCompleted","source_event":"PostToolUse","tool_input":{"command":"codex review --uncommitted"},"session_id":"test"}'
+assert_file_not_exists "Successful Codex review completion clears review marker" "$REVIEW_FILE"
+assert_eq "Successful Codex review completion renders done sprite" "mew" "$(cat "$STAGE_FILE" 2>/dev/null)"
+echo ""
+
 # --- TEST 4: UserPromptSubmit resets counter but keeps review marker ---
 echo "--- Test 4: UserPromptSubmit resets counter; preserves in-flight review marker ---"
 cleanup
@@ -285,13 +338,131 @@ echo ""
 echo "--- Test 5: Notification(permission_prompt) sets BLOCKED attention ---"
 cleanup
 printf '50' > "$COUNTER_FILE"
+HITL_TTY="${TMPDIR:-/tmp}/visualhud-hitl-$$.log"
+export VISUALHUD_TTY="$HITL_TTY"
+: > "$HITL_TTY"
 
 run_hook '{"hook_event_name": "Notification", "notification_type": "permission_prompt", "message": "Claude needs permission", "session_id": "test"}'
 assert_file_exists "Attention file created for BLOCKED" "$ATTENTION_FILE"
 assert_eq "Attention file contains 'blocked'" "blocked" "$(cat "$ATTENTION_FILE" 2>/dev/null)"
 assert_eq "Stage file is snorlax when BLOCKED" "snorlax" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_contains "Permission title explicitly labels HITL" "HITL" "$(cat "$HITL_TTY" 2>/dev/null)"
+assert_contains "iTerm permission emits a native notification" "]9;VisualHUD HITL" "$(cat "$HITL_TTY" 2>/dev/null)"
 # Counter should NOT be affected
 assert_eq "Counter unchanged during BLOCKED" "50" "$(cat "$COUNTER_FILE" 2>/dev/null)"
+rm -f "$HITL_TTY"
+unset VISUALHUD_TTY
+echo ""
+
+# --- TEST 5b: Neutral host permission checks remain distinct from HITL ---
+echo "--- Test 5b: Notification(permission_check) is neutral, not HITL ---"
+cleanup
+PERMISSION_CHECK_TTY="${TMPDIR:-/tmp}/visualhud-permission-check-$$.log"
+export VISUALHUD_TTY="$PERMISSION_CHECK_TTY"
+: > "$PERMISSION_CHECK_TTY"
+run_hook '{"hook_event_name": "Notification", "notification_type": "permission_check", "permission_key": "request-b", "session_id": "test"}'
+assert_eq "Permission check writes neutral attention state" "permission" "$(cat "$ATTENTION_FILE" 2>/dev/null)"
+assert_contains "Permission check title is explicit" "Permission check" "$(cat "$PERMISSION_CHECK_TTY" 2>/dev/null)"
+assert_not_contains "Permission check does not claim HITL" "HITL" "$(cat "$PERMISSION_CHECK_TTY" 2>/dev/null)"
+assert_not_contains "Permission check does not emit approval notification" "]9;VisualHUD HITL" "$(cat "$PERMISSION_CHECK_TTY" 2>/dev/null)"
+export VISUALHUD_ACTIVITY_MODE="semantic"
+run_hook '{"hook_event_name": "PostToolUse", "permission_key": "request-a", "tool_name": "Bash", "tool_response": {"exit_code": 0}, "session_id": "test"}'
+assert_eq "Unrelated tool completion preserves pending permission" "permission" "$(cat "$ATTENTION_FILE" 2>/dev/null)"
+run_hook '{"hook_event_name": "PostToolUse", "permission_key": "request-b", "tool_name": "Bash", "tool_response": {"exit_code": 0}, "session_id": "test"}'
+assert_file_not_exists "Successful tool clears a pending permission check" "$ATTENTION_FILE"
+assert_contains "Successful tool restores semantic working state" "WORKING" "$(cat "$PERMISSION_CHECK_TTY" 2>/dev/null)"
+rm -f "$PERMISSION_CHECK_TTY"
+unset VISUALHUD_TTY
+echo ""
+
+# --- TEST 5c: Overlapping approvals remain visible and clear independently ---
+echo "--- Test 5c: Overlapping permission requests retain HITL priority ---"
+cleanup
+PENDING_TTY="${TMPDIR:-/tmp}/visualhud-pending-hitl-$$.log"
+export VISUALHUD_TTY="$PENDING_TTY"
+: > "$PENDING_TTY"
+run_hook '{"hook_event_name":"Notification","notification_type":"permission_prompt","permission_key":"request-a","session_id":"test"}'
+run_hook '{"hook_event_name":"Notification","notification_type":"permission_prompt","permission_key":"request-b","session_id":"test"}'
+assert_eq "Both overlapping permission requests are retained" "2" "$(find "$PERMISSION_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
+: > "$PENDING_TTY"
+run_hook '{"hook_event_name":"PreToolUse","permission_key":"request-c","tool_name":"Read","session_id":"test"}'
+assert_contains "Unrelated tool start keeps pending HITL visible" "HITL" "$(cat "$PENDING_TTY" 2>/dev/null)"
+assert_eq "Unrelated tool start retains both permission requests" "2" "$(find "$PERMISSION_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
+: > "$PENDING_TTY"
+run_hook '{"hook_event_name":"PreToolUse","permission_key":"request-a","tool_name":"Bash","session_id":"test"}'
+assert_eq "Matching tool start clears only its permission request" "1" "$(find "$PERMISSION_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
+assert_contains "Remaining permission request keeps HITL visible" "HITL" "$(cat "$PENDING_TTY" 2>/dev/null)"
+: > "$PENDING_TTY"
+run_hook '{"hook_event_name":"PostToolUse","permission_key":"request-b","tool_name":"Bash","session_id":"test"}'
+assert_file_not_exists "Last matching completion clears HITL attention" "$ATTENTION_FILE"
+assert_eq "Last matching completion removes the pending set" "0" "$(find "$PERMISSION_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
+assert_contains "Last matching completion restores semantic working state" "WORKING" "$(cat "$PENDING_TTY" 2>/dev/null)"
+
+for overlap_round in $(seq 1 20); do
+    cleanup
+    export VISUALHUD_TTY="$PENDING_TTY"
+    export VISUALHUD_ACTIVITY_MODE="semantic"
+    : > "$PENDING_TTY"
+    run_hook "{\"hook_event_name\":\"Notification\",\"notification_type\":\"permission_prompt\",\"permission_key\":\"round-${overlap_round}-a\",\"session_id\":\"test\"}"
+    run_hook "{\"hook_event_name\":\"Notification\",\"notification_type\":\"permission_prompt\",\"permission_key\":\"round-${overlap_round}-b\",\"session_id\":\"test\"}"
+    run_hook "{\"hook_event_name\":\"PostToolUse\",\"permission_key\":\"round-${overlap_round}-a\",\"session_id\":\"test\"}" &
+    first_completion_pid=$!
+    run_hook "{\"hook_event_name\":\"PostToolUse\",\"permission_key\":\"round-${overlap_round}-b\",\"session_id\":\"test\"}" &
+    second_completion_pid=$!
+    wait "$first_completion_pid" "$second_completion_pid"
+done
+assert_eq "Concurrent matching completions remove every pending request" "0" "$(find "$PERMISSION_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
+assert_file_not_exists "Concurrent matching completions clear HITL attention" "$ATTENTION_FILE"
+assert_eq "Concurrent matching completions finish in working state" "pikachu" "$(cat "$STAGE_FILE" 2>/dev/null)"
+
+cleanup
+export VISUALHUD_TTY="$PENDING_TTY"
+export VISUALHUD_ACTIVITY_MODE="semantic"
+: > "$PENDING_TTY"
+run_hook '{"hook_event_name":"Notification","notification_type":"permission_prompt","permission_key":"duplicate-request","session_id":"test"}'
+run_hook '{"hook_event_name":"Notification","notification_type":"permission_prompt","permission_key":"duplicate-request","session_id":"test"}'
+assert_eq "Identical permission requests retain both occurrences" "2" "$(awk -F '\t' '{ total += $2 } END { print total + 0 }' "$PERMISSION_DIR"/* 2>/dev/null)"
+: > "$PENDING_TTY"
+run_hook '{"hook_event_name":"PreToolUse","permission_key":"duplicate-request","session_id":"test"}'
+assert_eq "First duplicate lifecycle event consumes one occurrence" "1" "$(awk -F '\t' '{ total += $2 } END { print total + 0 }' "$PERMISSION_DIR"/* 2>/dev/null)"
+assert_contains "One duplicate occurrence keeps HITL visible" "HITL" "$(cat "$PENDING_TTY" 2>/dev/null)"
+: > "$PENDING_TTY"
+run_hook '{"hook_event_name":"PostToolUse","permission_key":"duplicate-request","session_id":"test"}'
+assert_eq "Completion for the first duplicate does not consume the second request" "1" "$(awk -F '\t' '{ total += $2 } END { print total + 0 }' "$PERMISSION_DIR"/* 2>/dev/null)"
+assert_contains "First duplicate completion keeps the second HITL visible" "HITL" "$(cat "$PENDING_TTY" 2>/dev/null)"
+: > "$PENDING_TTY"
+run_hook '{"hook_event_name":"PreToolUse","permission_key":"duplicate-request","session_id":"test"}'
+run_hook '{"hook_event_name":"PostToolUse","permission_key":"duplicate-request","session_id":"test"}'
+assert_eq "Second duplicate lifecycle clears the final occurrence" "0" "$(find "$PERMISSION_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
+assert_file_not_exists "Final duplicate completion clears HITL attention" "$ATTENTION_FILE"
+assert_contains "Final duplicate completion restores semantic working state" "WORKING" "$(cat "$PENDING_TTY" 2>/dev/null)"
+
+cleanup
+export VISUALHUD_TTY="$PENDING_TTY"
+export VISUALHUD_ACTIVITY_MODE="semantic"
+printf 'review' > "$REVIEW_FILE"
+run_hook '{"hook_event_name":"Notification","notification_type":"permission_prompt","permission_key":"review-parallel-request","session_id":"test"}'
+: > "$PENDING_TTY"
+run_hook '{"hook_event_name":"TaskCompleted","tool_input":{"command":"codex review --uncommitted"},"session_id":"test"}'
+assert_eq "Review completion preserves an unrelated pending approval" "1" "$(find "$PERMISSION_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
+assert_contains "Pending approval outranks completed review" "HITL" "$(cat "$PENDING_TTY" 2>/dev/null)"
+assert_file_not_exists "Completed review clears only its review marker" "$REVIEW_FILE"
+
+cleanup
+export VISUALHUD_TTY="$PENDING_TTY"
+export VISUALHUD_ACTIVITY_MODE="semantic"
+printf '10' > "$COUNTER_FILE"
+run_hook '{"hook_event_name":"Notification","notification_type":"permission_prompt","permission_key":"bookkeeping-a","session_id":"test"}'
+run_hook '{"hook_event_name":"Notification","notification_type":"permission_prompt","permission_key":"bookkeeping-b","session_id":"test"}'
+run_hook '{"hook_event_name":"PreToolUse","permission_key":"unrelated-tool","tool_name":"Read","session_id":"test"}'
+assert_eq "Pending HITL still records unrelated tool activity" "11" "$(cat "$COUNTER_FILE")"
+run_hook '{"hook_event_name":"PostToolUseFailure","permission_key":"unrelated-tool","rollback_activity":true,"tool_name":"Read","session_id":"test"}'
+assert_eq "Failed unrelated tool rolls back only its own pending-HITL activity" "10" "$(cat "$COUNTER_FILE")"
+run_hook '{"hook_event_name":"PreToolUse","permission_key":"review-tool","tool_name":"Bash","tool_input":{"command":"codex review --uncommitted"},"session_id":"test"}'
+assert_file_exists "Pending HITL still records an in-flight review marker" "$REVIEW_FILE"
+assert_contains "Pending HITL remains visible while review bookkeeping is recorded" "HITL" "$(cat "$PENDING_TTY" 2>/dev/null)"
+rm -f "$PENDING_TTY"
+unset VISUALHUD_TTY
 echo ""
 
 # --- TEST 6: Non-permission notifications are ignored ---
@@ -555,9 +726,10 @@ assert_eq "TMNT Stop uses pizza sprite" "tmnt-pizza" "$(cat "$STAGE_FILE" 2>/dev
 assert_contains "TMNT Stop emits Turtle Power success tab color, not April yellow" \
     "SetColors=tab=14b955" \
     "$(cat "$TMNT_LIFECYCLE_TTY" 2>/dev/null)"
-assert_contains "TMNT Stop title uses visual progress blocks instead of initials" \
-    "🟥🟥🟧🟨🟨🟩🟩🟩🟦🟦🟦 PIZZA Pizza Party" \
-    "$(cat "$TMNT_LIFECYCLE_TTY" 2>/dev/null)"
+assert_contains "TMNT Stop title names the semantic done state" \
+    "PIZZA Pizza Party" "$(cat "$TMNT_LIFECYCLE_TTY" 2>/dev/null)"
+assert_not_contains "TMNT semantic done state has no fake progress blocks" \
+    "🟥" "$(cat "$TMNT_LIFECYCLE_TTY" 2>/dev/null)"
 
 run_hook '{"hook_event_name": "Notification", "notification_type": "idle_prompt", "session_id": "test"}'
 assert_eq "TMNT idle uses Splinter sprite" "tmnt-splinter" "$(cat "$STAGE_FILE" 2>/dev/null)"
@@ -758,11 +930,13 @@ cat > "$SUBAGENT_THEME_ROOT/agentic/theme.json" <<'JSON'
   "stages": [
     { "max": 999999, "sprite": "", "badge": ">", "name": "Working", "color_family": "cool", "color_family_singleton": true, "color": [60, 120, 200] }
   ],
+  "working": { "sprite": "", "badge": "WORK", "name": "WORKING", "color": [60, 120, 200] },
   "blocked": { "sprite": "", "badge": "!",   "name": "BLOCKED",      "color": [250, 80, 60] },
   "review":  { "sprite": "", "badge": "REV", "name": "Reviewing",     "stage": 1, "color": [200, 170, 60] },
   "done":    { "sprite": "", "badge": "OK",  "name": "Done",          "stage": 1, "color": [60, 220, 120] },
   "idle":    { "sprite": "", "badge": ".",   "name": "Idle",          "stage": 1, "color": [120, 140, 180] },
   "error":   { "sprite": "", "badge": "X",   "name": "Error",         "color": [255, 40, 40] },
+  "plan":    { "sprite": "", "badge": "PLAN", "name": "Planning",      "color": [180, 110, 255] },
   "subagent":{ "sprite": "", "badge": "AGT", "name": "Subagent",      "stage": 1, "color": [110, 180, 255] },
   "context_alerts": {
     "warning":  { "min_percent": 70, "badge": "WRN", "name": "Context High",     "color": [255, 190, 40] },
@@ -771,7 +945,7 @@ cat > "$SUBAGENT_THEME_ROOT/agentic/theme.json" <<'JSON'
 }
 JSON
 
-rm -f "$SUBAGENT_FILE" 2>/dev/null
+rm -rf "$SUBAGENT_DIR" "${SUBAGENT_DIR}.lock" 2>/dev/null
 export VISUALHUD_TTY="$SUBAGENT_TTY"
 export VISUALHUD_THEME="agentic"
 export VISUALHUD_THEMES_DIR="$SUBAGENT_THEME_ROOT"
@@ -779,18 +953,58 @@ export VISUALHUD_THEMES_DIR="$SUBAGENT_THEME_ROOT"
 
 # SubagentStart should write marker (with agent_type) and render .subagent state
 run_hook '{"hook_event_name": "SubagentStart", "session_id": "test", "agent_type": "Plan", "agent_id": "agt_test"}'
-assert_file_exists "SubagentStart creates subagent marker" "$SUBAGENT_FILE"
-assert_eq "Subagent marker captures agent_type" "Plan" "$(cat "$SUBAGENT_FILE" 2>/dev/null)"
+assert_eq "SubagentStart creates subagent marker" "1" "$(subagent_marker_count)"
+assert_contains "Subagent marker captures agent_type" "Plan" "$(cat "$SUBAGENT_DIR"/* 2>/dev/null)"
 assert_contains "SubagentStart renders theme.subagent name" "Subagent" "$(cat "$SUBAGENT_TTY" 2>/dev/null)"
 
 # SubagentStop should clear the marker
 : > "$SUBAGENT_TTY"
 run_hook '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_type": "Plan", "agent_id": "agt_test", "stop_reason": "completed"}'
-assert_file_not_exists "SubagentStop clears subagent marker" "$SUBAGENT_FILE"
+assert_eq "SubagentStop clears subagent marker" "0" "$(subagent_marker_count)"
+assert_contains "SubagentStop restores semantic working state" "WORKING" "$(cat "$SUBAGENT_TTY" 2>/dev/null)"
+
+# Active lifecycle state must take precedence when a subagent ends.
+: > "$SUBAGENT_TTY"
+run_hook '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_type": "Plan", "permission_mode": "plan"}'
+assert_contains "SubagentStop restores plan mode" "Planning" "$(cat "$SUBAGENT_TTY" 2>/dev/null)"
+
+: > "$SUBAGENT_TTY"
+run_hook '{"hook_event_name": "PreToolUse", "session_id": "test", "tool_name": "Bash", "tool_input": {"command": "codex review --uncommitted"}}'
+run_hook '{"hook_event_name": "Notification", "session_id": "test", "notification_type": "permission_prompt"}'
+: > "$SUBAGENT_TTY"
+run_hook '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_type": "Plan"}'
+assert_contains "SubagentStop keeps pending HITL ahead of review" "BLOCKED" "$(cat "$SUBAGENT_TTY" 2>/dev/null)"
+
+: > "$SUBAGENT_TTY"
+run_hook '{"hook_event_name": "StopFailure", "session_id": "test"}'
+: > "$SUBAGENT_TTY"
+run_hook '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_type": "Plan"}'
+assert_contains "SubagentStop restores error attention" "Error" "$(cat "$SUBAGENT_TTY" 2>/dev/null)"
+
+rm -f "$ATTENTION_FILE" "$REVIEW_FILE" 2>/dev/null
+: > "$SUBAGENT_TTY"
+run_hook '{"hook_event_name": "SubagentStart", "session_id": "test", "agent_id": "agt_a", "agent_type": "Review"}'
+run_hook '{"hook_event_name": "SubagentStart", "session_id": "test", "agent_id": "agt_b", "agent_type": "Worker"}'
+: > "$SUBAGENT_TTY"
+run_hook '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_id": "agt_a", "agent_type": "Review"}'
+assert_eq "Stopping one overlapping subagent keeps one marker" "1" "$(subagent_marker_count)"
+assert_contains "Stopping one overlapping subagent keeps subagent state" "Subagent" "$(cat "$SUBAGENT_TTY" 2>/dev/null)"
+run_hook '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_id": "agt_b", "agent_type": "Worker"}'
+
+run_hook '{"hook_event_name": "SubagentStart", "session_id": "test", "agent_id": "agt_c", "agent_type": "Review"}'
+run_hook '{"hook_event_name": "SubagentStart", "session_id": "test", "agent_id": "agt_d", "agent_type": "Worker"}'
+: > "$SUBAGENT_TTY"
+run_hook '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_id": "agt_c", "agent_type": "Review"}' &
+stop_c_pid=$!
+run_hook '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_id": "agt_d", "agent_type": "Worker"}' &
+stop_d_pid=$!
+wait "$stop_c_pid" "$stop_d_pid"
+assert_eq "Concurrent subagent stops clear every marker" "0" "$(subagent_marker_count)"
+assert_contains "Concurrent subagent stops finish in working state" "WORKING" "$(tail -c 1200 "$SUBAGENT_TTY" 2>/dev/null)"
 
 # Theme without .subagent: SubagentStart still tracks marker but doesn't crash on missing state
 cleanup
-rm -f "$SUBAGENT_FILE" 2>/dev/null
+rm -rf "$SUBAGENT_DIR" "${SUBAGENT_DIR}.lock" 2>/dev/null
 rm -rf "$SUBAGENT_THEME_ROOT/agentic-no-sub"
 cp -R "$SUBAGENT_THEME_ROOT/agentic" "$SUBAGENT_THEME_ROOT/agentic-no-sub"
 tmpfile="$SUBAGENT_THEME_ROOT/agentic-no-sub/theme.json.tmp"
@@ -800,8 +1014,9 @@ export VISUALHUD_THEME="agentic-no-sub"
 export VISUALHUD_THEMES_DIR="$SUBAGENT_THEME_ROOT"
 : > "$SUBAGENT_TTY"
 run_hook '{"hook_event_name": "SubagentStart", "session_id": "test", "agent_type": "Explore", "agent_id": "agt_x"}'
-assert_file_not_exists "Theme without .subagent does NOT write marker" "$SUBAGENT_FILE"
+assert_eq "Theme without .subagent does NOT write marker" "0" "$(subagent_marker_count)"
 
+rm -rf "$SUBAGENT_DIR" "${SUBAGENT_DIR}.lock" 2>/dev/null
 rm -f "$SUBAGENT_FILE" "$SUBAGENT_TTY"
 rm -rf "$SUBAGENT_THEME_ROOT"
 unset VISUALHUD_TTY VISUALHUD_THEME VISUALHUD_THEMES_DIR

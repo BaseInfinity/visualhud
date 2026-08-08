@@ -161,14 +161,15 @@ assert_eq "PreToolUse hook registered" "true" "$(hook_registered "$target/.codex
 assert_eq "PermissionRequest hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "PermissionRequest" "visualhud-codex.sh")"
 assert_eq "UserPromptSubmit hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "UserPromptSubmit" "visualhud-codex.sh")"
 assert_eq "Stop hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "Stop" "visualhud-codex.sh")"
-assert_eq "TaskCompleted hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "TaskCompleted" "visualhud-codex.sh")"
+assert_eq "PostToolUse hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "PostToolUse" "visualhud-codex.sh")"
 assert_eq "SessionStart hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "SessionStart" "visualhud-codex.sh")"
-assert_eq "CwdChanged hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "CwdChanged" "visualhud-codex.sh")"
+assert_eq "Unsupported TaskCompleted hook is absent" "false" "$(hook_registered "$target/.codex/hooks.json" "TaskCompleted" "visualhud-codex.sh")"
+assert_eq "Unsupported CwdChanged hook is absent" "false" "$(hook_registered "$target/.codex/hooks.json" "CwdChanged" "visualhud-codex.sh")"
 assert_eq "PreCompact hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "PreCompact" "visualhud-codex.sh")"
 assert_eq "PostCompact hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "PostCompact" "visualhud-codex.sh")"
 assert_eq "SubagentStart hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "SubagentStart" "visualhud-codex.sh")"
 assert_eq "SubagentStop hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "SubagentStop" "visualhud-codex.sh")"
-assert_eq "PostToolUseFailure hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "PostToolUseFailure" "visualhud-codex.sh")"
+assert_eq "Unsupported PostToolUseFailure hook is absent" "false" "$(hook_registered "$target/.codex/hooks.json" "PostToolUseFailure" "visualhud-codex.sh")"
 echo ""
 
 echo "--- Test 3: Codex install preserves existing hooks and is idempotent ---"
@@ -187,6 +188,20 @@ cat > "$target/.codex/hooks.json" <<'JSON'
           }
         ]
       }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/visualhud-codex.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash .codex/hooks/existing-task-hook.sh"
+          }
+        ]
+      }
     ]
   }
 }
@@ -196,7 +211,9 @@ printf -- '---\nname: existing-skill\ndescription: keep me\n---\n' > "$target/.a
 "$CLI" install codex --target "$target" --platform macos --theme pokemon >/dev/null
 assert_eq "Existing hook is preserved" "true" "$(hook_command_registered "$target/.codex/hooks.json" "PreToolUse" "bash .codex/hooks/existing.sh")"
 assert_eq "VisualHUD hook is not duplicated" "1" "$(hook_count "$target/.codex/hooks.json" "PreToolUse" "visualhud-codex.sh")"
-assert_eq "TaskCompleted hook is not duplicated" "1" "$(hook_count "$target/.codex/hooks.json" "TaskCompleted" "visualhud-codex.sh")"
+assert_eq "PostToolUse hook is not duplicated" "1" "$(hook_count "$target/.codex/hooks.json" "PostToolUse" "visualhud-codex.sh")"
+assert_eq "Legacy unsupported VisualHUD hook is removed" "0" "$(hook_count "$target/.codex/hooks.json" "TaskCompleted" "visualhud-codex.sh")"
+assert_eq "Unrelated unsupported-event hook is preserved" "true" "$(hook_command_registered "$target/.codex/hooks.json" "TaskCompleted" "bash .codex/hooks/existing-task-hook.sh")"
 assert_eq "Reinstall can switch active theme" "pokemon" "$(cat "$target/.visualhud/theme")"
 assert_file_exists "Existing repo skill is preserved" "$target/.agents/skills/existing-skill/SKILL.md"
 "$target/.visualhud/visualhud" install codex --target "$target" --platform macos --theme tmnt >/dev/null

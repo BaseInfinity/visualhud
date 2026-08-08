@@ -59,8 +59,20 @@ TTY_LOG="$TMP_ROOT/tty.log"
 )
 
 tty_output="$(cat "$TTY_LOG")"
-assert_contains "WezTerm renderer sets title" "Leonardo" "$tty_output"
+assert_contains "WezTerm renderer sets semantic title" "WORKING" "$tty_output"
 assert_contains "WezTerm renderer emits state user var" "SetUserVar=visualhudState=" "$tty_output"
 assert_not_contains "WezTerm renderer avoids Windows Terminal progress OSC" "]9;4;" "$tty_output"
+
+: > "$TTY_LOG"
+(
+    cd "$target"
+    printf '%s\n' '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"codex review --uncommitted"},"session_id":"wez-review"}' \
+        | VISUALHUD_STATE_DIR="$TMP_ROOT/state" VISUALHUD_TTY="$TTY_LOG" bash .codex/hooks/visualhud-codex.sh
+)
+review_state="$(node -e 'const fs=require("fs"); const text=fs.readFileSync(0,"utf8"); const values=[...text.matchAll(/SetUserVar=visualhudState=([A-Za-z0-9+/=]+)/g)]; process.stdout.write(Buffer.from(values.at(-1)[1], "base64").toString("utf8"));' < "$TTY_LOG")"
+assert_contains "WezTerm review state is semantic" '"state_kind":"review"' "$review_state"
+assert_contains "WezTerm review state has no legacy stage" '"stage":""' "$review_state"
+assert_contains "WezTerm review state has no fabricated percentage" '"progress_percent":0' "$review_state"
+assert_not_contains "WezTerm Lua does not format review as determinate progress" "state.state_kind == 'review'" "$(cat "$target/.visualhud/wezterm/visualhud.lua")"
 
 echo "=== Results: PASS ==="

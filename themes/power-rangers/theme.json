@@ -102,10 +102,22 @@
       "shades": [[120, 130, 160], [160, 175, 210], [205, 215, 245]]
     }
   ],
+  "working": {
+    "sprite": "",
+    "badge": "WORK",
+    "name": "WORKING",
+    "color": [60, 120, 200]
+  },
+  "permission": {
+    "sprite": "",
+    "badge": "CHECK",
+    "name": "Permission check",
+    "color": [120, 140, 180]
+  },
   "blocked": {
     "sprite": "",
-    "badge": "RITA",
-    "name": "Rita Repulsa",
+    "badge": "HITL",
+    "name": "Approval required",
     "color": [100, 30, 120]
   },
   "review": {

@@ -16,6 +16,9 @@ THEMES_DIR="${VISUALHUD_THEMES_DIR:-$ROOT_DIR/themes}"
 ACTIVE_THEME_FILE="${VISUALHUD_THEME_FILE:-$ROOT_DIR/theme}"
 DEFAULT_THEME="${VISUALHUD_DEFAULT_THEME:-pokemon}"
 JSON_HELPER="${VISUALHUD_JSON_HELPER:-$ROOT_DIR/scripts/visualhud-json.js}"
+if [ ! -f "$JSON_HELPER" ] && [ -f "$(cd -P "$(dirname "$SCRIPT_SOURCE")" && pwd)/scripts/visualhud-json.js" ]; then
+    JSON_HELPER="$(cd -P "$(dirname "$SCRIPT_SOURCE")" && pwd)/scripts/visualhud-json.js"
+fi
 
 json_helper() {
     node "$JSON_HELPER" "$@"
@@ -36,6 +39,7 @@ Usage:
   visualhud doctor
   visualhud theme list
   visualhud theme current
+  visualhud theme legend [name]
   visualhud theme set <name>
   visualhud theme reset
   visualhud theme calibrate [name] [--json|--live] [--delay seconds] [--pause] [--limit n]
@@ -100,6 +104,17 @@ set_theme() {
 reset_theme() {
     rm -f "$ACTIVE_THEME_FILE"
     printf 'Active theme reset to default: %s\n' "$DEFAULT_THEME"
+}
+
+theme_legend() {
+    local theme="${1:-$(active_theme)}"
+    if ! theme_exists "$theme"; then
+        printf 'Unknown theme: %s\n' "$theme" >&2
+        printf 'Run visualhud theme list to see available themes.\n' >&2
+        return 1
+    fi
+    printf '%s\n' "$(theme_display_name "$theme")"
+    json_helper theme-legend "$THEMES_DIR/$theme/theme.json"
 }
 
 detect_platform() {
@@ -632,9 +647,43 @@ calibration_counter_file() {
     printf '%s/claude-cooking-counter_%s' "${VISUALHUD_STATE_DIR:-${TMPDIR:-/tmp}}" "$session_key"
 }
 
+clear_calibration_transients() {
+    local counter_file state_prefix session_key permission_file subagent_file
+
+    counter_file=$(calibration_counter_file)
+    state_prefix=${counter_file%counter_*}
+    session_key=${counter_file##*counter_}
+    permission_file="${state_prefix}permission_${session_key}"
+    subagent_file="${state_prefix}subagent_${session_key}"
+    rm -f \
+        "$counter_file" \
+        "${state_prefix}attention_${session_key}" \
+        "${state_prefix}review_${session_key}" \
+        "${state_prefix}compacting_${session_key}" \
+        "${state_prefix}context_${session_key}" \
+        "${state_prefix}stop-history_${session_key}" \
+        "${state_prefix}loop_${session_key}" \
+        "$permission_file" \
+        "$subagent_file" \
+        2>/dev/null
+    rm -rf \
+        "${permission_file}.d" \
+        "${permission_file}.active.d" \
+        "${permission_file}.d.lock" \
+        "${subagent_file}.d" \
+        "${subagent_file}.d.lock" \
+        2>/dev/null
+}
+
+calibration_cleanup_on_signal() {
+    clear_calibration_transients
+    trap - EXIT INT TERM HUP
+    exit 130
+}
+
 render_calibration_step() {
     local theme="$1" step_json="$2"
-    local kind count counter_file payload fields
+    local kind count counter_file payload fields activity_mode="legacy"
 
     if [ -z "${ITERM_SESSION_ID:-}" ]; then
         printf 'Live calibration requires ITERM_SESSION_ID from a real terminal pane.\n' >&2
@@ -648,11 +697,14 @@ render_calibration_step() {
     fi
     IFS=$'\t' read -r kind count payload <<< "$fields"
     counter_file=$(calibration_counter_file)
+    clear_calibration_transients
     if [ "$kind" = "stage" ] || [ "$kind" = "stage-shade" ] || [ "$kind" = "context" ]; then
         printf '%s' "$((count - 1))" > "$counter_file"
+    elif [ "$kind" = "working" ]; then
+        activity_mode="semantic"
     fi
 
-    printf '%s\n' "$payload" | VISUALHUD_THEME="$theme" VISUALHUD_THEMES_DIR="$THEMES_DIR" bash "$ROOT_DIR/engine.sh" >/dev/null
+    printf '%s\n' "$payload" | VISUALHUD_ACTIVITY_MODE="$activity_mode" VISUALHUD_THEME="$theme" VISUALHUD_THEMES_DIR="$THEMES_DIR" bash "$ROOT_DIR/engine.sh" >/dev/null
 }
 
 calibration_label() {
@@ -722,6 +774,8 @@ calibrate_theme() {
         return
     fi
 
+    trap clear_calibration_transients EXIT
+    trap calibration_cleanup_on_signal INT TERM HUP
     while IFS= read -r step_json; do
         label=$(calibration_label "$step_json")
         printf '%s\n' "$label"
@@ -739,6 +793,8 @@ calibrate_theme() {
             --format json-lines \
             --limit "$limit"
     )
+    clear_calibration_transients
+    trap - EXIT INT TERM HUP
 }
 
 if [ "$#" -lt 1 ]; then
@@ -796,6 +852,9 @@ case "${1:-}" in
                 ;;
             current)
                 active_theme
+                ;;
+            legend)
+                theme_legend "${3:-}"
                 ;;
             set)
                 if [ -z "${3:-}" ]; then

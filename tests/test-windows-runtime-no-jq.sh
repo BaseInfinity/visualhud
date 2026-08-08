@@ -56,7 +56,7 @@ TTY_LOG="$TMP_ROOT/tty.log"
 )
 
 tty_output="$(cat "$TTY_LOG")"
-assert_contains "Windows renderer sets title" "Leonardo" "$tty_output"
-assert_contains "Windows renderer emits progress sequence" "]9;4;1;9" "$tty_output"
+assert_contains "Windows renderer sets semantic title" "WORKING" "$tty_output"
+assert_contains "Windows renderer emits indeterminate WORKING progress" "]9;4;3;0" "$tty_output"
 
 echo "=== Results: PASS ==="

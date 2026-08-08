@@ -193,7 +193,7 @@ echo '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test
     bash "$GLOBAL_ROOT3/.claude/hooks/visualhud-claude.sh" > /dev/null 2>&1 || true
 
 assert_file_exists "Global wrapper runs engine.sh: state file written" "$RUN_STAGE_FILE"
-assert_eq "Global wrapper renders pokemon stage 1 sprite" "charmander" "$(cat "$RUN_STAGE_FILE" 2>/dev/null)"
+assert_eq "Global wrapper renders stable Pokemon WORKING sprite" "pikachu" "$(cat "$RUN_STAGE_FILE" 2>/dev/null)"
 echo ""
 
 # --- TEST 6: Global wrapper does not yield to itself when CLAUDE_PROJECT_DIR is the global root ---

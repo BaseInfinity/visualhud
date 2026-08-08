@@ -14,7 +14,7 @@
 | Full suite / publish gate | `npm test` |
 | Specific test | `bash tests/<test_name>.sh` |
 | Codex adapter test | `bash tests/test-codex-visualhud.sh` |
-| Codex Bash guard test | `bash tests/test-codex-bash-guard.sh` |
+| Codex git guard test | `bash tests/test-codex-git-guard.sh` |
 | Target install test | `bash tests/test-visualhud-install.sh` |
 | Skill packaging test | `bash tests/test-visualhud-skills.sh` |
 | npm/npx package install test | `bash tests/test-npm-package.sh` |
@@ -27,6 +27,8 @@
 - Shell scripts tested via bash integration tests (custom assertions)
 - Python scripts tested via pytest (when added)
 - iTerm2 API calls are mocked (can't run outside iTerm2)
+- Semantic transition tests prove stable `WORKING`, explicit `HITL`, review
+  completion/failure cleanup, and that tool count is not presented as progress.
 
 ## Testing Diamond
 

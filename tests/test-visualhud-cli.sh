@@ -130,6 +130,14 @@ set_output=$("$CLI" theme set tmnt 2>&1 || true)
 assert_eq "Theme set writes confirmation" "Active theme: tmnt" "$set_output"
 assert_eq "Theme file stores selected theme" "tmnt" "$(cat "$VISUALHUD_THEME_FILE" 2>/dev/null)"
 assert_eq "Theme current reads selected theme" "tmnt" "$("$CLI" theme current 2>/dev/null || true)"
+legend_output=$("$CLI" theme legend pokemon 2>&1 || true)
+assert_contains "Theme legend labels indeterminate work" "WORKING" "$legend_output"
+assert_contains "Theme legend labels neutral permission checks" "CHECK" "$legend_output"
+assert_contains "Theme legend labels human approval explicitly" "HITL" "$legend_output"
+assert_contains "Theme legend includes review" "REVIEW" "$legend_output"
+assert_contains "Theme legend includes error" "ERROR" "$legend_output"
+assert_contains "Theme legend includes done" "DONE" "$legend_output"
+assert_contains "Theme legend includes idle" "IDLE" "$legend_output"
 echo ""
 
 echo "--- Test 3: Invalid theme names are rejected without changing active theme ---"
@@ -154,7 +162,7 @@ assert_eq "Adapter default theme can drive engine without forcing VISUALHUD_THEM
 cleanup_stage
 printf 'pokemon\n' > "$VISUALHUD_THEME_FILE"
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
-assert_eq "Active theme file overrides adapter default on next hook" "charmander" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Active theme file overrides adapter default on next hook" "pikachu" "$(cat "$STAGE_FILE" 2>/dev/null)"
 
 cleanup_stage
 printf 'tmnt\n' > "$VISUALHUD_THEME_FILE"
@@ -164,7 +172,7 @@ assert_eq "Changing active theme file switches back on next hook" "tmnt-leonardo
 cleanup_stage
 export VISUALHUD_THEME="pokemon"
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
-assert_eq "Explicit VISUALHUD_THEME env still has highest priority" "charmander" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Explicit VISUALHUD_THEME env still has highest priority" "pikachu" "$(cat "$STAGE_FILE" 2>/dev/null)"
 echo ""
 
 cleanup

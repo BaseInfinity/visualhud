@@ -39,7 +39,7 @@ bash tests/test-theme-calibration.sh
 bash tests/test-codex-visualhud.sh
 bash tests/test-cooking-status.sh
 bash tests/test-claude-visualhud.sh
-bash tests/test-codex-bash-guard.sh
+bash tests/test-codex-git-guard.sh
 
 shellcheck_normalized visualhud ./*.sh scripts/*.sh tests/*.sh .codex/hooks/*.sh .claude/hooks/*.sh engine.sh
 jq empty .codex/hooks.json .claude/settings.json themes/pokemon/theme.json themes/tmnt/theme.json themes/tmnt/sprites/manifest.json package.json

@@ -106,6 +106,7 @@ function validateEngineLifecycle() {
     VISUALHUD_STATE_DIR: stateDir,
     VISUALHUD_TTY: ttyLog,
     VISUALHUD_RENDERER: "windows",
+    VISUALHUD_ACTIVITY_MODE: "legacy",
     VISUALHUD_REAPPLY_DELAY: "0",
   };
 

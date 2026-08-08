@@ -14,7 +14,9 @@
     { "max": 400, "sprite": "tmnt-foot-clan", "badge": "F", "name": "Foot Clan", "color_family": "steel", "color": [95, 85, 120], "shades": [[95, 85, 120], [120, 110, 150], [70, 65, 95]], "shade_sprites": ["tmnt-foot-clan", "tmnt-foot-clan-steel-2", "tmnt-foot-clan-steel-3"] },
     { "max": 999999, "sprite": "tmnt-turtle-power", "badge": "T", "name": "Turtle Power", "color_family": "green", "color": [20, 185, 85], "shades": [[20, 185, 85], [45, 220, 110], [10, 145, 65]], "shade_sprites": ["tmnt-turtle-power", "tmnt-turtle-power-green-2", "tmnt-turtle-power-green-3"] }
   ],
-  "blocked": { "sprite": "tmnt-shredder", "badge": "SHREDDER", "name": "Shredder", "color": [80, 75, 95] },
+  "working": { "sprite": "tmnt-leonardo", "badge": "WORK", "name": "WORKING", "color": [25, 105, 255] },
+  "permission": { "sprite": "tmnt-leonardo", "badge": "CHECK", "name": "Permission check", "color": [120, 140, 180] },
+  "blocked": { "sprite": "tmnt-shredder", "badge": "HITL", "name": "Approval required", "color": [80, 75, 95] },
   "review": { "sprite": "tmnt-splinter", "badge": "REV", "name": "Splinter Review", "stage": 10, "color": [130, 95, 65] },
   "done": { "sprite": "tmnt-pizza", "badge": "PIZZA", "name": "Pizza Party", "stage": 11, "color": [20, 185, 85] },
   "idle": { "sprite": "tmnt-splinter", "badge": "SPLINTER", "name": "Splinter", "stage": 11, "color": [130, 95, 65] },

@@ -54,7 +54,15 @@ Do not commit until you can answer:
 - The proof is recent
 - The diff matches the proof
 
-Codex commit/push hooks enforce this with an ignored staged-diff proof marker at
-`.codex-sdlc/proof/full-suite.sha256`. Re-run the full required checks after
-staging changes, then refresh the marker from the current staged diff before
-committing.
+Codex commit/push hooks enforce this with an ignored repo-local proof record at
+`.codex-sdlc/proof.json`. After staging the intended changes and completing
+self-review, run:
+
+```bash
+node .codex/hooks/git-guard.cjs prove --reviewed
+```
+
+The proof command runs the checks configured in `.codex-sdlc/manifest.json` and
+binds the result to the current Git index and workspace fingerprint. It refuses
+to stamp staged tracked content that differs from the tested worktree, and any
+subsequent index or workspace change makes the proof stale.

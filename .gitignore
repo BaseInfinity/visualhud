@@ -1,4 +1,6 @@
 .claude/plans/
 .claude/settings.local.json
 .codex-sdlc/proof/
+.codex-sdlc/proof.json
+.visualhud/
 theme

@@ -30,7 +30,7 @@ local function visualhud_status(state)
   if non_empty(state.context_title) then
     return ' ' .. state.context_title .. ' '
   end
-  if state.state_kind == 'progress' or state.state_kind == 'review' then
+  if state.state_kind == 'progress' then
     return string.format(' %s %d%% ', label, progress)
   end
   return ' ' .. label .. ' '

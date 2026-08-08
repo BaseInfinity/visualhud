@@ -57,10 +57,22 @@
       "color": [255, 60, 160]
     }
   ],
+  "working": {
+    "sprite": "",
+    "badge": "WORK",
+    "name": "WORKING",
+    "color": [30, 100, 255]
+  },
+  "permission": {
+    "sprite": "",
+    "badge": "CHECK",
+    "name": "Permission check",
+    "color": [120, 140, 180]
+  },
   "blocked": {
     "sprite": "",
-    "badge": "BRR",
-    "name": "Brain Freeze",
+    "badge": "HITL",
+    "name": "Approval required",
     "color": [140, 200, 240]
   },
   "review": {

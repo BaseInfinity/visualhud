@@ -1,23 +1,45 @@
 {
-  "selected_profile": "maximum",
+  "schema_version": 2,
+  "selected_profile": "balanced",
   "profiles": {
+    "balanced": {
+      "main_model": "gpt-5.6-sol",
+      "main_reasoning": "medium",
+      "review_model": "gpt-5.6-sol",
+      "review_reasoning": "high",
+      "review_effort_source": "explicit command override",
+      "review_command": "codex -c 'model_reasoning_effort=\"high\"' review",
+      "tradeoff": "Selected balanced profile for routine work with a quality-first Sol high review gate."
+    },
     "mixed": {
-      "main_model": "gpt-5.4-mini",
-      "main_reasoning": "xhigh",
-      "review_model": "gpt-5.5",
-      "review_reasoning": "xhigh",
-      "tradeoff": "Smaller/faster main model for routine work while keeping xhigh main reasoning and xhigh review."
+      "main_model": "gpt-5.6-terra",
+      "main_reasoning": "medium",
+      "review_model": "gpt-5.6-sol",
+      "review_reasoning": "high",
+      "review_effort_source": "explicit command override",
+      "review_command": "codex -c 'model_reasoning_effort=\"high\"' review",
+      "tradeoff": "Experimental explicit opt-in efficiency profile for measured, bounded work; not the normal quality-first driver."
     },
     "maximum": {
-      "main_model": "gpt-5.5",
-      "main_reasoning": "xhigh",
-      "review_model": "gpt-5.5",
-      "review_reasoning": "xhigh",
-      "tradeoff": "Higher latency and token usage in exchange for maximum stability and depth."
+      "main_model": "gpt-5.6-sol",
+      "main_reasoning": "high",
+      "review_model": "gpt-5.6-sol",
+      "review_reasoning": "high",
+      "review_effort_source": "profile baseline",
+      "review_command": "codex review",
+      "tradeoff": "Explicit quality-first profile with Sol high as the standing root driver."
     }
   },
   "policy": {
     "high_confidence_threshold_percent": 95,
-    "low_confidence_rule": "Research more first. If confidence stays below 95%, escalate review to xhigh. Use the maximum profile for abstract, complex, or high-blast-radius work."
+    "default_profile": "balanced",
+    "default_driver": "gpt-5.6-sol",
+    "default_reasoning": "medium",
+    "low_confidence_rule": "Research more first. If confidence stays below 95%, escalate the difficult slice or review to high, then xhigh if needed.",
+    "reasoning_effort_rule": "Use Sol medium as the normal root driver. Escalate hook, renderer, installer, release, CI, or difficult regression slices to high, and use xhigh only when high leaves material risk unresolved.",
+    "mixed_profile_rule": "Mixed is experimental and requires explicit opt-in. Preserve an existing explicit selection, but do not select it automatically.",
+    "review_effort_rule": "review_model selects the review model only. Balanced and mixed reviews must explicitly override model_reasoning_effort to high.",
+    "lightweight_rule": "Use low only for bounded documentation, metadata, or issue-organization work with a clear verification boundary. Use Terra or Luna only when explicitly selected for bounded support work.",
+    "escalation_rule": "Max is single-task reasoning; Ultra is subagent-backed parallel work. Most tasks do not need either, and neither is a default wizard profile."
   }
 }

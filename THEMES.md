@@ -63,7 +63,9 @@ because the current background-image bridge uses the iTerm2 Python API.
       "shades": [[70, 80, 90], [90, 110, 120]]
     }
   ],
-  "blocked": { "sprite": "blocked", "badge": "BLOCK", "name": "Blocked", "color": [80, 75, 95] },
+  "working": { "sprite": "worker", "badge": "WORK", "name": "WORKING", "color": [60, 120, 200] },
+  "permission": { "sprite": "worker", "badge": "CHECK", "name": "Permission check", "color": [120, 140, 180] },
+  "blocked": { "sprite": "blocked", "badge": "HITL", "name": "Approval required", "color": [80, 75, 95] },
   "done": { "sprite": "done", "badge": "DONE", "name": "Done", "stage": 3, "color": [40, 100, 255] },
   "idle": { "sprite": "idle", "badge": "IDLE", "name": "Idle", "stage": 3, "color": [40, 100, 255] },
   "error": { "sprite": "error", "badge": "ERROR", "name": "Error", "color": [255, 40, 40] },
@@ -82,9 +84,12 @@ because the current background-image bridge uses the iTerm2 Python API.
 - Fast-start themes with early thresholds like `2`, `5`, and `12` must use shade ramps. Without them, high-contrast themes flash through saturated colors in the first few tool calls instead of feeling like progress.
 - Colors-only themes with many unrelated hue families should use balanced dwell thresholds instead of the sprite-backed fast-start curve. Without character art, the terminal color carries the whole state, so equal dwell keeps one color from flashing past while another lingers.
 - `"shade_sprites"` is optional. When present, it must have the same length as `"shades"` and lets a stage swap sprite art per shade while keeping one character family. For branded character themes, shade sprites should be distinct portraits or clearly different source-backed poses, not just crop-only zooms of the same art.
-- `progress_bar` is the shared visual progress strip shown in the terminal title. Keep it a compact health/progress-style visual sequence; do not use character initials there. Theme identity belongs in stage badges, names, sprites, colors, and optional `shade_sprites`.
+- `progress_bar` is the shared visual progress strip used by explicit calibration and legacy progression. It is not shown for indeterminate or semantic lifecycle states. Keep it compact and do not use character initials there.
 - Use `"color_family_singleton": true` only for a deliberate one-color stage or slower-progressing generic theme; do not use it as a shortcut for branded character themes.
-- `blocked`, `review`, `done`, `idle`, and `error` are mandatory lifecycle states.
+- `working` is mandatory and represents stable, indeterminate agent activity. Its sprite, color, badge, and title must not change merely because another tool ran.
+- `permission`, `blocked`, `review`, `done`, `idle`, and `error` are mandatory lifecycle states.
+- `permission` is a neutral pre-decision check. It must not claim that human action is required.
+- `blocked` is the human-in-the-loop state. Its badge or name must say `HITL` explicitly so approval cannot be confused with ordinary work or an error.
 - review is not done: use it for code review/background verification that is
   still running after the main answer appears complete. It must have its own
   non-final title/color/sprite so `done` remains reserved for work that is
@@ -100,6 +105,7 @@ because the current background-image bridge uses the iTerm2 Python API.
 - `context_alerts` colors describe alert identity for reports/future non-destructive indicators; they must not replace the active stage surface palette.
 - Sprite names resolve to `themes/<theme>/sprites/<sprite>.png` first, then legacy global sprites.
 - Missing sprite files clear stale background art instead of silently showing the last theme's image.
+- With full-pane backgrounds enabled, ordinary work keeps the `working` sprite. Backgrounds change when the semantic lifecycle state changes, not as a tool-count animation.
 
 ## Sprite Assets
 

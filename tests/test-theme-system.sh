@@ -68,6 +68,16 @@ assert_file_exists() {
     fi
 }
 
+assert_file_not_exists() {
+    local label="$1" filepath="$2"
+    TOTAL=$((TOTAL + 1))
+    if [ ! -e "$filepath" ]; then
+        pass "$label"
+    else
+        fail "$label (unexpected path: $filepath)"
+    fi
+}
+
 assert_contains() {
     local label="$1" needle="$2" haystack="$3"
     TOTAL=$((TOTAL + 1))
@@ -122,6 +132,9 @@ README_DOC=$(cat "$ROOT_DIR/README.md")
 ARCH_DOC=$(cat "$ROOT_DIR/ARCHITECTURE.md")
 ROADMAP_DOC=$(cat "$ROOT_DIR/ROADMAP.md")
 TESTING_DOC=$(cat "$ROOT_DIR/TESTING.md")
+AGENTS_DOC=$(cat "$ROOT_DIR/AGENTS.md")
+SDLC_SKILL_DOC=$(cat "$ROOT_DIR/.agents/skills/sdlc/SKILL.md")
+CODEX_CONFIG_DOC=$(cat "$ROOT_DIR/.codex/config.toml")
 assert_contains "Theme docs define max-threshold stages" '"max"' "$THEMES_DOC"
 assert_contains "Theme docs define sprite-backed states" '"sprite"' "$THEMES_DOC"
 assert_contains "Theme docs define color families" '"color_family"' "$THEMES_DOC"
@@ -158,6 +171,8 @@ assert_contains "README documents matte stripping for source sprites" "neutral c
 assert_contains "README documents repo-local theme switch command" "./visualhud theme set" "$README_DOC"
 assert_contains "README documents theme switch without restart" "next hook" "$README_DOC"
 assert_contains "README documents calibration command" "./visualhud theme calibrate" "$README_DOC"
+assert_contains "README documents the semantic legend command" "./visualhud theme legend" "$README_DOC"
+assert_contains "README labels ordinary work as indeterminate" "WORKING is indeterminate" "$README_DOC"
 assert_contains "README documents create-theme workflow" "## Create A Theme" "$README_DOC"
 assert_contains "README tells agents to follow theme docs" "Tell your agent to follow \`THEMES.md\`" "$README_DOC"
 assert_contains "README documents theme JSON scaffold path" "themes/<name>/theme.json" "$README_DOC"
@@ -167,22 +182,32 @@ assert_contains "README records Batman as a future theme candidate" "Batman" "$R
 assert_contains "README records Power Rangers as a future theme candidate" "Power Rangers" "$README_DOC"
 assert_contains "README records Sonic as a future theme candidate" "Sonic" "$README_DOC"
 assert_contains "README documents Windows status renderer" "Windows Terminal/PowerShell is supported for Codex hook install" "$README_DOC"
-assert_contains "Roadmap prioritizes TMNT hardening before new themes" "## TMNT Hardening Before New Themes" "$ROADMAP_DOC"
-assert_contains "Roadmap parks Batman theme candidate" "**Batman** (parked)" "$ROADMAP_DOC"
-assert_contains "Roadmap marks Power Rangers as shipped colors-only theme" "**Power Rangers** — shipped as colors-only theme" "$ROADMAP_DOC"
-assert_contains "Roadmap marks Power Rangers balanced dwell shipped" "Power Rangers shade-ramp and dwell pass" "$ROADMAP_DOC"
-assert_contains "Roadmap parks Sonic theme candidate" "**Sonic** (parked)" "$ROADMAP_DOC"
-assert_contains "Roadmap marks Pokemon as shipped first-party theme" "**Pokemon** — shipped first-party theme" "$ROADMAP_DOC"
-assert_contains "Roadmap marks TMNT as shipped first-party theme" "**TMNT** — shipped first-party theme" "$ROADMAP_DOC"
-assert_contains "Roadmap captures TMNT roster packs under one theme" "TMNT roster packs" "$ROADMAP_DOC"
-assert_contains "Roadmap tracks TMNT per-shade portrait upgrades" "TMNT per-shade portrait variants" "$ROADMAP_DOC"
-assert_contains "Roadmap keeps Windows as separate portability track" "Windows Terminal/PowerShell stays a separate renderer track" "$ROADMAP_DOC"
-assert_contains "Roadmap tracks Codex macOS install" "Codex macOS repo install" "$ROADMAP_DOC"
-assert_contains "Roadmap marks easy theme swapping shipped" "[x] **Easy theme swapping**" "$ROADMAP_DOC"
-assert_contains "Roadmap tracks theme creator workflow" "**Theme creator workflow**" "$ROADMAP_DOC"
-assert_contains "Roadmap tracks animated demo asset" "**Animated demo asset**" "$ROADMAP_DOC"
-assert_contains "Roadmap parks TDLC for hard terminal visual testing" "TDLC" "$ROADMAP_DOC"
-assert_contains "Roadmap tracks Claude Fable max insights pass" "Claude \`/insights\` with Fable max" "$ROADMAP_DOC"
+assert_file_not_exists "Planning stays consolidated without GOALS.md" "$ROOT_DIR/GOALS.md"
+assert_eq "Repo-local VisualHUD runtime is ignored" "true" "$(git -C "$ROOT_DIR" check-ignore -q .visualhud && printf true || printf false)"
+assert_contains "Roadmap delegates release scope to GitHub milestones" "GitHub milestones define release scope" "$ROADMAP_DOC"
+assert_contains "Roadmap links the active v1.2.0 milestone" "v1.2.0 - Release Readiness" "$ROADMAP_DOC"
+assert_contains "Roadmap links the next v1.3.0 milestone" "v1.3.0 - Theme and UX" "$ROADMAP_DOC"
+assert_contains "Roadmap links active regression matrix issue #11" "issues/11" "$ROADMAP_DOC"
+assert_contains "Roadmap links active Codex state semantics issue #10" "issues/10" "$ROADMAP_DOC"
+assert_contains "Roadmap links active reliability issue #9" "issues/9" "$ROADMAP_DOC"
+assert_contains "Roadmap links active reliability issue #7" "issues/7" "$ROADMAP_DOC"
+assert_contains "Roadmap links active setup issue #5" "issues/5" "$ROADMAP_DOC"
+assert_contains "Roadmap links active Windows issue #3" "issues/3" "$ROADMAP_DOC"
+assert_contains "Roadmap links active setup issue #2" "issues/2" "$ROADMAP_DOC"
+assert_contains "Roadmap links next theme issue #4" "issues/4" "$ROADMAP_DOC"
+assert_not_contains "Roadmap does not duplicate open issue checklists" "- [ ]" "$ROADMAP_DOC"
+assert_not_contains "Roadmap does not retain completed-history checklists" "- [x]" "$ROADMAP_DOC"
+assert_contains "Roadmap identifies the active goal" "## Active Goal" "$ROADMAP_DOC"
+assert_contains "Roadmap defines active completion criteria" "## Completion Criteria" "$ROADMAP_DOC"
+assert_contains "Roadmap requires npm release verification" "npm view visualhud version" "$ROADMAP_DOC"
+assert_not_contains "Roadmap does not delegate active scope to GOALS.md" "GOALS.md" "$ROADMAP_DOC"
+assert_contains "Codex SDLC skill defaults to medium effort" "effort: medium" "$SDLC_SKILL_DOC"
+assert_contains "Codex project config defaults to medium reasoning" 'model_reasoning_effort = "medium"' "$CODEX_CONFIG_DOC"
+assert_contains "Agent policy selects the balanced profile" "Selected profile: balanced" "$AGENTS_DOC"
+assert_contains "Agent policy keeps high review escalation" "Sol high review" "$AGENTS_DOC"
+assert_jq "Model profile selects balanced Sol medium" "$ROOT_DIR/.codex-sdlc/model-profile.json" '.selected_profile == "balanced" and .profiles.balanced.main_model == "gpt-5.6-sol" and .profiles.balanced.main_reasoning == "medium"'
+assert_jq "Balanced profile keeps Sol high review" "$ROOT_DIR/.codex-sdlc/model-profile.json" '.profiles.balanced.review_model == "gpt-5.6-sol" and .profiles.balanced.review_reasoning == "high"'
+assert_jq "Manifest records balanced medium baseline" "$ROOT_DIR/.codex-sdlc/manifest.json" '.model_profile.selected_profile == "balanced" and .model_profile.baseline_reasoning == "medium"'
 assert_contains "Testing docs include calibration test" "test-theme-calibration" "$TESTING_DOC"
 assert_contains "Architecture documents Claude adapter" "visualhud-claude.sh" "$ARCH_DOC"
 assert_contains "Architecture documents terminal surface palette" "SetColors=tab" "$ARCH_DOC"
@@ -192,7 +217,10 @@ assert_contains "Architecture documents theme shades" "shades" "$ARCH_DOC"
 assert_contains "Architecture documents source sprite backdrop colors" "backdrop_color" "$ARCH_DOC"
 assert_contains "Architecture documents non-destructive context alerts" "preserving the selected theme stage color and sprite" "$ARCH_DOC"
 assert_contains "Architecture documents theme selection precedence" "VISUALHUD_THEME > repo-local active theme file > VISUALHUD_DEFAULT_THEME > pokemon" "$ARCH_DOC"
+assert_contains "Architecture does not treat tool count as completion" "telemetry, not completion" "$ARCH_DOC"
 assert_contains "Theme docs document theme switch CLI" "./visualhud theme set" "$THEMES_DOC"
+assert_contains "Theme docs require a working state" "\`working\` is mandatory" "$THEMES_DOC"
+assert_contains "Theme docs require explicit HITL labeling" "HITL" "$THEMES_DOC"
 assert_contains "Theme docs document active theme file" "repo-local active theme file" "$THEMES_DOC"
 assert_contains "Theme docs document calibration review flow" "theme calibration" "$THEMES_DOC"
 assert_no_repo_match "Public theme docs do not advertise legacy at/image/title schema" \
@@ -227,12 +255,16 @@ while IFS= read -r theme_file; do
     # shellcheck disable=SC2016
     assert_jq "$theme_name has lifecycle states" "$theme_file" '
       . as $theme
-      | all(["blocked", "review", "done", "idle", "error"][]; . as $state |
+      | all(["working", "permission", "blocked", "review", "done", "idle", "error"][]; . as $state |
         ($theme[$state].name | type == "string")
         and ($theme[$state].badge | type == "string")
         and ($theme[$state].sprite | type == "string")
         and ($theme[$state].color | type == "array" and length == 3)
       )
+    '
+    assert_jq "$theme_name labels human approval as HITL" "$theme_file" '
+      (.blocked.badge | ascii_upcase | contains("HITL"))
+      or (.blocked.name | ascii_upcase | contains("HITL"))
     '
     missing_sprites=$(
       jq -r '[.stages[].sprite, .stages[].shade_sprites[]?, .blocked.sprite, .done.sprite, .idle.sprite, .review.sprite, .context_alerts[].sprite?] | map(select(. != null and . != "")) | unique | .[]' "$theme_file" \
@@ -246,6 +278,8 @@ while IFS= read -r theme_file; do
     assert_eq "$theme_name ships theme-local sprites for every referenced sprite" "" "$missing_sprites"
     assert_jq "$theme_name RGB values stay in terminal-safe range" "$theme_file" '
       [
+        .working.color[],
+        .permission.color[],
         .stages[].color[],
         .blocked.color[],
         .review.color[],

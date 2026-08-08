@@ -5,7 +5,6 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const PROOF_TTL_MS = 4 * 60 * 60 * 1000;
-const PROOF_RELATIVE_PATH = "codex-sdlc/proof.json";
 const WORKTREE_PROOF_PATH = ".codex-sdlc/proof.json";
 const GIT_REPOSITORY_ENV_NAMES = new Set(["GIT_COMMON_DIR", "GIT_DIR", "GIT_WORK_TREE"]);
 
@@ -73,12 +72,7 @@ function repositoryRoot(cwd = process.cwd()) {
 }
 
 function proofPath(root) {
-  const result = runGit(root, ["rev-parse", "--git-path", PROOF_RELATIVE_PATH]);
-  if (result.ok && result.stdout.trim() !== "") {
-    return path.resolve(root, result.stdout.trim());
-  }
-
-  return path.join(root, ".git", PROOF_RELATIVE_PATH);
+  return path.join(root, WORKTREE_PROOF_PATH);
 }
 
 function safeProofCommand(value) {
@@ -214,8 +208,16 @@ function workspaceFingerprint(root) {
     return { ok: false, reason: "git file listing failed" };
   }
 
+  const indexResult = runGit(root, ["ls-files", "-s", "-z"]);
+  if (!indexResult.ok) {
+    return { ok: false, reason: "git index listing failed" };
+  }
+
   const files = filesResult.stdout.split("\0").filter(Boolean).sort();
   const hash = crypto.createHash("sha256");
+  hash.update("index\0");
+  hash.update(indexResult.stdout);
+  hash.update("\0worktree\0");
   let fileCount = 0;
 
   for (const relativePath of files) {
@@ -232,6 +234,56 @@ function workspaceFingerprint(root) {
     fileCount,
     hash: `sha256:${hash.digest("hex")}`,
   };
+}
+
+function hasUnstagedTrackedChanges(root) {
+  const result = runGit(root, ["diff", "--quiet", "--ignore-submodules", "--"]);
+  return {
+    ok: result.status === 0 || result.status === 1,
+    changed: result.status === 1,
+  };
+}
+
+function stagedDeletionShadows(root) {
+  const deletedResult = runGit(root, ["diff", "--cached", "--name-only", "--diff-filter=D", "-z", "--"]);
+  const untrackedResult = runGit(root, ["ls-files", "--others", "--exclude-standard", "-z"]);
+  if (!deletedResult.ok || !untrackedResult.ok) {
+    return { ok: false, paths: [] };
+  }
+
+  const deleted = new Set(deletedResult.stdout.split("\0").filter(Boolean));
+  const paths = untrackedResult.stdout.split("\0").filter((entry) => entry && deleted.has(entry));
+  return { ok: true, paths };
+}
+
+function rejectUntestedStagedContent(root) {
+  const status = hasUnstagedTrackedChanges(root);
+  if (!status.ok) {
+    process.stderr.write("Cannot inspect tracked workspace changes before writing SDLC proof.\n");
+    return true;
+  }
+
+  if (status.changed) {
+    process.stderr.write(
+      "Cannot write SDLC proof while unstaged tracked changes differ from the staged content being committed.\n",
+    );
+    return true;
+  }
+
+  const shadows = stagedDeletionShadows(root);
+  if (!shadows.ok) {
+    process.stderr.write("Cannot inspect staged deletions before writing SDLC proof.\n");
+    return true;
+  }
+
+  if (shadows.paths.length > 0) {
+    process.stderr.write(
+      `Cannot write SDLC proof while untracked files shadow staged deletions: ${shadows.paths.join(", ")}\n`,
+    );
+    return true;
+  }
+
+  return false;
 }
 
 function writeProof(root, checks, reviewed) {
@@ -256,8 +308,22 @@ function writeProof(root, checks, reviewed) {
     },
   };
   const target = proofPath(root);
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, `${JSON.stringify(proof, null, 2)}\n`);
+  const targetDirectory = path.dirname(target);
+  fs.mkdirSync(targetDirectory, { recursive: true });
+  if (fs.realpathSync(targetDirectory) !== path.resolve(root, ".codex-sdlc")) {
+    throw new Error("proof directory must not be a symlink");
+  }
+  if (fs.existsSync(target) && fs.lstatSync(target).isSymbolicLink()) {
+    throw new Error("proof target must not be a symlink");
+  }
+
+  const temporary = path.join(targetDirectory, `.proof-${process.pid}-${crypto.randomBytes(8).toString("hex")}.tmp`);
+  try {
+    fs.writeFileSync(temporary, `${JSON.stringify(proof, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+    fs.renameSync(temporary, target);
+  } finally {
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+  }
   return target;
 }
 
@@ -275,6 +341,10 @@ function runProofCli(args) {
   const root = repositoryRoot();
   if (root === "") {
     process.stderr.write("Cannot write SDLC proof outside a git worktree.\n");
+    return 2;
+  }
+
+  if (rejectUntestedStagedContent(root)) {
     return 2;
   }
 
@@ -296,6 +366,10 @@ function runProofCli(args) {
       process.stderr.write(`SDLC proof check failed: ${check}\n`);
       return typeof result.status === "number" ? result.status : 1;
     }
+  }
+
+  if (rejectUntestedStagedContent(root)) {
+    return 2;
   }
 
   try {

@@ -110,6 +110,21 @@ Calibrate a theme:
 ./.visualhud/visualhud theme calibrate tmnt --live --delay 1
 ```
 
+Inspect the active theme's status meanings without opening its JSON:
+
+```bash
+./visualhud theme legend
+./visualhud theme legend pokemon
+```
+
+`WORKING is indeterminate`: ordinary tool activity keeps one stable working
+color, title, and sprite. Tool-call count remains internal telemetry and powers
+the explicit calibration/legacy progression only; it is not task completion.
+Semantic transitions change the HUD to `PLAN`, `REVIEW`, `CHECK`, `HITL`, `ERROR`,
+`DONE`, or `IDLE`. With `VISUALHUD_BG=on`, the full-pane character follows
+those same states, so an unchanged Pokemon during ordinary work is expected.
+`CHECK` is a neutral host permission preflight and does not claim human action is required. Codex `PermissionRequest` maps to correlated `HITL` because Codex exposes no later prompt-shown event; matching tool lifecycle events clear it, and `HITL` emits an iTerm2 notification.
+
 Development checkout install:
 
 ```bash
@@ -420,7 +435,7 @@ VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
 - Background images update through the iTerm2 Python API (`LocalWriteOnlyProfile`) for the active terminal session.
 - Windows Terminal/PowerShell installs for Codex and updates the tab title plus `OSC 9;4` progress status.
 - WezTerm installs for Codex and updates title, right status, colors, and live background sprites through `OSC 1337;SetUserVar` plus the bundled Lua module.
-- `PreToolUse`, `UserPromptSubmit`, `Notification`, `PermissionRequest`, `Stop`, `StopFailure`, `TaskCompleted`, and `SessionStart` are mapped into the engine by repo-local adapters.
+- Repo-local adapters map each host's supported lifecycle events into the engine. Codex maps explicit object-shaped `PostToolUse` failures but does not guess from raw unified-shell output, which omits exit status; Claude can emit `PostToolUseFailure` directly.
 - Theme stages use `color_family` plus `shades`, so a character can keep the same sprite while the terminal chrome advances through multiple color steps.
 - Pokemon, TMNT, Power Rangers, Otter Pop, and Minimal all ship as theme packs. Pokemon and TMNT include source-backed sprite art; Power Rangers, Otter Pop, and Minimal are colors-only.
 - Context/token pressure is an ambient overlay: warning and critical label the state while preserving the active stage color/sprite.

@@ -1,29 +1,124 @@
 # SDLC Enforcement
 
+## Project Context
+
+- **Language:** javascript
+- **Source:** N/A
+- **Tests:** tests/
+- **Domain:** cli
+- **Repo shape:** javascript/cli
+- **Setup confidence:** partial
+
+Read TESTING.md for testing guidance before writing or modifying tests.
+Read ARCHITECTURE.md for system context before architectural changes.
+If GOALS.md exists, read it before ROADMAP.md and treat it as the active-scope contract for long-running work.
+
+## Philosophy
+
+This project follows a strict Software Development Life Cycle. The goal is not speed — it is confidence. Every change should be planned, tested, and reviewed before it ships. If these docs don't fully match your project yet, improve them as you learn.
+
+## Honest Codex Shape
+
+- `skills = explicit workflow layer`
+- `hooks = silent event enforcement`
+- `repo docs = source of local truth`
+
+Use skills for the visible workflow contract, let hooks enforce silently, and keep these repo docs as the local truth. Do not pretend Codex has native slash commands when it does not.
+
 ## Before Every Task
-1. Plan before coding - outline steps, state confidence (HIGH/MEDIUM/LOW)
-2. LOW confidence? Research more or ASK USER
-3. Reasoning policy - default to XHIGH for this repo
-4. Keep XHIGH as the normal path in this repo unless the user explicitly asks for less
-5. Keep this repo on maximum because codex-sdlc-wizard is unusually meta and high-blast-radius
-6. Write failing test FIRST (TDD RED), then implement (TDD GREEN)
-7. ALL tests must pass before commit - no exceptions
 
-## TDD Workflow (MANDATORY)
-1. Write the test file FIRST - the test MUST FAIL initially
-2. Run the test - confirm it fails (RED)
-3. Write the minimum implementation to make the test pass
-4. Run the test - confirm it passes (GREEN)
-5. Only then: commit
+1. **Plan first.** State your approach and confidence level before writing code
+   - HIGH (90%+): Know exactly what to do — proceed after stating approach
+   - MEDIUM (60-89%): Solid approach, some unknowns — highlight uncertainties
+   - LOW (<60%): Not sure — do more research or ASK the user before proceeding
+   - Always state confidence on meaningful work, and keep slices small enough that confidence stays high in practice
+2. **TDD Red:** Write a failing test FIRST that proves the feature/fix is needed
+3. **TDD Green:** Implement the minimum code to make the test pass
+4. **Run ALL tests** — not just the new one. No exceptions
+5. **Active goals:** When `GOALS.md` exists, complete that active scope before claiming the run is done; do not confuse active goal completion with roadmap completion.
 
-## After Implementation
-1. Self-review: read back your changes, check for bugs
-2. Run full test suite - ALL tests must pass
-3. Only then: commit and push
+## Commands
 
-## Rules
-- Delete legacy code - no backwards compatibility hacks
-- Less is more - don't add what wasn't asked for
-- Tests ARE code - treat test failures as bugs
-- NEVER commit without running tests first
-- During setup, environment repair, and auth-heavy workflows, prefer full access
+| Action | Command |
+|--------|---------|
+| Test | npm test |
+| Lint | shellcheck *.sh |
+| Build | N/A |
+
+If any command above shows N/A, figure out the right command for this project and update this table.
+
+## Setup Status
+
+- Known: language=javascript; test_dir=tests/; test_command=npm test; domain=cli
+- Unresolved: source_dir; test_framework; build_command
+
+## Model Profile
+
+- Selected profile: balanced
+- Baseline reasoning: `medium`
+- Detected repo risk signals: CI (github-actions)
+- Adaptive high scopes: Use high for hook lifecycle, terminal renderers, installers, release/publish work, CI (github-actions), and difficult regressions. Escalate further to xhigh for security review, migrations, destructive operations, long-running research, or difficult coding when the selected baseline and explicit Sol high review leave risk unresolved.
+- `balanced`: `gpt-5.6-sol` at `medium` for normal work, with an explicit Sol high review gate. This is the selected default for this repository.
+- `maximum`: `gpt-5.6-sol` at `high` for the whole slice. Select it explicitly for sustained quality-first work; the profile name selects the maximum model tier, not Max reasoning.
+- `mixed`: experimental explicit opt-in using `gpt-5.6-terra` at `medium` plus `gpt-5.6-sol` review. Because `review_model` does not set effort independently, use `codex -c 'model_reasoning_effort="high"' review ...` for its high review gate. Preserve it when explicitly selected, but do not switch to it automatically.
+- Terra and Luna are bounded support options, not normal SDLC drivers. Keep integration and acceptance with the Sol root.
+- Start work at the selected `medium` baseline. Escalate the affected slice or review to `high` or `xhigh` based on risk; do not force the entire repo to pay the higher cost when the task does not need it.
+- Max is a single-task reasoning escalation; Ultra is a subagent-backed parallel-work escalation. Most tasks do not need Max or Ultra, and neither belongs in default wizard profiles.
+- If confidence is below `95%`, research more first. If it still stays below `95%`, escalate the difficult slice or review to `high`, then `xhigh` if high leaves material risk unresolved.
+
+## Capability Detectors
+
+If auth, license, tenant, or account shape determines what work is possible here, add and use a repo-local capability detector instead of raw provider commands.
+
+Good patterns:
+- `doctor`
+- `check-capability`
+- `Test-*Access.ps1`
+
+Prefer one-command classification that tells you the current lane clearly before deeper work starts.
+
+## Testing Diamond
+
+Prioritize integration tests — best bang for buck. Minimize mocking.
+
+| Layer | Ratio | Purpose |
+|-------|-------|---------|
+| E2E | ~10% | Critical user paths, prove the system works |
+| Integration | ~60% | Real dependencies, component interactions |
+| Unit | ~30% | Pure logic, edge cases, fast feedback |
+
+Flaky tests are bugs. Investigate and fix them — never skip or retry blindly.
+
+## Git Gates
+
+- Do NOT run `git commit` without ALL tests passing
+- Do NOT run `git push` without a self-review
+- These are enforced by hooks — violations are blocked automatically
+
+## Self-Review
+
+After implementation, BEFORE presenting to the user:
+
+1. Re-read every file you changed — look for bugs, dead code, leftover debug statements
+2. Run the full test suite
+3. Check: did you only change what was asked? No scope creep
+4. Check: any security issues? (injection, secrets, permissions)
+
+## Principles
+
+- Don't over-engineer. Three similar lines beat a premature abstraction
+- Don't add features beyond what was asked
+- Delete dead code — no legacy fallbacks, no commented-out blocks
+- Test code is production code — same quality standards
+- Every bug fix starts with a failing test that reproduces the bug
+- If you fail twice on the same problem, STOP and ask the user
+
+## Feedback and Repo Focus
+
+- If you uncover a proven reusable wizard lesson, prefer filing a direct GitHub issue instead of leaving a loose note
+- Keep the active session focused on the product repo
+- Only switch to live wizard work when the product repo is actually blocked
+
+## Self-Improving
+
+If you discover something about this project that these docs don't cover — a test command, a build step, an architectural pattern — update the relevant doc. These files are living documents, not static templates.

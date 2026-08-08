@@ -87,7 +87,7 @@ def stage_entries(theme: dict[str, Any]) -> list[dict[str, Any]]:
 
 def lifecycle_entries(theme: dict[str, Any]) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
-    for key in ("blocked", "review", "done", "idle", "error", "plan", "compacting", "subagent"):
+    for key in ("working", "permission", "blocked", "review", "done", "idle", "error", "plan", "compacting", "subagent"):
         state = theme.get(key)
         if not state:
             continue

@@ -18,11 +18,11 @@ See `AGENTS.md`, `SDLC-LOOP.md`, and `.agents/skills/sdlc/SKILL.md` for the enfo
 
 | Level | Meaning | Action | Effort |
 |-------|---------|--------|--------|
-| HIGH (95%+) | Know exactly what to do | Proceed after proof is defined | `xhigh` (default) |
-| MEDIUM (<95%) | Solid approach, some uncertainty | Research more, then surface uncertainty | `xhigh` (default) |
-| LOW | Not sure | ASK USER before proceeding | `xhigh` |
-| FAILED 2x | Something's wrong | STOP. ASK USER immediately | `xhigh` |
-| CONFUSED | Can't diagnose why failing | STOP. Describe what tried | `xhigh` |
+| HIGH (95%+) | Know exactly what to do | Proceed after proof is defined | `medium`; escalate risky slices to `high` |
+| MEDIUM (<95%) | Solid approach, some uncertainty | Research more, then surface uncertainty | `high` for the uncertain slice |
+| LOW | Not sure | ASK USER before proceeding | `high` or `xhigh` after research |
+| FAILED 2x | Something's wrong | STOP. ASK USER immediately | Escalate only with a new approach |
+| CONFUSED | Can't diagnose why failing | STOP. Describe what tried | Research before resuming |
 
 ## Context Management
 

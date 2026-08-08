@@ -14,7 +14,9 @@
     { "max": 400, "sprite": "wartortle", "badge": "💧", "name": "Wartortle", "color_family": "water", "color": [50, 130, 240], "shades": [[50, 130, 240], [65, 150, 255], [35, 105, 220]] },
     { "max": 999999, "sprite": "blastoise", "badge": "💧", "name": "Blastoise", "color_family": "water", "color": [40, 100, 255], "shades": [[40, 100, 255], [60, 125, 255], [25, 80, 225]] }
   ],
-  "blocked": { "sprite": "snorlax", "badge": "😴", "name": "BLOCKED", "color": [40, 40, 50] },
+  "working": { "sprite": "pikachu", "badge": "WORK", "name": "WORKING", "color": [250, 210, 50] },
+  "permission": { "sprite": "pikachu", "badge": "CHECK", "name": "Permission check", "color": [120, 140, 180] },
+  "blocked": { "sprite": "snorlax", "badge": "HITL", "name": "Approval required", "color": [40, 40, 50] },
   "review": { "sprite": "alakazam", "badge": "REV", "name": "Reviewing", "stage": 10, "color": [245, 205, 60] },
   "done": { "sprite": "mew", "badge": "⭐", "name": "Complete", "stage": 11, "color": [255, 120, 180] },
   "idle": { "sprite": "eevee", "badge": "IDLE", "name": "Your turn", "stage": 11, "color": [170, 115, 65] },

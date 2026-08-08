@@ -87,6 +87,12 @@ EFFORT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-effort_${SESSION_KEY}"
 BG_CLEAR_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
 COMPACT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-compacting_${SESSION_KEY}"
 SUBAGENT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-subagent_${SESSION_KEY}"
+SUBAGENT_DIR="${SUBAGENT_FILE}.d"
+SUBAGENT_LOCK="${SUBAGENT_DIR}.lock"
+PERMISSION_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-permission_${SESSION_KEY}"
+PERMISSION_DIR="${PERMISSION_FILE}.d"
+PERMISSION_ACTIVE_DIR="${PERMISSION_FILE}.active.d"
+PERMISSION_LOCK="${PERMISSION_DIR}.lock"
 TOKENS_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-tokens_${SESSION_KEY}"
 STOP_HISTORY_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-stop-history_${SESSION_KEY}"
 LOOP_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-loop_${SESSION_KEY}"
@@ -272,6 +278,9 @@ emit_iterm_status() {
 windows_progress_state() {
     local state_kind="$1" context_alert="$2"
     case "$state_kind" in
+        working)
+            printf '3'
+            ;;
         error)
             printf '2'
             ;;
@@ -297,7 +306,7 @@ windows_progress_state() {
 windows_progress_percent() {
     local stage_num="$1" state_kind="$2" limit
     case "$state_kind" in
-        progress|review)
+        progress)
             limit=$(json_helper progress-bar-length "$THEME_FILE" 2>/dev/null || printf '0')
             if [ -n "$stage_num" ] && [ "$limit" -gt 0 ]; then
                 printf '%d' $((stage_num * 100 / limit))
@@ -325,16 +334,20 @@ emit_windows_status() {
 
 emit_wezterm_status() {
     local tty_target="$1" badge_text="$2" title="$3" context_title="$4" stage_num="$5" state_kind="$6"
-    local sprite_path="$7" color_hex="$8" tint_hex="$9" stage_name="${10}" progress_percent state_b64
+    local sprite_path="$7" color_hex="$8" tint_hex="$9" stage_name="${10}" progress_percent state_b64 render_stage
 
     progress_percent=$(windows_progress_percent "$stage_num" "$state_kind")
+    render_stage="$stage_num"
+    if [ "$state_kind" != "progress" ]; then
+        render_stage=""
+    fi
     state_b64=$(json_helper wezterm-state \
         "$title" \
         "$context_title" \
         "$sprite_path" \
         "$color_hex" \
         "$tint_hex" \
-        "$stage_num" \
+        "$render_stage" \
         "$state_kind" \
         "$progress_percent" \
         "$badge_text" \
@@ -382,7 +395,7 @@ set_status_from_json() {
     tg=$(to_tint "$g")
     tb=$(to_tint "$b")
 
-    if [ -n "$stage_num" ]; then
+    if [ "$state_kind" = "progress" ] && [ -n "$stage_num" ]; then
         badge_text=$(badge_text_for "$badge_emoji" "$stage_name" "$stage_num")
         if [ -n "$stage_name" ]; then
             title="$(progress_bar "$stage_num") ${badge_emoji} ${stage_name} — ${PROJECT_NAME}"
@@ -440,6 +453,12 @@ set_named_state() {
     set_status_from_json "$(theme_state_json "$state")" "" "$state"
 }
 
+emit_hitl_notification() {
+    if [ "$RENDERER" = "iterm2" ]; then
+        printf '\033]9;VisualHUD HITL: approval required\a' >> "$TTY_TARGET" 2>/dev/null || true
+    fi
+}
+
 CONTEXT_PERCENT=$(context_percent_from_input)
 CONTEXT_ALERT_JSON=$(context_alert_json "$CONTEXT_PERCENT")
 
@@ -483,6 +502,192 @@ in_plan_mode() {
         && theme_has_state "plan"
 }
 
+permission_input_key() {
+    local input_key
+    input_key=$(printf '%s' "$INPUT" | json_helper field permission_key 2>/dev/null || true)
+    printf '%s' "${input_key:-uncorrelated}"
+}
+
+permission_marker_path() {
+    local key="$1" checksum
+    checksum=$(printf '%s' "$key" | cksum | awk '{print $1}')
+    printf '%s/%s' "$PERMISSION_DIR" "$checksum"
+}
+
+permission_active_marker_path() {
+    local key="$1" checksum
+    checksum=$(printf '%s' "$key" | cksum | awk '{print $1}')
+    printf '%s/%s' "$PERMISSION_ACTIVE_DIR" "$checksum"
+}
+
+acquire_permission_lock() {
+    local attempt=0
+    while ! mkdir "$PERMISSION_LOCK" 2>/dev/null; do
+        attempt=$((attempt + 1))
+        [ "$attempt" -lt 500 ] || return 1
+        sleep 0.01
+    done
+}
+
+release_permission_lock() {
+    rmdir "$PERMISSION_LOCK" 2>/dev/null || true
+}
+
+permission_add() {
+    local key="$1" state="$2" marker stored_key count stored_state
+    acquire_permission_lock || return 1
+    trap release_permission_lock EXIT
+    mkdir -p "$PERMISSION_DIR" 2>/dev/null
+    marker=$(permission_marker_path "$key")
+    stored_key=$(cut -f1 "$marker" 2>/dev/null || true)
+    count=0
+    stored_state=""
+    if [ "$stored_key" = "$key" ]; then
+        count=$(cut -f2 "$marker" 2>/dev/null || printf 0)
+        stored_state=$(cut -f3 "$marker" 2>/dev/null || true)
+        if ! [ "$count" -ge 1 ] 2>/dev/null; then
+            stored_state="$count"
+            count=1
+        fi
+    fi
+    if [ "$stored_state" = "blocked" ]; then
+        state="blocked"
+    fi
+    printf '%s\t%d\t%s\n' "$key" "$((count + 1))" "$state" > "$marker" 2>/dev/null
+    rm -f "$PERMISSION_FILE" 2>/dev/null
+    release_permission_lock
+    trap - EXIT
+}
+
+permission_remove_input() {
+    local key marker stored_key count state
+    key=$(permission_input_key)
+    acquire_permission_lock || return 1
+    trap release_permission_lock EXIT
+    marker=$(permission_marker_path "$key")
+    stored_key=$(cut -f1 "$marker" 2>/dev/null || true)
+    if [ "$stored_key" != "$key" ]; then
+        release_permission_lock
+        trap - EXIT
+        return 1
+    fi
+    count=$(cut -f2 "$marker" 2>/dev/null || printf 1)
+    state=$(cut -f3 "$marker" 2>/dev/null || true)
+    if ! [ "$count" -ge 1 ] 2>/dev/null; then
+        state="$count"
+        count=1
+    fi
+    if [ "$count" -gt 1 ]; then
+        printf '%s\t%d\t%s\n' "$key" "$((count - 1))" "$state" > "$marker" 2>/dev/null
+    else
+        rm -f "$marker" 2>/dev/null
+    fi
+    rmdir "$PERMISSION_DIR" 2>/dev/null || true
+    release_permission_lock
+    trap - EXIT
+}
+
+permission_active_add_input() {
+    local key marker stored_key count
+    key=$(permission_input_key)
+    acquire_permission_lock || return 1
+    trap release_permission_lock EXIT
+    mkdir -p "$PERMISSION_ACTIVE_DIR" 2>/dev/null
+    marker=$(permission_active_marker_path "$key")
+    stored_key=$(cut -f1 "$marker" 2>/dev/null || true)
+    count=0
+    if [ "$stored_key" = "$key" ]; then
+        count=$(cut -f2 "$marker" 2>/dev/null || printf 0)
+    fi
+    printf '%s\t%d\n' "$key" "$((count + 1))" > "$marker" 2>/dev/null
+    release_permission_lock
+    trap - EXIT
+}
+
+permission_active_remove_input() {
+    local key marker stored_key count
+    key=$(permission_input_key)
+    acquire_permission_lock || return 1
+    trap release_permission_lock EXIT
+    marker=$(permission_active_marker_path "$key")
+    stored_key=$(cut -f1 "$marker" 2>/dev/null || true)
+    if [ "$stored_key" != "$key" ]; then
+        release_permission_lock
+        trap - EXIT
+        return 1
+    fi
+    count=$(cut -f2 "$marker" 2>/dev/null || printf 1)
+    if [ "$count" -gt 1 ]; then
+        printf '%s\t%d\n' "$key" "$((count - 1))" > "$marker" 2>/dev/null
+    else
+        rm -f "$marker" 2>/dev/null
+        rmdir "$PERMISSION_ACTIVE_DIR" 2>/dev/null || true
+    fi
+    release_permission_lock
+    trap - EXIT
+}
+
+permission_pending() {
+    [ -d "$PERMISSION_DIR" ] && [ -n "$(find "$PERMISSION_DIR" -type f -print -quit 2>/dev/null)" ]
+}
+
+permission_pending_state() {
+    if grep -l $'\tblocked$' "$PERMISSION_DIR"/* >/dev/null 2>&1; then
+        printf 'blocked'
+    else
+        printf 'permission'
+    fi
+}
+
+render_pending_permission() {
+    local state
+    acquire_permission_lock || return 1
+    trap release_permission_lock EXIT
+    if ! permission_pending; then
+        rm -f "$ATTENTION_FILE" 2>/dev/null
+        release_permission_lock
+        trap - EXIT
+        return 1
+    fi
+    state=$(permission_pending_state)
+    printf '%s' "$state" > "$ATTENTION_FILE" 2>/dev/null
+    if [ "$state" = "blocked" ]; then
+        set_named_state "blocked"
+    else
+        set_named_state "permission"
+    fi
+    release_permission_lock
+    trap - EXIT
+}
+
+clear_permissions() {
+    rm -f "$PERMISSION_FILE" 2>/dev/null
+    rm -rf "$PERMISSION_DIR" "$PERMISSION_ACTIVE_DIR" "$PERMISSION_LOCK" 2>/dev/null
+}
+
+acquire_subagent_lock() {
+    local attempt=0
+    while ! mkdir "$SUBAGENT_LOCK" 2>/dev/null; do
+        attempt=$((attempt + 1))
+        [ "$attempt" -lt 500 ] || return 1
+        sleep 0.01
+    done
+}
+
+release_subagent_lock() {
+    rmdir "$SUBAGENT_LOCK" 2>/dev/null || true
+}
+
+subagent_marker_path() {
+    local agent_id="$1" checksum
+    checksum=$(printf '%s' "$agent_id" | cksum | awk '{print $1}')
+    printf '%s/%s' "$SUBAGENT_DIR" "$checksum"
+}
+
+subagent_active() {
+    [ -d "$SUBAGENT_DIR" ] && [ -n "$(find "$SUBAGENT_DIR" -type f -print -quit 2>/dev/null)" ]
+}
+
 case "$EVENT" in
     UserPromptSubmit)
         # Reset working counter + attention, but preserve REVIEW_FILE.
@@ -490,6 +695,7 @@ case "$EVENT" in
         # running) must not flip the state to 'done' on the next Stop.
         # A user message also breaks any /goal Stop loop in progress — clear loop state.
         rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$STOP_HISTORY_FILE" "$LOOP_FILE" 2>/dev/null
+        clear_permissions
         if in_plan_mode; then
             set_named_state "plan"
         fi
@@ -500,6 +706,7 @@ case "$EVENT" in
         if [ -n "$NEW_CWD" ] && [ -d "$NEW_CWD" ]; then
             PROJECT_NAME=$(basename "$NEW_CWD")
             rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$REVIEW_FILE" "$STAGE_FILE" 2>/dev/null
+            clear_permissions
             set_named_state "idle"
         fi
         exit 0
@@ -514,6 +721,7 @@ case "$EVENT" in
         case "$SESSION_SOURCE" in
             clear|compact)
                 rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$REVIEW_FILE" "$STAGE_FILE" 2>/dev/null
+                clear_permissions
                 ;;
         esac
         exit 0
@@ -533,23 +741,103 @@ case "$EVENT" in
     SubagentStart)
         if theme_has_state "subagent"; then
             SUBAGENT_TYPE=$(printf '%s' "$INPUT" | json_helper field agent_type 2>/dev/null || true)
-            printf '%s' "$SUBAGENT_TYPE" > "$SUBAGENT_FILE" 2>/dev/null
+            SUBAGENT_ID=$(printf '%s' "$INPUT" | json_helper field agent_id 2>/dev/null || true)
+            SUBAGENT_ID=$(printf '%s' "${SUBAGENT_ID:-type-$SUBAGENT_TYPE}" | tr '\t\r\n' '___')
+            acquire_subagent_lock || exit 0
+            trap release_subagent_lock EXIT
+            mkdir -p "$SUBAGENT_DIR" 2>/dev/null
+            printf '%s\t%s\n' "$SUBAGENT_ID" "$SUBAGENT_TYPE" > "$(subagent_marker_path "$SUBAGENT_ID")" 2>/dev/null
             set_named_state "subagent"
+            release_subagent_lock
+            trap - EXIT
         fi
         exit 0
         ;;
     SubagentStop)
-        rm -f "$SUBAGENT_FILE" 2>/dev/null
+        SUBAGENT_ID=$(printf '%s' "$INPUT" | json_helper field agent_id 2>/dev/null || true)
+        acquire_subagent_lock || exit 0
+        trap release_subagent_lock EXIT
+        if [ -n "$SUBAGENT_ID" ] && [ -d "$SUBAGENT_DIR" ]; then
+            SUBAGENT_ID=$(printf '%s' "$SUBAGENT_ID" | tr '\t\r\n' '___')
+            rm -f "$(subagent_marker_path "$SUBAGENT_ID")" 2>/dev/null
+        else
+            rm -rf "$SUBAGENT_DIR" 2>/dev/null
+        fi
+        if subagent_active; then
+            set_named_state "subagent"
+            release_subagent_lock
+            trap - EXIT
+            exit 0
+        fi
+        rmdir "$SUBAGENT_DIR" 2>/dev/null || true
+        if [ -f "$ATTENTION_FILE" ]; then
+            ATTENTION_STATE=$(cat "$ATTENTION_FILE" 2>/dev/null || true)
+            case "$ATTENTION_STATE" in
+                error) set_named_state "error" ;;
+                permission) set_named_state "permission" ;;
+                *) set_named_state "blocked" ;;
+            esac
+        elif in_plan_mode; then
+            set_named_state "plan"
+        elif [ -f "$REVIEW_FILE" ]; then
+            set_named_state "review"
+        elif theme_has_state "working"; then
+            set_named_state "working"
+        fi
+        release_subagent_lock
+        trap - EXIT
+        exit 0
+        ;;
+    PostToolUse)
+        if permission_active_remove_input; then
+            :
+        elif ! permission_remove_input; then
+            exit 0
+        fi
+        if permission_pending; then
+            render_pending_permission
+            exit 0
+        fi
+        rm -f "$ATTENTION_FILE" 2>/dev/null
+        if subagent_active; then
+            set_named_state "subagent"
+        elif in_plan_mode; then
+            set_named_state "plan"
+        elif [ -f "$REVIEW_FILE" ]; then
+            set_named_state "review"
+        elif theme_has_state "working"; then
+            set_named_state "working"
+        fi
         exit 0
         ;;
     PostToolUseFailure)
         # Success-weighted progress: roll back the optimistic increment from PreToolUse
         # and flash error state (without persisting attention — next PreToolUse clears).
-        if [ -f "$COUNTER_FILE" ]; then
+        ROLLBACK_ACTIVITY=$(printf '%s' "$INPUT" | json_helper field rollback_activity 2>/dev/null || true)
+        REVIEW_FAILURE=$(printf '%s' "$INPUT" | json_helper field review_failure 2>/dev/null || true)
+        if [ "$ROLLBACK_ACTIVITY" != "false" ] && [ -f "$COUNTER_FILE" ]; then
             current=$(cat "$COUNTER_FILE" 2>/dev/null)
             if [ -n "$current" ] && [ "$current" -gt 0 ] 2>/dev/null; then
                 printf '%d' "$((current - 1))" > "$COUNTER_FILE" 2>/dev/null
             fi
+        fi
+        if [ "$REVIEW_FAILURE" = "true" ] || { [ -z "$REVIEW_FAILURE" ] && is_review_payload "$INPUT"; }; then
+            rm -f "$REVIEW_FILE" 2>/dev/null
+        fi
+        if permission_active_remove_input; then
+            if permission_pending; then
+                render_pending_permission
+                exit 0
+            fi
+        elif permission_pending; then
+            if permission_remove_input && permission_pending; then
+                render_pending_permission
+                exit 0
+            elif permission_pending; then
+                render_pending_permission
+                exit 0
+            fi
+            rm -f "$ATTENTION_FILE" 2>/dev/null
         fi
         set_named_state "error"
         exit 0
@@ -557,10 +845,19 @@ case "$EVENT" in
     Notification)
         NOTIF_TYPE=$(printf '%s' "$INPUT" | json_helper field notification_type 2>/dev/null || true)
         if [ "$NOTIF_TYPE" = "permission_prompt" ]; then
+            NOTIF_KEY=$(printf '%s' "$INPUT" | json_helper field permission_key 2>/dev/null || true)
+            permission_add "${NOTIF_KEY:-uncorrelated}" "blocked"
             printf 'blocked' > "$ATTENTION_FILE" 2>/dev/null
             set_named_state "blocked"
+            emit_hitl_notification
+        elif [ "$NOTIF_TYPE" = "permission_check" ] && theme_has_state "permission"; then
+            NOTIF_KEY=$(printf '%s' "$INPUT" | json_helper field permission_key 2>/dev/null || true)
+            permission_add "${NOTIF_KEY:-uncorrelated}" "permission"
+            printf 'permission' > "$ATTENTION_FILE" 2>/dev/null
+            set_named_state "permission"
         elif [ "$NOTIF_TYPE" = "idle_prompt" ]; then
             rm -f "$COUNTER_FILE" "$ATTENTION_FILE" 2>/dev/null
+            clear_permissions
             if [ -f "$REVIEW_FILE" ]; then
                 set_named_state "review"
             else
@@ -577,13 +874,20 @@ case "$EVENT" in
         ;;
     TaskCompleted)
         if [ -f "$REVIEW_FILE" ] || is_review_payload "$INPUT"; then
-            rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$REVIEW_FILE" 2>/dev/null
-            set_named_state "done"
+            permission_active_remove_input || true
+            rm -f "$COUNTER_FILE" "$REVIEW_FILE" 2>/dev/null
+            if permission_pending; then
+                render_pending_permission
+            else
+                rm -f "$ATTENTION_FILE" 2>/dev/null
+                set_named_state "done"
+            fi
         fi
         exit 0
         ;;
     Stop)
         rm -f "$COUNTER_FILE" "$ATTENTION_FILE" 2>/dev/null
+        clear_permissions
         if detect_stop_loop; then
             loop_count=$(wc -l < "$STOP_HISTORY_FILE" 2>/dev/null | tr -d ' ')
             emit_loop_status "${loop_count:-?}"
@@ -599,14 +903,31 @@ case "$EVENT" in
         exit 0
         ;;
     PreToolUse|*)
-        rm -f "$ATTENTION_FILE" 2>/dev/null
+        PENDING_PERMISSION_RENDER=false
+        if permission_pending; then
+            if permission_remove_input; then
+                permission_active_add_input || true
+            fi
+            if permission_pending; then
+                PENDING_PERMISSION_RENDER=true
+            fi
+        fi
+        rm -f "$ATTENTION_FILE" "$PERMISSION_FILE" 2>/dev/null
         if is_review_payload "$INPUT"; then
             printf 'review' > "$REVIEW_FILE" 2>/dev/null
-            set_named_state "review"
+            if [ "$PENDING_PERMISSION_RENDER" = "true" ]; then
+                render_pending_permission
+            else
+                set_named_state "review"
+            fi
             exit 0
         fi
         if in_plan_mode; then
-            set_named_state "plan"
+            if [ "$PENDING_PERMISSION_RENDER" = "true" ]; then
+                render_pending_permission
+            else
+                set_named_state "plan"
+            fi
             exit 0
         fi
         ;;
@@ -616,5 +937,11 @@ count=1
 [ -f "$COUNTER_FILE" ] && count=$(( $(cat "$COUNTER_FILE") + 1 ))
 printf '%d' "$count" > "$COUNTER_FILE" 2>/dev/null
 
-stage_index=$(json_helper stage-index "$THEME_FILE" "$count")
-set_status_from_json "$(theme_state_json "progress" "$count")" "$((stage_index + 1))"
+if [ "${PENDING_PERMISSION_RENDER:-false}" = "true" ]; then
+    render_pending_permission
+elif [ "${VISUALHUD_ACTIVITY_MODE:-semantic}" = "legacy" ] || ! theme_has_state "working"; then
+    stage_index=$(json_helper stage-index "$THEME_FILE" "$count")
+    set_status_from_json "$(theme_state_json "progress" "$count")" "$((stage_index + 1))"
+else
+    set_named_state "working"
+fi

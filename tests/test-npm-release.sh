@@ -253,6 +253,21 @@ assert_contains "Trusted Publishing setup uses npm trust github" \
 assert_contains "Trusted Publishing setup reports linked publisher" "trusted publisher linked" "$trust_output"
 echo ""
 
+echo "--- Test 8: Candidate CI proves changes without publishing ---"
+candidate_workflow="$ROOT_DIR/.github/workflows/ci.yml"
+assert_file_exists "Candidate CI workflow exists" "$candidate_workflow"
+if [ -f "$candidate_workflow" ]; then
+    candidate_doc="$(cat "$candidate_workflow")"
+    assert_contains "Candidate CI runs for pull requests" "pull_request:" "$candidate_doc"
+    assert_contains "Candidate CI runs for main branch pushes" "branches: [main]" "$candidate_doc"
+    assert_contains "Candidate CI installs dependencies reproducibly" "npm ci" "$candidate_doc"
+    assert_contains "Candidate CI installs contact-sheet image dependency" "python3 -m pip install Pillow" "$candidate_doc"
+    assert_contains "Candidate CI runs the full test gate" "npm test" "$candidate_doc"
+    assert_not_contains "Candidate CI never publishes" "npm publish" "$candidate_doc"
+    assert_not_contains "Candidate CI does not request publish credentials" "id-token: write" "$candidate_doc"
+fi
+echo ""
+
 echo "=== Results: $PASS/$TOTAL passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then
     exit 1

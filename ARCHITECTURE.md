@@ -76,6 +76,53 @@
 - Context/token alert marker: `claude-cooking-context_${SESSION_KEY}`
 - Active code-review/background-verification marker: `claude-cooking-review_${SESSION_KEY}`
 
+## Planned Codex Task Journey
+
+This is the agreed design direction, not a description of the current
+tool-count runtime. The first implementation target is a Codex-first task journey
+driven by trustworthy task and SDLC checkpoints. Each filled top-bar block
+represents one named checkpoint with a matching theme stage, color, and
+character when the selected visual lane provides one. Tool activity may animate
+the current checkpoint, but it cannot advance task completion.
+
+The visible journey is reversible. When tests, review, or CI invalidate earlier
+work, later blocks clear and the active stage returns to the checkpoint that
+must be repeated. HITL and transient errors are overlays: they preserve the
+task's current checkpoint unless the resulting decision or failure actually
+invalidates completed work.
+
+The initial built-in profiles are:
+
+- `codex-default`: a coarse understand, plan, implement, verify, review, done
+  journey for repos without structured SDLC evidence.
+- `sdlc`: the richer intake, discovery, plan, TDD, implementation, targeted
+  tests, full suite, self-review, final-review, proof, done journey.
+- `release`: an SDLC journey extended with the repository's configured build,
+  CI, publish/deploy, and smoke gates.
+
+Profiles are repo- and task-specific. A repository can use the SDLC profile for
+normal changes and the release profile only for an actual release. Repositories
+without CI skip CI gates instead of simulating them. Local implementation,
+tests, and review precede pull-request creation; configured CI/CD begins after
+the pull request exists. A proof-invalidating CI failure moves the task journey back
+to the appropriate implementation or verification checkpoint, after which local
+proof and CI run again. A transient CI infrastructure or authentication failure remains at the CI gate
+with an error overlay because it does not invalidate completed work. A post-CI
+human or model review is optional repository policy rather than a universal
+completion requirement; merge, deploy, and smoke gates appear only when the
+selected journey requires them.
+
+Task journey and milestone progress are separate scopes. The top tab answers
+where the current issue or task is in its delivery journey. An aggregate such as
+`Tasks 2/4` or `Milestone v1.2.0 2/7` answers how many plan items or GitHub issues
+are complete and belongs in a secondary status surface. Milestone counts must
+come from GitHub or another authoritative tracker and must never advance the
+current task's character journey.
+
+Claude Code journey mapping is intentionally deferred until this design is
+validated in Codex. Claude has a different host lifecycle and may need a
+different adapter mapping while preserving the same journey semantics.
+
 ## Activity And Calibration
 
 Normal agent activity renders the theme's stable `working` state. The tool-call

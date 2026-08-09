@@ -124,7 +124,7 @@ if [ "$REQUESTED_JOURNEY_PROFILE" = "off" ]; then
 elif [ -n "$INPUT_JOURNEY_PROFILE" ]; then
     JOURNEY_PROFILE="$INPUT_JOURNEY_PROFILE"
 elif [ -f "$JOURNEY_FILE" ]; then
-    STORED_JOURNEY_PROFILE=$(cat "$JOURNEY_FILE" 2>/dev/null | json_helper field profile 2>/dev/null || true)
+    STORED_JOURNEY_PROFILE=$(json_helper field profile 2>/dev/null < "$JOURNEY_FILE" || true)
     case "$STORED_JOURNEY_PROFILE" in
         codex-default|sdlc|release) JOURNEY_PROFILE="$STORED_JOURNEY_PROFILE" ;;
         *) JOURNEY_PROFILE="$REQUESTED_JOURNEY_PROFILE" ;;
@@ -556,7 +556,7 @@ journey_reset_if_done() {
     [ -f "$JOURNEY_FILE" ] || return 0
     acquire_journey_lock || return 1
     trap release_journey_lock EXIT
-    current=$(cat "$JOURNEY_FILE" 2>/dev/null | json_helper field current 2>/dev/null || true)
+    current=$(json_helper field current 2>/dev/null < "$JOURNEY_FILE" || true)
     if [ "$current" = "done" ]; then
         rm -rf "$JOURNEY_OPERATION_DIR" 2>/dev/null
         rm -f "$JOURNEY_FILE" "$AGGREGATE_FILE" 2>/dev/null

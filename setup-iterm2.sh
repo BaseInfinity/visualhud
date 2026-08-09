@@ -62,7 +62,9 @@ setup_failed() {
 trap setup_failed ERR
 
 read_status() {
-    [ -n "$STATUS_FILE" ] && cat "$STATUS_FILE" 2>/dev/null || true
+    if [ -n "$STATUS_FILE" ]; then
+        cat "$STATUS_FILE" 2>/dev/null || true
+    fi
 }
 
 detect_iterm_state() {

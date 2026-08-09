@@ -20,15 +20,18 @@ export VISUALHUD_STATE_DIR="$STATE_ROOT"
 TEST_SESSION="w0t0p0:VISUALHUD_CLI_$(date +%s)"
 export ITERM_SESSION_ID="$TEST_SESSION"
 SESSION_KEY=$(printf '%s' "$TEST_SESSION" | tr ':/' '__')
+PROJECT_CHECKSUM=$(printf '%s' "$ROOT_DIR" | cksum)
+PROJECT_KEY=${PROJECT_CHECKSUM%% *}
 COUNTER_FILE="$STATE_ROOT/claude-cooking-counter_${SESSION_KEY}"
 STAGE_FILE="$STATE_ROOT/claude-cooking-stage_${SESSION_KEY}"
 ATTENTION_FILE="$STATE_ROOT/claude-cooking-attention_${SESSION_KEY}"
 CONTEXT_FILE="$STATE_ROOT/claude-cooking-context_${SESSION_KEY}"
+JOURNEY_FILE="$STATE_ROOT/visualhud-journey_${SESSION_KEY}_${PROJECT_KEY}.json"
 
 cleanup() {
     rm -f "$COUNTER_FILE" "$STAGE_FILE" "$ATTENTION_FILE" "$CONTEXT_FILE" 2>/dev/null
     rm -rf "$TMP_ROOT"
-    unset VISUALHUD_ROOT VISUALHUD_THEMES_DIR VISUALHUD_THEME_FILE VISUALHUD_THEME
+    unset VISUALHUD_ROOT VISUALHUD_ENGINE VISUALHUD_THEMES_DIR VISUALHUD_THEME_FILE VISUALHUD_THEME
     unset VISUALHUD_DEFAULT_THEME VISUALHUD_TTY VISUALHUD_SET_BG VISUALHUD_STATE_DIR
 }
 trap cleanup EXIT
@@ -91,6 +94,7 @@ cp "$ROOT_DIR/themes/pokemon/theme.json" "$TMP_ROOT/themes/pokemon/theme.json"
 cp "$ROOT_DIR/themes/tmnt/theme.json" "$TMP_ROOT/themes/tmnt/theme.json"
 
 export VISUALHUD_ROOT="$TMP_ROOT"
+export VISUALHUD_ENGINE="$ENGINE"
 export VISUALHUD_THEMES_DIR="$TMP_ROOT/themes"
 export VISUALHUD_THEME_FILE="$TMP_ROOT/theme"
 export VISUALHUD_TTY="$TMP_ROOT/tty.log"
@@ -116,6 +120,7 @@ set -e
 assert_eq "Help exits zero" "0" "$help_status"
 assert_contains "Help shows bare npx install command" "npx -y visualhud@latest" "$help_output"
 assert_contains "Help shows Codex start command" "codex --yolo" "$help_output"
+assert_contains "Help exposes explicit release journey evidence" "journey set <checkpoint> <outcome>" "$help_output"
 assert_not_contains "Help does not recommend legacy full-auto flag" "codex --full-auto" "$help_output"
 echo ""
 
@@ -138,6 +143,60 @@ assert_contains "Theme legend includes review" "REVIEW" "$legend_output"
 assert_contains "Theme legend includes error" "ERROR" "$legend_output"
 assert_contains "Theme legend includes done" "DONE" "$legend_output"
 assert_contains "Theme legend includes idle" "IDLE" "$legend_output"
+journey_legend_output=$(VISUALHUD_JOURNEY_PROFILE=sdlc "$CLI" theme legend pokemon 2>&1 || true)
+assert_contains "Theme legend names the selected journey profile" "Journey profile: sdlc" "$journey_legend_output"
+assert_contains "Theme legend maps explicit checkpoints" "CHECKPOINT" "$journey_legend_output"
+assert_contains "Theme legend explains state-preserving overlays" "OVERLAY" "$journey_legend_output"
+assert_contains "Theme legend explains backward movement" "ROLLBACK" "$journey_legend_output"
+echo ""
+
+echo "--- Test 2b: Journey CLI can advance explicit release-only gates ---"
+export VISUALHUD_JOURNEY_PROFILE=release
+"$CLI" journey set proof passed >/dev/null
+assert_eq "Passing local proof enters the CI gate" "ci" \
+    "$(jq -r '.current' "$JOURNEY_FILE")"
+"$CLI" journey set ci passed >/dev/null
+assert_eq "Passing CI enters publish" "publish" \
+    "$(jq -r '.current' "$JOURNEY_FILE")"
+"$CLI" journey set publish passed >/dev/null
+assert_eq "Passing publish enters smoke verification" "smoke" \
+    "$(jq -r '.current' "$JOURNEY_FILE")"
+"$CLI" journey set smoke passed >/dev/null
+assert_eq "Passing smoke completes the release journey" "done" \
+    "$(jq -r '.current' "$JOURNEY_FILE")"
+unset VISUALHUD_JOURNEY_PROFILE
+node "$ROOT_DIR/scripts/visualhud-json.js" journey-transition release proof proof started > "$JOURNEY_FILE"
+"$CLI" journey set proof passed >/dev/null
+assert_eq "Omitted profile preserves the active release journey" "release:ci" \
+    "$(jq -r '[.profile,.current] | join(":")' "$JOURNEY_FILE")"
+echo ""
+
+echo "--- Test 2c: Journey CLI shares the active WezTerm pane state ---"
+(
+    unset ITERM_SESSION_ID WT_SESSION
+    export WEZTERM_PANE=42 VISUALHUD_JOURNEY_PROFILE=release
+    printf '%s' '{"hook_event_name":"PreToolUse","session_id":"codex-wez-session","journey_checkpoint":"proof","journey_outcome":"started"}' | bash "$ENGINE" >/dev/null
+    "$CLI" journey set proof passed >/dev/null
+)
+assert_eq "WezTerm CLI advances the hook-owned pane journey" "ci" \
+    "$(jq -r '.current' "$STATE_ROOT/visualhud-journey_42_${PROJECT_KEY}.json" 2>/dev/null || true)"
+assert_eq "WezTerm CLI does not create a fallback journey" "absent" \
+    "$([ -f "$STATE_ROOT/visualhud-journey_visualhud_${PROJECT_KEY}.json" ] && printf present || printf absent)"
+echo ""
+
+echo "--- Test 2d: Journey CLI keeps repository scope from nested directories ---"
+node "$ROOT_DIR/scripts/visualhud-json.js" journey-transition release proof proof started > "$JOURNEY_FILE"
+NESTED_PROJECT_CHECKSUM=$(printf '%s' "$ROOT_DIR/tests" | cksum)
+NESTED_PROJECT_KEY=${NESTED_PROJECT_CHECKSUM%% *}
+(
+    unset VISUALHUD_PROJECT_ROOT
+    cd "$ROOT_DIR/tests"
+    "$CLI" journey set proof passed >/dev/null
+)
+assert_eq "Nested CLI advances the repository journey" "ci" \
+    "$(jq -r '.current' "$JOURNEY_FILE" 2>/dev/null || true)"
+assert_eq "Nested CLI does not create subdirectory journey state" "absent" \
+    "$([ -f "$STATE_ROOT/visualhud-journey_${SESSION_KEY}_${NESTED_PROJECT_KEY}.json" ] && printf present || printf absent)"
 echo ""
 
 echo "--- Test 3: Invalid theme names are rejected without changing active theme ---"
@@ -148,7 +207,7 @@ echo ""
 
 echo "--- Test 4: Active theme file hot-swaps on the next hook ---"
 cleanup_stage() {
-    rm -f "$COUNTER_FILE" "$STAGE_FILE" "$ATTENTION_FILE" "$CONTEXT_FILE" 2>/dev/null
+    rm -f "$COUNTER_FILE" "$STAGE_FILE" "$ATTENTION_FILE" "$CONTEXT_FILE" "$JOURNEY_FILE" 2>/dev/null
     : > "$VISUALHUD_TTY"
 }
 

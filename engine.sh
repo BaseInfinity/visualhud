@@ -45,6 +45,8 @@ json_helper() {
 }
 
 EVENT=$(printf '%s' "$INPUT" | json_helper event-name 2>/dev/null || true)
+SOURCE_EVENT=$(printf '%s' "$INPUT" | json_helper field source_event 2>/dev/null || true)
+START_SOURCE=$(printf '%s' "$INPUT" | json_helper field start_source 2>/dev/null || true)
 
 if [ -z "$EVENT" ]; then
     case "${1:-}" in
@@ -72,7 +74,7 @@ if [ ! -f "$THEME_FILE" ]; then
 fi
 
 INPUT_SESSION_ID=$(printf '%s' "$INPUT" | json_helper field session_id 2>/dev/null || true)
-SESSION_ID="${ITERM_SESSION_ID:-${WT_SESSION:-${INPUT_SESSION_ID:-visualhud}}}"
+SESSION_ID="${ITERM_SESSION_ID:-${WT_SESSION:-${WEZTERM_PANE:-${INPUT_SESSION_ID:-visualhud}}}}"
 PROJECT_NAME=$(basename "$PWD")
 SESSION_KEY=$(printf '%s' "$SESSION_ID" | tr ':/' '__')
 VISUALHUD_STATE_ROOT="${VISUALHUD_STATE_DIR:-${TMPDIR:-/tmp}}"
@@ -96,12 +98,54 @@ PERMISSION_LOCK="${PERMISSION_DIR}.lock"
 TOKENS_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-tokens_${SESSION_KEY}"
 STOP_HISTORY_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-stop-history_${SESSION_KEY}"
 LOOP_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-loop_${SESSION_KEY}"
+PROJECT_PATH="${VISUALHUD_PROJECT_ROOT:-$PWD}"
+PROJECT_CHECKSUM=$(printf '%s' "$PROJECT_PATH" | cksum)
+PROJECT_KEY=${PROJECT_CHECKSUM%% *}
+JOURNEY_KEY="${SESSION_KEY}_${PROJECT_KEY}"
+JOURNEY_FILE="$VISUALHUD_STATE_ROOT/visualhud-journey_${JOURNEY_KEY}.json"
+JOURNEY_HISTORY_FILE="$VISUALHUD_STATE_ROOT/visualhud-journey-history_${JOURNEY_KEY}.jsonl"
+JOURNEY_LOCK="$VISUALHUD_STATE_ROOT/visualhud-journey_${JOURNEY_KEY}.lock"
+JOURNEY_OPERATION_DIR="$VISUALHUD_STATE_ROOT/visualhud-journey-operations_${JOURNEY_KEY}.d"
+AGGREGATE_FILE="$VISUALHUD_STATE_ROOT/visualhud-aggregate_${JOURNEY_KEY}"
+TURN_FAILURE_FILE="$VISUALHUD_STATE_ROOT/visualhud-turn-failure_${JOURNEY_KEY}"
 SPRITES_DIR="${VISUALHUD_SPRITES_DIR:-$SCRIPT_DIR/sprites}"
 SET_BG="${VISUALHUD_SET_BG:-$SCRIPT_DIR/set_bg.py}"
 TTY_TARGET=$(resolve_tty_target)
 RENDERER="${VISUALHUD_RENDERER:-}"
 VISUALHUD_LOOP_WINDOW_SEC="${VISUALHUD_LOOP_WINDOW_SEC:-30}"
 VISUALHUD_LOOP_THRESHOLD="${VISUALHUD_LOOP_THRESHOLD:-8}"
+REQUESTED_JOURNEY_PROFILE="${VISUALHUD_JOURNEY_PROFILE:-}"
+INPUT_JOURNEY_PROFILE=""
+case "$INPUT" in
+    *'"journey_profile"'*) INPUT_JOURNEY_PROFILE=$(printf '%s' "$INPUT" | json_helper field journey_profile 2>/dev/null || true) ;;
+esac
+if [ "$REQUESTED_JOURNEY_PROFILE" = "off" ]; then
+    JOURNEY_PROFILE="off"
+elif [ -n "$INPUT_JOURNEY_PROFILE" ]; then
+    JOURNEY_PROFILE="$INPUT_JOURNEY_PROFILE"
+elif [ -f "$JOURNEY_FILE" ]; then
+    STORED_JOURNEY_PROFILE=$(cat "$JOURNEY_FILE" 2>/dev/null | json_helper field profile 2>/dev/null || true)
+    case "$STORED_JOURNEY_PROFILE" in
+        codex-default|sdlc|release) JOURNEY_PROFILE="$STORED_JOURNEY_PROFILE" ;;
+        *) JOURNEY_PROFILE="$REQUESTED_JOURNEY_PROFILE" ;;
+    esac
+else
+    JOURNEY_PROFILE="$REQUESTED_JOURNEY_PROFILE"
+fi
+JOURNEY_ENABLED=false
+if [ -n "$JOURNEY_PROFILE" ] && [ "$JOURNEY_PROFILE" != "off" ] && [ "${VISUALHUD_ACTIVITY_MODE:-semantic}" != "legacy" ]; then
+    JOURNEY_ENABLED=true
+fi
+JOURNEY_RENDER_JSON=""
+AGGREGATE_STATUS=""
+case "$INPUT" in
+    *'"journey_aggregate"'*) AGGREGATE_STATUS=$(printf '%s' "$INPUT" | json_helper field journey_aggregate 2>/dev/null || true) ;;
+esac
+if [ -n "$AGGREGATE_STATUS" ]; then
+    printf '%s' "$AGGREGATE_STATUS" > "$AGGREGATE_FILE" 2>/dev/null || true
+elif [ -f "$AGGREGATE_FILE" ]; then
+    AGGREGATE_STATUS=$(cat "$AGGREGATE_FILE" 2>/dev/null || true)
+fi
 
 if [ -z "$RENDERER" ]; then
     if [ -n "${WEZTERM_PANE:-}" ]; then
@@ -272,6 +316,7 @@ emit_iterm_status() {
         printf '\033]1337;SetUserVar=%s=%s\007' "hudContext" "$(printf '%s' "$context_title" | base64)"
         printf '\033]1337;SetUserVar=%s=%s\007' "hudEffort" "$(printf '%s' "${EFFORT_LEVEL:-}" | base64)"
         printf '\033]1337;SetUserVar=%s=%s\007' "hudCost" "$(printf '%s' "${TOKEN_TOTAL:-}" | base64)"
+        printf '\033]1337;SetUserVar=%s=%s\007' "hudAggregate" "$(printf '%s' "${AGGREGATE_STATUS:-}" | base64)"
     } >> "$tty_target" 2>/dev/null || true
 }
 
@@ -297,6 +342,13 @@ windows_progress_state() {
                 printf '1'
             fi
             ;;
+        journey)
+            if [ -n "$context_alert" ]; then
+                printf '4'
+            else
+                printf '1'
+            fi
+            ;;
         *)
             printf '0'
             ;;
@@ -304,12 +356,19 @@ windows_progress_state() {
 }
 
 windows_progress_percent() {
-    local stage_num="$1" state_kind="$2" limit
+    local stage_num="$1" state_kind="$2" journey_total="${3:-}" limit
     case "$state_kind" in
         progress)
             limit=$(json_helper progress-bar-length "$THEME_FILE" 2>/dev/null || printf '0')
             if [ -n "$stage_num" ] && [ "$limit" -gt 0 ]; then
                 printf '%d' $((stage_num * 100 / limit))
+            else
+                printf '0'
+            fi
+            ;;
+        journey)
+            if [ -n "$stage_num" ] && [ -n "$journey_total" ] && [ "$journey_total" -gt 0 ]; then
+                printf '%d' $((stage_num * 100 / journey_total))
             else
                 printf '0'
             fi
@@ -321,11 +380,11 @@ windows_progress_percent() {
 }
 
 emit_windows_status() {
-    local tty_target="$1" title="$2" stage_num="$3" state_kind="$4" context_alert="$5"
+    local tty_target="$1" title="$2" stage_num="$3" state_kind="$4" context_alert="$5" journey_total="${6:-}"
     local progress_state progress_percent
 
     progress_state=$(windows_progress_state "$state_kind" "$context_alert")
-    progress_percent=$(windows_progress_percent "$stage_num" "$state_kind")
+    progress_percent=$(windows_progress_percent "$stage_num" "$state_kind" "$journey_total")
     {
         printf '\033]0;%s\a' "$title"
         printf '\033]9;4;%s;%s\a' "$progress_state" "$progress_percent"
@@ -334,11 +393,11 @@ emit_windows_status() {
 
 emit_wezterm_status() {
     local tty_target="$1" badge_text="$2" title="$3" context_title="$4" stage_num="$5" state_kind="$6"
-    local sprite_path="$7" color_hex="$8" tint_hex="$9" stage_name="${10}" progress_percent state_b64 render_stage
+    local sprite_path="$7" color_hex="$8" tint_hex="$9" stage_name="${10}" journey_total="${11:-}" progress_percent state_b64 render_stage
 
-    progress_percent=$(windows_progress_percent "$stage_num" "$state_kind")
+    progress_percent=$(windows_progress_percent "$stage_num" "$state_kind" "$journey_total")
     render_stage="$stage_num"
-    if [ "$state_kind" != "progress" ]; then
+    if [ "$state_kind" != "progress" ] && [ "$state_kind" != "journey" ]; then
         render_stage=""
     fi
     state_b64=$(json_helper wezterm-state \
@@ -363,14 +422,14 @@ emit_wezterm_status() {
 emit_terminal_status() {
     local tty_target="$1" badge_text="$2" tr="$3" tg="$4" tb="$5" rh="$6" gh="$7" bh="$8" r="$9"
     shift 9
-    local g="$1" b="$2" title="$3" context_title="$4" stage_num="${5:-}" state_kind="${6:-progress}" context_alert="${7:-}" sprite_path="${8:-}" stage_name="${9:-}"
+    local g="$1" b="$2" title="$3" context_title="$4" stage_num="${5:-}" state_kind="${6:-progress}" context_alert="${7:-}" sprite_path="${8:-}" stage_name="${9:-}" journey_total="${10:-}"
 
     case "$RENDERER" in
         wezterm)
-            emit_wezterm_status "$tty_target" "$badge_text" "$title" "$context_title" "$stage_num" "$state_kind" "$sprite_path" "#${rh}${gh}${bh}" "#${tr}${tg}${tb}" "$stage_name"
+            emit_wezterm_status "$tty_target" "$badge_text" "$title" "$context_title" "$stage_num" "$state_kind" "$sprite_path" "#${rh}${gh}${bh}" "#${tr}${tg}${tb}" "$stage_name" "$journey_total"
             ;;
         windows|win32|powershell|windows-terminal)
-            emit_windows_status "$tty_target" "$title" "$stage_num" "$state_kind" "$context_alert"
+            emit_windows_status "$tty_target" "$title" "$stage_num" "$state_kind" "$context_alert" "$journey_total"
             ;;
         *)
             emit_iterm_status "$tty_target" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title"
@@ -382,10 +441,10 @@ set_status_from_json() {
     local state_json="$1" fallback_stage_num="${2:-}" state_kind="${3:-progress}"
     local r g b sprite badge_emoji stage_name stage_num rh gh bh tr tg tb badge_text title sprite_path
     local context_alert context_level context_percent context_badge context_name context_title reapply_delay
-    local state_fields
+    local state_fields state_progress_bar state_journey_total
 
     state_fields=$(printf '%s' "$state_json" | json_helper state-fields)
-    IFS=$'\037' read -r r g b sprite badge_emoji stage_name stage_num <<< "$state_fields"
+    IFS=$'\037' read -r r g b sprite badge_emoji stage_name stage_num state_progress_bar state_journey_total <<< "$state_fields"
     stage_num="${stage_num:-$fallback_stage_num}"
 
     rh=$(to_hex "$r")
@@ -395,7 +454,10 @@ set_status_from_json() {
     tg=$(to_tint "$g")
     tb=$(to_tint "$b")
 
-    if [ "$state_kind" = "progress" ] && [ -n "$stage_num" ]; then
+    if [ "$state_kind" = "journey" ] && [ -n "$stage_num" ]; then
+        badge_text=$(badge_text_for "$badge_emoji" "$stage_name" "$stage_num")
+        title="${state_progress_bar} ${badge_emoji} ${stage_name} — ${PROJECT_NAME}"
+    elif [ "$state_kind" = "progress" ] && [ -n "$stage_num" ]; then
         badge_text=$(badge_text_for "$badge_emoji" "$stage_name" "$stage_num")
         if [ -n "$stage_name" ]; then
             title="$(progress_bar "$stage_num") ${badge_emoji} ${stage_name} — ${PROJECT_NAME}"
@@ -426,18 +488,18 @@ set_status_from_json() {
     fi
 
     sprite_path=$(sprite_path_for "$sprite")
-    emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name"
+    emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total"
     reapply_delay="${VISUALHUD_REAPPLY_DELAY:-0}"
     if [ -n "$reapply_delay" ] && [ "$reapply_delay" != "0" ]; then
         (
             sleep "$reapply_delay"
-            emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name"
+            emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total"
         ) >/dev/null 2>&1 &
     fi
 
     local last_stage=""
     [ -f "$STAGE_FILE" ] && last_stage=$(cat "$STAGE_FILE")
-    if [ "$sprite" != "$last_stage" ] && [ -n "$sprite" ]; then
+    if [ ! -f "$STAGE_FILE" ] || [ "$sprite" != "$last_stage" ] || [ "${BACKGROUND_NEEDS_APPLY:-false}" = "true" ]; then
         printf '%s' "$sprite" > "$STAGE_FILE" 2>/dev/null
         # Background sprite is opt-in. Default is compact mode (no full-pane sprite).
         # Enable with VISUALHUD_BG=on for the full-pane sprite background.
@@ -451,6 +513,73 @@ set_status_from_json() {
 set_named_state() {
     local state="$1"
     set_status_from_json "$(theme_state_json "$state")" "" "$state"
+}
+
+acquire_journey_lock() {
+    local attempt=0
+    while ! mkdir "$JOURNEY_LOCK" 2>/dev/null; do
+        attempt=$((attempt + 1))
+        [ "$attempt" -lt 500 ] || return 1
+        sleep 0.01
+    done
+}
+
+release_journey_lock() {
+    rmdir "$JOURNEY_LOCK" 2>/dev/null || true
+}
+
+journey_apply_signal() {
+    [ "$JOURNEY_ENABLED" = "true" ] || return 1
+    acquire_journey_lock || return 1
+    trap release_journey_lock EXIT
+    JOURNEY_RENDER_JSON=$(printf '%s' "$INPUT" | json_helper journey-apply \
+        "$JOURNEY_PROFILE" "$JOURNEY_FILE" "$JOURNEY_HISTORY_FILE" \
+        "$JOURNEY_OPERATION_DIR" "$THEME_FILE")
+    release_journey_lock
+    trap - EXIT
+}
+
+journey_complete_read_only() {
+    [ "$JOURNEY_ENABLED" = "true" ] || return 1
+    [ "$JOURNEY_PROFILE" = "codex-default" ] || return 0
+    acquire_journey_lock || return 1
+    trap release_journey_lock EXIT
+    JOURNEY_RENDER_JSON=$(json_helper journey-complete-read-only \
+        "$JOURNEY_PROFILE" "$JOURNEY_FILE" "$JOURNEY_HISTORY_FILE" "$THEME_FILE")
+    release_journey_lock
+    trap - EXIT
+}
+
+journey_reset_if_done() {
+    local current
+    [ "$JOURNEY_ENABLED" = "true" ] || return 1
+    [ -f "$JOURNEY_FILE" ] || return 0
+    acquire_journey_lock || return 1
+    trap release_journey_lock EXIT
+    current=$(cat "$JOURNEY_FILE" 2>/dev/null | json_helper field current 2>/dev/null || true)
+    if [ "$current" = "done" ]; then
+        rm -rf "$JOURNEY_OPERATION_DIR" 2>/dev/null
+        rm -f "$JOURNEY_FILE" "$AGGREGATE_FILE" 2>/dev/null
+        AGGREGATE_STATUS=""
+        JOURNEY_RENDER_JSON=""
+        JOURNEY_PROFILE="${REQUESTED_JOURNEY_PROFILE:-$JOURNEY_PROFILE}"
+    fi
+    release_journey_lock
+    trap - EXIT
+}
+
+render_journey() {
+    local state_json
+    [ "$JOURNEY_ENABLED" = "true" ] || return 1
+    if [ -z "$JOURNEY_RENDER_JSON" ]; then
+        if [ ! -f "$JOURNEY_FILE" ]; then
+            journey_apply_signal || return 1
+        else
+            JOURNEY_RENDER_JSON=$(json_helper journey-render-file "$THEME_FILE" "$JOURNEY_PROFILE" "$JOURNEY_FILE")
+        fi
+    fi
+    state_json="$JOURNEY_RENDER_JSON"
+    set_status_from_json "$state_json" "" journey
 }
 
 emit_hitl_notification() {
@@ -467,9 +596,13 @@ CONTEXT_ALERT_JSON=$(context_alert_json "$CONTEXT_PERCENT")
 # per-pane state; with compact-by-default we never call set_bg.py again, so
 # the stale image sticks forever. One explicit clear per pane fixes it.
 # Toggling VISUALHUD_BG=on removes the marker so off→on→off re-triggers.
+BACKGROUND_NEEDS_APPLY=false
 if [ "$RENDERER" != "iterm2" ]; then
     :
 elif [ "${VISUALHUD_BG:-off}" = "on" ]; then
+    if [ -f "$BG_CLEAR_FILE" ]; then
+        BACKGROUND_NEEDS_APPLY=true
+    fi
     rm -f "$BG_CLEAR_FILE" 2>/dev/null
 elif [ ! -f "$BG_CLEAR_FILE" ] && [ -f "$SET_BG" ]; then
     python3 "$SET_BG" "" "$SESSION_ID" 2>/dev/null &
@@ -688,16 +821,29 @@ subagent_active() {
     [ -d "$SUBAGENT_DIR" ] && [ -n "$(find "$SUBAGENT_DIR" -type f -print -quit 2>/dev/null)" ]
 }
 
+if [ "$JOURNEY_ENABLED" = "true" ] && ! { [ "$EVENT" = "Stop" ] && [ "$SOURCE_EVENT" = "SessionStart" ]; }; then
+    journey_apply_signal || true
+fi
+
 case "$EVENT" in
     UserPromptSubmit)
         # Reset working counter + attention, but preserve REVIEW_FILE.
         # A user message during an in-flight code review (background shell still
         # running) must not flip the state to 'done' on the next Stop.
         # A user message also breaks any /goal Stop loop in progress — clear loop state.
-        rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$STOP_HISTORY_FILE" "$LOOP_FILE" 2>/dev/null
+        rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$TURN_FAILURE_FILE" "$STOP_HISTORY_FILE" "$LOOP_FILE" 2>/dev/null
         clear_permissions
+        if [ "$JOURNEY_ENABLED" = "true" ]; then
+            journey_reset_if_done || true
+        fi
         if in_plan_mode; then
-            set_named_state "plan"
+            if [ "$JOURNEY_ENABLED" = "true" ]; then
+                render_journey
+            else
+                set_named_state "plan"
+            fi
+        elif [ "$JOURNEY_ENABLED" = "true" ]; then
+            render_journey
         fi
         exit 0
         ;;
@@ -724,6 +870,9 @@ case "$EVENT" in
                 clear_permissions
                 ;;
         esac
+        if [ "$JOURNEY_ENABLED" = "true" ]; then
+            render_journey
+        fi
         exit 0
         ;;
     PreCompact)
@@ -736,6 +885,9 @@ case "$EVENT" in
         ;;
     PostCompact)
         rm -f "$COMPACT_FILE" 2>/dev/null
+        if [ "$JOURNEY_ENABLED" = "true" ]; then
+            render_journey
+        fi
         exit 0
         ;;
     SubagentStart)
@@ -777,6 +929,8 @@ case "$EVENT" in
                 permission) set_named_state "permission" ;;
                 *) set_named_state "blocked" ;;
             esac
+        elif [ "$JOURNEY_ENABLED" = "true" ]; then
+            render_journey
         elif in_plan_mode; then
             set_named_state "plan"
         elif [ -f "$REVIEW_FILE" ]; then
@@ -792,6 +946,9 @@ case "$EVENT" in
         if permission_active_remove_input; then
             :
         elif ! permission_remove_input; then
+            if [ "$JOURNEY_ENABLED" = "true" ]; then
+                render_journey
+            fi
             exit 0
         fi
         if permission_pending; then
@@ -801,6 +958,8 @@ case "$EVENT" in
         rm -f "$ATTENTION_FILE" 2>/dev/null
         if subagent_active; then
             set_named_state "subagent"
+        elif [ "$JOURNEY_ENABLED" = "true" ]; then
+            render_journey
         elif in_plan_mode; then
             set_named_state "plan"
         elif [ -f "$REVIEW_FILE" ]; then
@@ -811,8 +970,8 @@ case "$EVENT" in
         exit 0
         ;;
     PostToolUseFailure)
-        # Success-weighted progress: roll back the optimistic increment from PreToolUse
-        # and flash error state (without persisting attention — next PreToolUse clears).
+        # Roll back optimistic activity and flash the error. Journey mode also
+        # latches the failure through Stop so later tools cannot erase it.
         ROLLBACK_ACTIVITY=$(printf '%s' "$INPUT" | json_helper field rollback_activity 2>/dev/null || true)
         REVIEW_FAILURE=$(printf '%s' "$INPUT" | json_helper field review_failure 2>/dev/null || true)
         if [ "$ROLLBACK_ACTIVITY" != "false" ] && [ -f "$COUNTER_FILE" ]; then
@@ -823,6 +982,10 @@ case "$EVENT" in
         fi
         if [ "$REVIEW_FAILURE" = "true" ] || { [ -z "$REVIEW_FAILURE" ] && is_review_payload "$INPUT"; }; then
             rm -f "$REVIEW_FILE" 2>/dev/null
+        fi
+        if [ "$JOURNEY_ENABLED" = "true" ]; then
+            printf 'error' > "$ATTENTION_FILE" 2>/dev/null
+            printf 'error' > "$TURN_FAILURE_FILE" 2>/dev/null
         fi
         if permission_active_remove_input; then
             if permission_pending; then
@@ -872,12 +1035,24 @@ case "$EVENT" in
         set_named_state "error"
         exit 0
         ;;
+    JourneyUpdate)
+        JOURNEY_OUTCOME=$(printf '%s' "$INPUT" | json_helper field journey_outcome 2>/dev/null || true)
+        if [ "$JOURNEY_OUTCOME" = "transient" ]; then
+            set_named_state "error"
+        elif [ "$JOURNEY_ENABLED" = "true" ]; then
+            render_journey
+        fi
+        exit 0
+        ;;
     TaskCompleted)
         if [ -f "$REVIEW_FILE" ] || is_review_payload "$INPUT"; then
             permission_active_remove_input || true
             rm -f "$COUNTER_FILE" "$REVIEW_FILE" 2>/dev/null
             if permission_pending; then
                 render_pending_permission
+            elif [ "$JOURNEY_ENABLED" = "true" ]; then
+                rm -f "$ATTENTION_FILE" 2>/dev/null
+                render_journey
             else
                 rm -f "$ATTENTION_FILE" 2>/dev/null
                 set_named_state "done"
@@ -886,8 +1061,30 @@ case "$EVENT" in
         exit 0
         ;;
     Stop)
-        rm -f "$COUNTER_FILE" "$ATTENTION_FILE" 2>/dev/null
+        STOP_HAD_ERROR=false
+        if [ -f "$TURN_FAILURE_FILE" ]; then
+            STOP_HAD_ERROR=true
+        fi
+        rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$TURN_FAILURE_FILE" 2>/dev/null
         clear_permissions
+        if [ "$SOURCE_EVENT" = "SessionStart" ]; then
+            case "$START_SOURCE" in
+                resume|compact)
+                    if [ "$JOURNEY_ENABLED" = "true" ] && [ -f "$JOURNEY_FILE" ]; then
+                        render_journey
+                    else
+                        set_named_state "idle"
+                    fi
+                    ;;
+                *)
+                    rm -rf "$JOURNEY_OPERATION_DIR" 2>/dev/null
+                    rm -f "$JOURNEY_FILE" "$AGGREGATE_FILE" "$TURN_FAILURE_FILE" "$REVIEW_FILE" 2>/dev/null
+                    AGGREGATE_STATUS=""
+                    set_named_state "idle"
+                    ;;
+            esac
+            exit 0
+        fi
         if detect_stop_loop; then
             loop_count=$(wc -l < "$STOP_HISTORY_FILE" 2>/dev/null | tr -d ' ')
             emit_loop_status "${loop_count:-?}"
@@ -895,7 +1092,17 @@ case "$EVENT" in
         fi
         if [ -f "$REVIEW_FILE" ] || is_review_payload "$INPUT"; then
             printf 'review' > "$REVIEW_FILE" 2>/dev/null
-            set_named_state "review"
+            if [ "$JOURNEY_ENABLED" = "true" ]; then
+                render_journey
+            else
+                set_named_state "review"
+            fi
+        elif [ "$JOURNEY_ENABLED" = "true" ]; then
+            rm -f "$REVIEW_FILE" 2>/dev/null
+            if [ "$STOP_HAD_ERROR" != "true" ]; then
+                journey_complete_read_only || true
+            fi
+            render_journey
         else
             rm -f "$REVIEW_FILE" 2>/dev/null
             set_named_state "done"
@@ -917,6 +1124,8 @@ case "$EVENT" in
             printf 'review' > "$REVIEW_FILE" 2>/dev/null
             if [ "$PENDING_PERMISSION_RENDER" = "true" ]; then
                 render_pending_permission
+            elif [ "$JOURNEY_ENABLED" = "true" ]; then
+                render_journey
             else
                 set_named_state "review"
             fi
@@ -925,6 +1134,8 @@ case "$EVENT" in
         if in_plan_mode; then
             if [ "$PENDING_PERMISSION_RENDER" = "true" ]; then
                 render_pending_permission
+            elif [ "$JOURNEY_ENABLED" = "true" ]; then
+                render_journey
             else
                 set_named_state "plan"
             fi
@@ -932,6 +1143,11 @@ case "$EVENT" in
         fi
         ;;
 esac
+
+if [ "$JOURNEY_ENABLED" = "true" ]; then
+    render_journey
+    exit 0
+fi
 
 count=1
 [ -f "$COUNTER_FILE" ] && count=$(( $(cat "$COUNTER_FILE") + 1 ))

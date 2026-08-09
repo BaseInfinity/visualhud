@@ -29,6 +29,10 @@
 - iTerm2 API calls are mocked (can't run outside iTerm2)
 - Semantic transition tests prove stable `WORKING`, explicit `HITL`, review
   completion/failure cleanup, and that tool count is not presented as progress.
+- Task-journey integration tests prove profile selection, evidence-driven
+  advancement, rollback, overlay preservation, aggregate separation, immediate
+  repainting, stale-sprite clearing, read-only completion, and rejection of
+  stale concurrent verification after an invalidating edit.
 
 ## Testing Diamond
 
@@ -72,6 +76,7 @@ tests/
   run-all.sh                 <- Full local/publish verification suite
   test-cooking-status.sh    <- Main hook integration tests
   test-codex-visualhud.sh   <- Codex adapter integration tests
+  test-journey-state.sh     <- Reversible task-journey integration tests
   test-visualhud-skills.sh  <- Packaged skill docs + install discovery tests
   test-npm-package.sh       <- npm pack + npx tarball consumer install test
   test-npm-release.sh       <- npm auth/test/dry-run/publish automation test

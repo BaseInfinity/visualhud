@@ -15,6 +15,14 @@ fi
 
 export VISUALHUD_DEFAULT_THEME="${VISUALHUD_DEFAULT_THEME:-tmnt}"
 export VISUALHUD_REAPPLY_DELAY="${VISUALHUD_REAPPLY_DELAY:-0.12}"
+export VISUALHUD_PROJECT_ROOT="${VISUALHUD_PROJECT_ROOT:-$REPO_ROOT}"
+if [ -z "${VISUALHUD_JOURNEY_PROFILE:-}" ]; then
+  if [ -f "$REPO_ROOT/.codex-sdlc/manifest.json" ] || [ -f "$REPO_ROOT/.agents/skills/sdlc/SKILL.md" ]; then
+    export VISUALHUD_JOURNEY_PROFILE=sdlc
+  else
+    export VISUALHUD_JOURNEY_PROFILE=codex-default
+  fi
+fi
 
 PAYLOAD=$(printf '%s' "$INPUT" | node "$JSON_HELPER" codex-payload 2>/dev/null || true)
 

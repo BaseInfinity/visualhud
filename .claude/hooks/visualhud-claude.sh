@@ -20,6 +20,8 @@ fi
 
 export VISUALHUD_DEFAULT_THEME="${VISUALHUD_DEFAULT_THEME:-pokemon}"
 export VISUALHUD_REAPPLY_DELAY="${VISUALHUD_REAPPLY_DELAY:-0.12}"
+export VISUALHUD_PROJECT_ROOT="${VISUALHUD_PROJECT_ROOT:-$REPO_ROOT}"
+export VISUALHUD_JOURNEY_PROFILE=off
 
 # Claude hook output is user-visible. The engine writes terminal control
 # sequences to /dev/tty, so keep stdout empty here.

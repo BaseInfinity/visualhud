@@ -20,7 +20,6 @@ Ship the existing VisualHUD `1.2.0` source as a reliable, diagnosable npm and Gi
 4. [#5 - Apply or explicitly block the iTerm2 setup helper](https://github.com/BaseInfinity/visualhud/issues/5)
 5. [#7 - Resolve Claude Code TUI rendering conflicts](https://github.com/BaseInfinity/visualhud/issues/7)
 6. [#2 - Clarify restart requirements and Windows renderer limits](https://github.com/BaseInfinity/visualhud/issues/2)
-7. [#3 - Detect missing WezTerm and explain renderer support](https://github.com/BaseInfinity/visualhud/issues/3)
 
 ## Completion Criteria
 
@@ -46,6 +45,12 @@ A release milestone is not complete until the npm registry and GitHub release bo
 4. [#13 - Add stable theme demos and a release documentation audit](https://github.com/BaseInfinity/visualhud/issues/13)
 
 Additional work enters this milestone only after it has a scoped GitHub issue with acceptance criteria.
+
+## Deferred - Windows Compatibility
+
+Keep the existing Windows Terminal basic renderer and WezTerm enhanced renderer covered by regression tests, but do not make Windows feature work a near-term release blocker. Community pull requests are welcome.
+
+1. [#3 - Detect missing WezTerm and explain renderer support](https://github.com/BaseInfinity/visualhud/issues/3)
 
 ## Later
 

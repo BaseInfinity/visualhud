@@ -59,9 +59,13 @@ TTY_LOG="$TMP_ROOT/tty.log"
 )
 
 tty_output="$(cat "$TTY_LOG")"
-assert_contains "WezTerm renderer sets semantic title" "WORKING" "$tty_output"
+assert_contains "WezTerm renderer names the coarse journey checkpoint" "UNDERSTAND" "$tty_output"
 assert_contains "WezTerm renderer emits state user var" "SetUserVar=visualhudState=" "$tty_output"
 assert_not_contains "WezTerm renderer avoids Windows Terminal progress OSC" "]9;4;" "$tty_output"
+initial_state="$(node -e 'const fs=require("fs"); const text=fs.readFileSync(0,"utf8"); const values=[...text.matchAll(/SetUserVar=visualhudState=([A-Za-z0-9+/=]+)/g)]; process.stdout.write(Buffer.from(values.at(-1)[1], "base64").toString("utf8"));' < "$TTY_LOG")"
+assert_contains "WezTerm initial state is a task journey" '"state_kind":"journey"' "$initial_state"
+assert_contains "WezTerm initial journey starts at checkpoint one" '"stage":"1"' "$initial_state"
+assert_contains "WezTerm initial journey reports one of six checkpoints" '"progress_percent":16' "$initial_state"
 
 : > "$TTY_LOG"
 (
@@ -70,9 +74,9 @@ assert_not_contains "WezTerm renderer avoids Windows Terminal progress OSC" "]9;
         | VISUALHUD_STATE_DIR="$TMP_ROOT/state" VISUALHUD_TTY="$TTY_LOG" bash .codex/hooks/visualhud-codex.sh
 )
 review_state="$(node -e 'const fs=require("fs"); const text=fs.readFileSync(0,"utf8"); const values=[...text.matchAll(/SetUserVar=visualhudState=([A-Za-z0-9+/=]+)/g)]; process.stdout.write(Buffer.from(values.at(-1)[1], "base64").toString("utf8"));' < "$TTY_LOG")"
-assert_contains "WezTerm review state is semantic" '"state_kind":"review"' "$review_state"
-assert_contains "WezTerm review state has no legacy stage" '"stage":""' "$review_state"
-assert_contains "WezTerm review state has no fabricated percentage" '"progress_percent":0' "$review_state"
-assert_not_contains "WezTerm Lua does not format review as determinate progress" "state.state_kind == 'review'" "$(cat "$target/.visualhud/wezterm/visualhud.lua")"
+assert_contains "WezTerm review is the fifth coarse checkpoint" '"state_kind":"journey"' "$review_state"
+assert_contains "WezTerm review journey reports checkpoint five" '"stage":"5"' "$review_state"
+assert_contains "WezTerm review journey reports five of six checkpoints" '"progress_percent":83' "$review_state"
+assert_contains "WezTerm Lua formats task journeys as determinate progress" "or state.state_kind == 'journey'" "$(cat "$target/.visualhud/wezterm/visualhud.lua")"
 
 echo "=== Results: PASS ==="

@@ -118,12 +118,36 @@ Inspect the active theme's status meanings without opening its JSON:
 ```
 
 `WORKING is indeterminate`: ordinary tool activity keeps one stable working
-color, title, and sprite. Tool-call count remains internal telemetry and powers
-the explicit calibration/legacy progression only; it is not task completion.
-Semantic transitions change the HUD to `PLAN`, `REVIEW`, `CHECK`, `HITL`, `ERROR`,
-`DONE`, or `IDLE`. With `VISUALHUD_BG=on`, the full-pane character follows
-those same states, so an unchanged Pokemon during ordinary work is expected.
+color, title, and sprite when no task journey is selected. Codex automatically
+uses the coarse `codex-default` journey, or the richer `sdlc` journey when the
+repo has SDLC evidence. Set `VISUALHUD_JOURNEY_PROFILE=release` for an actual
+release slice. Tool-call count remains internal telemetry and cannot advance
+task completion. `theme legend` lists every checkpoint, its theme visual,
+state-preserving overlays, and rollback behavior.
+
+Checkpoint transitions change the progress blocks, title, color, and character
+together. Failed tests, review findings, proof failures, and CI regressions move
+the journey backward and clear invalid later blocks. `CHECK`, `HITL`, compaction,
+subagent work, and transient failures are overlays that preserve the checkpoint.
+With `VISUALHUD_BG=on`, sprite-backed themes change character with the active
+checkpoint; colors-only themes actively clear stale character art.
 `CHECK` is a neutral host permission preflight and does not claim human action is required. Codex `PermissionRequest` maps to correlated `HITL` because Codex exposes no later prompt-shown event; matching tool lifecycle events clear it, and `HITL` emits an iTerm2 notification.
+
+Release-only evidence is explicit because VisualHUD cannot infer remote gate
+semantics from arbitrary commands:
+
+```bash
+./visualhud journey set ci passed --profile release
+./visualhud journey set publish passed --profile release
+./visualhud journey set smoke passed --profile release
+```
+
+Use `failed`, `invalidated`, or `transient` instead of `passed` when that is the
+observed outcome. Routine reads, plan updates, and other earlier-stage activity
+never rewind a later checkpoint. New source edits return to implementation,
+test-only edits return to TDD RED, and explicit invalidating evidence can return
+to any named earlier checkpoint. Review commands advance only when their result
+explicitly reports no findings; exit status alone does not prove a clean review.
 
 Development checkout install:
 
@@ -308,10 +332,10 @@ WezTerm renderer for live sprite changes on Windows.
 
 ## How It Works
 
-Claude Code and Codex fire lifecycle hooks on prompt, tool use, permission request, and stop events. VisualHUD intercepts those hooks and drives the terminal through a progression of **stages** — each with its own colors, background image where supported, and title.
+Claude Code and Codex fire lifecycle hooks on prompt, tool use, permission request, and stop events. VisualHUD normalizes those hooks into terminal states. Codex additionally maps trustworthy plan, implementation, test, review, and proof evidence into a reversible task-checkpoint journey.
 
 ```
-Hook fires → adapter normalizes event → counter increments → stage advances → terminal renderer updates
+Hook fires → adapter normalizes evidence → state machine transitions or preserves → terminal renderer updates
 ```
 
 Each terminal session is isolated via `ITERM_SESSION_ID`, `WT_SESSION`, or the
@@ -393,7 +417,10 @@ See [THEMES.md](THEMES.md) for the complete contract and required tests.
 
 ### Default Theme: Progress Bar
 
-No images needed — just a smooth color gradient that acts as a visual progress bar: red (just started) through yellow/green (making progress) to blue (done). It's a progress bar, not a health bar — the color tracks how far along the task is, not how "healthy" anything is. Works out of the box.
+No images needed: a smooth color track maps named task checkpoints from early
+work through completion. The color shows where the current task is in its
+selected journey, not context health or raw tool activity. Failed proof can move
+the track backward.
 
 ## Landscape — What Else Is Out There?
 
@@ -436,6 +463,7 @@ VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
 - Windows Terminal/PowerShell installs for Codex and updates the tab title plus `OSC 9;4` progress status.
 - WezTerm installs for Codex and updates title, right status, colors, and live background sprites through `OSC 1337;SetUserVar` plus the bundled Lua module.
 - Repo-local adapters map each host's supported lifecycle events into the engine. Codex maps explicit object-shaped `PostToolUse` failures but does not guess from raw unified-shell output, which omits exit status; Claude can emit `PostToolUseFailure` directly.
+- Codex verification evidence requires an actual foreground test invocation. Correlated journey generations prevent a test or review started before a later edit from advancing the changed task.
 - Theme stages use `color_family` plus `shades`, so a character can keep the same sprite while the terminal chrome advances through multiple color steps.
 - Pokemon, TMNT, Power Rangers, Otter Pop, and Minimal all ship as theme packs. Pokemon and TMNT include source-backed sprite art; Power Rangers, Otter Pop, and Minimal are colors-only.
 - Context/token pressure is an ambient overlay: warning and critical label the state while preserving the active stage color/sprite.
@@ -538,7 +566,8 @@ sprite art exists.
 
 ## Token Usage Indicator (Separate from Task Progress)
 
-Task completion (stage progression) is the **main visual driver** — background, tab color, images.
+Task checkpoints are the **main visual driver** for Codex — progress blocks,
+background, tab color, title, and images advance or roll back together.
 
 Token/context usage is a **separate ambient indicator** that doesn't interfere with the main visual:
 - Badge/title suffix surfaces only when it matters (`CTX 70%+` warning, `CTX 85%+` critical)
@@ -546,7 +575,8 @@ Token/context usage is a **separate ambient indicator** that doesn't interfere w
 - Themes can name those alerts: Pokemon uses Pokemon Center/Chansey and Nurse Joy/Blissey, TMNT uses Casey Jones for critical context
 - Codex can derive context percent from hook payload token data or a matching session JSONL token-count event
 
-These are independent axes: you can be on stage 3 (Charizard) with low token usage, or stage 1 (Charmander) with high token usage.
+These are independent axes: a task can be at implementation with low context
+usage or at review with high context usage.
 
 ## TMNT Source Art Import
 

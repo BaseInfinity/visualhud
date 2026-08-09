@@ -27,7 +27,8 @@ printf '%s' "$INPUT" | jq -c \
   --arg theme "${VISUALHUD_THEME:-}" \
   --arg default_theme "${VISUALHUD_DEFAULT_THEME:-}" \
   --arg reapply_delay "${VISUALHUD_REAPPLY_DELAY:-}" \
-  '. + {visualhud_theme: $theme, visualhud_default_theme: $default_theme, visualhud_reapply_delay: $reapply_delay}' >> "$VISUALHUD_TEST_LOG"
+  --arg journey_profile "${VISUALHUD_JOURNEY_PROFILE:-}" \
+  '. + {visualhud_theme: $theme, visualhud_default_theme: $default_theme, visualhud_reapply_delay: $reapply_delay, visualhud_journey_profile: $journey_profile}' >> "$VISUALHUD_TEST_LOG"
 printf 'engine stdout should not leak to Claude hook stdout\n'
 EOF
 chmod +x "$ENGINE"
@@ -88,13 +89,22 @@ if [ -f "$LOG_FILE" ]; then
     assert_eq "Claude adapter leaves VISUALHUD_THEME open for repo-local theme file" "" "$(last_event_field '.visualhud_theme')"
     assert_eq "Claude adapter defaults to Pokemon theme" "pokemon" "$(last_event_field '.visualhud_default_theme')"
     assert_eq "Claude adapter enables delayed title/color reapply" "0.12" "$(last_event_field '.visualhud_reapply_delay')"
+    assert_eq "Claude adapter disables deferred task journeys" "off" "$(last_event_field '.visualhud_journey_profile')"
 else
     assert_eq "Engine receives Claude PreToolUse" "PreToolUse" "__missing_log__"
     assert_eq "Engine receives Claude tool name" "Read" "__missing_log__"
     assert_eq "Claude adapter leaves VISUALHUD_THEME open for repo-local theme file" "" "__missing_log__"
     assert_eq "Claude adapter defaults to Pokemon theme" "pokemon" "__missing_log__"
     assert_eq "Claude adapter enables delayed title/color reapply" "0.12" "__missing_log__"
+    assert_eq "Claude adapter disables deferred task journeys" "off" "__missing_log__"
 fi
+echo ""
+
+echo "--- Test 1b: Claude ignores an inherited Codex journey profile ---"
+export VISUALHUD_JOURNEY_PROFILE=release
+run_adapter '{"hook_event_name":"PreToolUse","session_id":"claude-session","tool_name":"Read"}' >"$OUT_FILE"
+assert_eq "Inherited profile cannot activate the deferred Claude journey" "off" "$(last_event_field '.visualhud_journey_profile')"
+unset VISUALHUD_JOURNEY_PROFILE
 echo ""
 
 echo "--- Test 2: Claude adapter respects explicit theme override ---"

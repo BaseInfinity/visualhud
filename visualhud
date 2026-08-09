@@ -16,6 +16,7 @@ THEMES_DIR="${VISUALHUD_THEMES_DIR:-$ROOT_DIR/themes}"
 ACTIVE_THEME_FILE="${VISUALHUD_THEME_FILE:-$ROOT_DIR/theme}"
 DEFAULT_THEME="${VISUALHUD_DEFAULT_THEME:-pokemon}"
 JSON_HELPER="${VISUALHUD_JSON_HELPER:-$ROOT_DIR/scripts/visualhud-json.js}"
+ENGINE="${VISUALHUD_ENGINE:-$ROOT_DIR/engine.sh}"
 if [ ! -f "$JSON_HELPER" ] && [ -f "$(cd -P "$(dirname "$SCRIPT_SOURCE")" && pwd)/scripts/visualhud-json.js" ]; then
     JSON_HELPER="$(cd -P "$(dirname "$SCRIPT_SOURCE")" && pwd)/scripts/visualhud-json.js"
 fi
@@ -43,6 +44,7 @@ Usage:
   visualhud theme set <name>
   visualhud theme reset
   visualhud theme calibrate [name] [--json|--live] [--delay seconds] [--pause] [--limit n]
+  visualhud journey set <checkpoint> <outcome> [--profile codex-default|sdlc|release]
 EOF
 }
 
@@ -65,6 +67,48 @@ active_theme() {
 theme_display_name() {
     local theme="$1"
     json_helper theme-display-name "$THEMES_DIR/$theme/theme.json" "$theme" 2>/dev/null || printf '%s\n' "$theme"
+}
+
+journey_profile() {
+    local project_root
+    if [ -n "${VISUALHUD_JOURNEY_PROFILE:-}" ]; then
+        printf '%s\n' "$VISUALHUD_JOURNEY_PROFILE"
+        return
+    fi
+    if [ "$(basename "$ROOT_DIR")" = ".visualhud" ]; then
+        project_root=$(cd "$ROOT_DIR/.." && pwd)
+    else
+        project_root="$ROOT_DIR"
+    fi
+    if [ -f "$project_root/.codex-sdlc/manifest.json" ] || [ -f "$project_root/.agents/skills/sdlc/SKILL.md" ]; then
+        printf 'sdlc\n'
+    else
+        printf 'codex-default\n'
+    fi
+}
+
+journey_project_root() {
+    if [ -n "${VISUALHUD_PROJECT_ROOT:-}" ]; then
+        printf '%s\n' "$VISUALHUD_PROJECT_ROOT"
+    else
+        git rev-parse --show-toplevel 2>/dev/null || pwd
+    fi
+}
+
+persisted_journey_profile() {
+    local state_root session_id session_key project_root project_checksum project_key state_file profile
+    state_root="${VISUALHUD_STATE_DIR:-${TMPDIR:-/tmp}}"
+    session_id="${ITERM_SESSION_ID:-${WT_SESSION:-${WEZTERM_PANE:-visualhud}}}"
+    session_key=$(printf '%s' "$session_id" | tr ':/' '__')
+    project_root=$(journey_project_root)
+    project_checksum=$(printf '%s' "$project_root" | cksum)
+    project_key=${project_checksum%% *}
+    state_file="$state_root/visualhud-journey_${session_key}_${project_key}.json"
+    [ -f "$state_file" ] || return 0
+    profile=$(json_helper field profile < "$state_file" 2>/dev/null || true)
+    case "$profile" in
+        codex-default|sdlc|release) printf '%s\n' "$profile" ;;
+    esac
 }
 
 list_themes() {
@@ -107,7 +151,7 @@ reset_theme() {
 }
 
 theme_legend() {
-    local theme="${1:-$(active_theme)}"
+    local theme="${1:-$(active_theme)}" profile
     if ! theme_exists "$theme"; then
         printf 'Unknown theme: %s\n' "$theme" >&2
         printf 'Run visualhud theme list to see available themes.\n' >&2
@@ -115,6 +159,42 @@ theme_legend() {
     fi
     printf '%s\n' "$(theme_display_name "$theme")"
     json_helper theme-legend "$THEMES_DIR/$theme/theme.json"
+    profile=$(journey_profile)
+    if [ "$profile" != "off" ]; then
+        printf '\n'
+        json_helper journey-legend "$THEMES_DIR/$theme/theme.json" "$profile"
+    fi
+}
+
+set_journey_evidence() {
+    local checkpoint="${1:-}" outcome="${2:-}" profile="" persisted_profile project_root
+    shift "$(( $# >= 2 ? 2 : $# ))"
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --profile)
+                profile="${2:-}"
+                [ -n "$profile" ] || { printf 'Missing --profile value.\n' >&2; return 2; }
+                shift
+                ;;
+            *)
+                printf 'Unknown journey option: %s\n' "$1" >&2
+                return 2
+                ;;
+        esac
+        shift
+    done
+    if [ -z "$profile" ]; then
+        persisted_profile=$(persisted_journey_profile)
+        profile="${persisted_profile:-$(journey_profile)}"
+    fi
+    if [ -z "$checkpoint" ] || [ -z "$outcome" ]; then
+        printf 'Usage: visualhud journey set <checkpoint> <outcome> [--profile codex-default|sdlc|release]\n' >&2
+        return 2
+    fi
+    project_root=$(journey_project_root)
+    json_helper journey-payload "$profile" "$checkpoint" "$outcome" |
+        VISUALHUD_PROJECT_ROOT="$project_root" VISUALHUD_JOURNEY_PROFILE="$profile" bash "$ENGINE" >/dev/null
+    printf 'Journey evidence: %s %s (%s)\n' "$checkpoint" "$outcome" "$profile"
 }
 
 detect_platform() {
@@ -227,6 +307,14 @@ VISUALHUD_ROOT="$REPO_ROOT/.visualhud"
 export VISUALHUD_ENGINE="$VISUALHUD_ROOT/engine.sh"
 export VISUALHUD_THEMES_DIR="$VISUALHUD_ROOT/themes"
 export VISUALHUD_SET_BG="$VISUALHUD_ROOT/set_bg.py"
+export VISUALHUD_PROJECT_ROOT="$REPO_ROOT"
+if [ -z "${VISUALHUD_JOURNEY_PROFILE:-}" ]; then
+    if [ -f "$REPO_ROOT/.codex-sdlc/manifest.json" ] || [ -f "$REPO_ROOT/.agents/skills/sdlc/SKILL.md" ]; then
+        export VISUALHUD_JOURNEY_PROFILE=sdlc
+    else
+        export VISUALHUD_JOURNEY_PROFILE=codex-default
+    fi
+fi
 EOF
         if [ -n "$renderer" ]; then
             printf 'export VISUALHUD_RENDERER="%s"\n' "$renderer"
@@ -873,6 +961,20 @@ case "${1:-}" in
                 ;;
             *)
                 printf 'Unknown theme command: %s\n' "$subcommand" >&2
+                usage >&2
+                exit 2
+                ;;
+        esac
+        ;;
+    journey)
+        subcommand="${2:-}"
+        case "$subcommand" in
+            set)
+                shift 2
+                set_journey_evidence "$@"
+                ;;
+            *)
+                printf 'Unknown journey command: %s\n' "$subcommand" >&2
                 usage >&2
                 exit 2
                 ;;

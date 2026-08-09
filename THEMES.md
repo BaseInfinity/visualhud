@@ -84,7 +84,7 @@ because the current background-image bridge uses the iTerm2 Python API.
 - Fast-start themes with early thresholds like `2`, `5`, and `12` must use shade ramps. Without them, high-contrast themes flash through saturated colors in the first few tool calls instead of feeling like progress.
 - Colors-only themes with many unrelated hue families should use balanced dwell thresholds instead of the sprite-backed fast-start curve. Without character art, the terminal color carries the whole state, so equal dwell keeps one color from flashing past while another lingers.
 - `"shade_sprites"` is optional. When present, it must have the same length as `"shades"` and lets a stage swap sprite art per shade while keeping one character family. For branded character themes, shade sprites should be distinct portraits or clearly different source-backed poses, not just crop-only zooms of the same art.
-- `progress_bar` is the shared visual progress strip used by explicit calibration and legacy progression. It is not shown for indeterminate or semantic lifecycle states. Keep it compact and do not use character initials there.
+- `progress_bar` is the shared visual progress strip and checkpoint track used by the Codex task journey, explicit calibration, and legacy progression. In journey mode each visible block maps to a named checkpoint; generic tool activity cannot add blocks. It is not shown for indeterminate lifecycle states. Keep it compact and do not use character initials there.
 - Use `"color_family_singleton": true` only for a deliberate one-color stage or slower-progressing generic theme; do not use it as a shortcut for branded character themes.
 - `working` is mandatory and represents stable, indeterminate agent activity. Its sprite, color, badge, and title must not change merely because another tool ran.
 - `permission`, `blocked`, `review`, `done`, `idle`, and `error` are mandatory lifecycle states.
@@ -105,7 +105,7 @@ because the current background-image bridge uses the iTerm2 Python API.
 - `context_alerts` colors describe alert identity for reports/future non-destructive indicators; they must not replace the active stage surface palette.
 - Sprite names resolve to `themes/<theme>/sprites/<sprite>.png` first, then legacy global sprites.
 - Missing sprite files clear stale background art instead of silently showing the last theme's image.
-- With full-pane backgrounds enabled, ordinary work keeps the `working` sprite. Backgrounds change when the semantic lifecycle state changes, not as a tool-count animation.
+- With full-pane backgrounds enabled, Codex journey checkpoints select matching theme sprites. Outside journey mode, ordinary work keeps the `working` sprite. Backgrounds change on checkpoint or lifecycle transitions, not as a tool-count animation.
 
 ## Sprite Assets
 

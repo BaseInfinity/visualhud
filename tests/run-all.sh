@@ -37,6 +37,7 @@ node tests/test-pokemon-theme-lifecycle.js
 bash tests/test-theme-system.sh
 bash tests/test-theme-calibration.sh
 bash tests/test-codex-visualhud.sh
+bash tests/test-journey-state.sh
 bash tests/test-cooking-status.sh
 bash tests/test-claude-visualhud.sh
 bash tests/test-codex-git-guard.sh

@@ -109,10 +109,324 @@ function progressBar(theme, stageArg) {
   return output;
 }
 
+const JOURNEY_PROFILES = {
+  "codex-default": [
+    ["understand", "UNDERSTAND"],
+    ["plan", "PLAN"],
+    ["implement", "IMPLEMENT"],
+    ["verify", "VERIFY"],
+    ["review", "REVIEW"],
+    ["done", "DONE"],
+  ],
+  sdlc: [
+    ["intake", "INTAKE"],
+    ["discovery", "DISCOVERY"],
+    ["plan", "PLAN"],
+    ["tdd_red", "TDD RED"],
+    ["implement", "IMPLEMENT"],
+    ["implemented", "IMPLEMENTED"],
+    ["targeted_test", "TARGETED TEST"],
+    ["full_test", "FULL TEST"],
+    ["self_review", "SELF REVIEW"],
+    ["final_review", "FINAL REVIEW"],
+    ["proof", "PROOF"],
+    ["done", "DONE"],
+  ],
+  release: [
+    ["intake", "INTAKE"],
+    ["discovery", "DISCOVERY"],
+    ["plan", "PLAN"],
+    ["tdd_red", "TDD RED"],
+    ["implement", "IMPLEMENT"],
+    ["implemented", "IMPLEMENTED"],
+    ["targeted_test", "TARGETED TEST"],
+    ["full_test", "FULL TEST"],
+    ["self_review", "SELF REVIEW"],
+    ["final_review", "FINAL REVIEW"],
+    ["proof", "PROOF"],
+    ["ci", "CI"],
+    ["publish", "PUBLISH"],
+    ["smoke", "SMOKE"],
+    ["done", "DONE"],
+  ],
+};
+
+function journeyProfile(name) {
+  const selected = JOURNEY_PROFILES[name] || JOURNEY_PROFILES["codex-default"];
+  return selected.map(([id, label], index) => ({ id, label, index: index + 1 }));
+}
+
+function journeyTransition(profileName, currentArg, checkpointArg, outcomeArg, generationArg = 0) {
+  const profile = journeyProfile(profileName);
+  const ids = profile.map((checkpoint) => checkpoint.id);
+  const fallback = ids[0];
+  const current = ids.includes(currentArg) ? currentArg : fallback;
+  const coarseCheckpointMap = {
+    intake: "understand",
+    discovery: "understand",
+    tdd_red: "implement",
+    implemented: "implement",
+    targeted_test: "verify",
+    full_test: "verify",
+    self_review: "review",
+    final_review: "review",
+    proof: "verify",
+    ci: "verify",
+  };
+  const mappedCheckpoint = profileName === "codex-default" ? coarseCheckpointMap[checkpointArg] : "";
+  const checkpoint = ids.includes(checkpointArg)
+    ? checkpointArg
+    : (ids.includes(mappedCheckpoint) ? mappedCheckpoint : current);
+  const outcome = String(outcomeArg || "started").toLowerCase();
+  const generation = Math.max(0, Number.parseInt(generationArg, 10) || 0);
+  const currentIndex = ids.indexOf(current);
+  const checkpointIndex = ids.indexOf(checkpoint);
+  let next = current;
+
+  if (outcome === "expected_failure" || outcome === "red") {
+    next = checkpoint === "tdd_red" ? checkpoint : current;
+  } else if (outcome === "transient" || outcome === "preserved") {
+    next = current;
+  } else if (outcome === "invalidated") {
+    next = checkpointIndex < currentIndex ? checkpoint : current;
+  } else if (outcome === "failed" || outcome === "finding") {
+    const rollback = {
+      tdd_red: "implement",
+      verify: "implement",
+      review: "implement",
+      targeted_test: "implement",
+      full_test: "implement",
+      self_review: "implement",
+      final_review: "implement",
+      proof: "implement",
+      ci: ids.includes("full_test") ? "full_test" : "verify",
+      publish: ids.includes("ci") ? "ci" : current,
+      smoke: ids.includes("publish") ? "publish" : current,
+    };
+    next = ids.includes(rollback[checkpoint]) ? rollback[checkpoint] : current;
+  } else if (outcome === "passed" || outcome === "completed") {
+    const candidate = ids[Math.min(checkpointIndex + 1, ids.length - 1)];
+    next = ids.indexOf(candidate) >= currentIndex ? candidate : current;
+  } else if (outcome === "started" || outcome === "active") {
+    const invalidatingEdit = checkpoint === "tdd_red" || checkpoint === "implement";
+    next = checkpointIndex >= currentIndex || invalidatingEdit ? checkpoint : current;
+  }
+
+  const index = ids.indexOf(next);
+  return {
+    profile: JOURNEY_PROFILES[profileName] ? profileName : "codex-default",
+    current: next,
+    current_index: index + 1,
+    total: ids.length,
+    generation,
+    completed: ids.slice(0, index),
+    transition: { from: current, checkpoint, outcome, to: next },
+  };
+}
+
+function writeJsonAtomic(file, value) {
+  const temporary = `${file}.${process.pid}`;
+  fs.writeFileSync(temporary, `${JSON.stringify(value)}\n`);
+  fs.renameSync(temporary, file);
+}
+
+function appendJourneyHistory(file, value) {
+  fs.appendFileSync(file, `${JSON.stringify(value)}\n`);
+}
+
+function operationMarkerPath(directory, key) {
+  const checksum = crypto.createHash("sha256").update(key).digest("hex").slice(0, 24);
+  return `${directory}/${checksum}.json`;
+}
+
+function rejectActiveJourneyOperations(directory) {
+  if (!fs.existsSync(directory)) return;
+  for (const name of fs.readdirSync(directory)) {
+    const file = `${directory}/${name}`;
+    const marker = parseJson(fs.readFileSync(file, "utf8"), {});
+    const active = Array.isArray(marker.generations) ? marker.generations.length : 0;
+    marker.reject_remaining = Math.max(Number(marker.reject_remaining || 0), active);
+    marker.generations = [];
+    writeJsonAtomic(file, marker);
+  }
+}
+
+function journeyApply(profileName, stateFile, historyFile, operationDirectory, themeFile, payload) {
+  let state = fs.existsSync(stateFile)
+    ? readJsonFile(stateFile)
+    : journeyTransition(profileName, "", "", "started");
+  if (!fs.existsSync(stateFile)) {
+    writeJsonAtomic(stateFile, state);
+    appendJourneyHistory(historyFile, state);
+  }
+
+  const checkpoint = String(payload.journey_checkpoint || "");
+  const outcome = String(payload.journey_outcome || "").toLowerCase();
+  const terminalOnly = payload.journey_terminal === true;
+  if ((checkpoint && outcome) || terminalOnly) {
+    let generation = Math.max(0, Number.parseInt(state.generation, 10) || 0);
+    const operationKey = String(payload.journey_operation_key || payload.permission_key || "");
+    const invalidating = checkpoint && (outcome === "invalidated"
+      || (outcome === "started" && (checkpoint === "tdd_red" || checkpoint === "implement")));
+    const terminal = terminalOnly || new Set([
+      "active", "passed", "completed", "failed", "finding", "expected_failure", "red",
+    ]).has(outcome);
+
+    if (invalidating) {
+      generation += 1;
+      rejectActiveJourneyOperations(operationDirectory);
+    }
+
+    let stale = false;
+    if (operationKey) {
+      fs.mkdirSync(operationDirectory, { recursive: true });
+      const markerFile = operationMarkerPath(operationDirectory, operationKey);
+      const marker = fs.existsSync(markerFile) ? readJsonFile(markerFile) : {
+        key: operationKey,
+        generations: [],
+        reject_remaining: 0,
+      };
+      marker.generations = Array.isArray(marker.generations) ? marker.generations : [];
+      marker.reject_remaining = Math.max(0, Number(marker.reject_remaining || 0));
+
+      if (outcome === "started") {
+        if (marker.reject_remaining > 0) {
+          marker.reject_remaining += 1;
+        } else {
+          marker.generations.push(generation);
+        }
+        writeJsonAtomic(markerFile, marker);
+      } else if (terminal && fs.existsSync(markerFile)) {
+        if (marker.reject_remaining > 0) {
+          marker.reject_remaining -= 1;
+          stale = true;
+        } else if (marker.generations.length > 0) {
+          stale = Number(marker.generations.shift()) !== generation;
+        }
+        if (marker.reject_remaining === 0 && marker.generations.length === 0) {
+          fs.unlinkSync(markerFile);
+        } else {
+          writeJsonAtomic(markerFile, marker);
+        }
+      }
+    }
+
+    if (!stale && checkpoint && outcome) {
+      state = journeyTransition(profileName, state.current, checkpoint, outcome, generation);
+      writeJsonAtomic(stateFile, state);
+      appendJourneyHistory(historyFile, state);
+    }
+  }
+
+  return journeyRender(readJsonFile(themeFile), profileName, state.current);
+}
+
+function journeyCompleteReadOnly(profileName, stateFile, historyFile, themeFile) {
+  let state = fs.existsSync(stateFile)
+    ? readJsonFile(stateFile)
+    : journeyTransition(profileName, "", "", "started");
+  const last = state.transition || {};
+  const noToolAnswer = state.current === "understand" && last.outcome === "started";
+  const successfulDiscovery = state.current === "plan"
+    && last.checkpoint === "understand"
+    && last.outcome === "passed";
+  if (profileName === "codex-default" && (noToolAnswer || successfulDiscovery)) {
+    state = journeyTransition(profileName, state.current, "done", "completed", state.generation);
+    writeJsonAtomic(stateFile, state);
+    appendJourneyHistory(historyFile, state);
+  }
+  return journeyRender(readJsonFile(themeFile), profileName, state.current);
+}
+
+function journeyPayload(profileName, checkpoint, outcome) {
+  if (!Object.hasOwn(JOURNEY_PROFILES, profileName)) {
+    throw new Error(`Unknown journey profile: ${profileName}`);
+  }
+  const checkpoints = JOURNEY_PROFILES[profileName].map(([id]) => id);
+  if (!checkpoints.includes(checkpoint)) {
+    throw new Error(`Unknown ${profileName} checkpoint: ${checkpoint}`);
+  }
+  const allowedOutcomes = new Set([
+    "started", "active", "passed", "completed", "failed", "finding",
+    "invalidated", "transient", "preserved", "expected_failure", "red",
+  ]);
+  const normalizedOutcome = String(outcome || "started").toLowerCase();
+  if (!allowedOutcomes.has(normalizedOutcome)) {
+    throw new Error(`Unknown journey outcome: ${outcome}`);
+  }
+  return {
+    hook_event_name: "JourneyUpdate",
+    journey_profile: profileName,
+    journey_checkpoint: checkpoint,
+    journey_outcome: normalizedOutcome,
+  };
+}
+
+function journeyRender(theme, profileName, currentArg) {
+  const profile = journeyProfile(profileName);
+  const ids = profile.map((checkpoint) => checkpoint.id);
+  const index = Math.max(0, ids.indexOf(currentArg));
+  const checkpoint = profile[index];
+  const done = checkpoint.id === "done";
+  const stages = Array.isArray(theme.stages) ? theme.stages : [];
+  const progress = Array.isArray(theme.progress_bar) ? theme.progress_bar : [];
+  const preDoneCount = Math.max(1, profile.length - 1);
+  const stageIndex = Math.min(
+    Math.max(0, stages.length - 1),
+    Math.floor((index * Math.max(1, stages.length)) / preDoneCount),
+  );
+  const visual = { ...(done ? (theme.done || {}) : (stages[stageIndex] || theme.working || {})) };
+  const filled = [];
+  for (let step = 0; step <= index; step += 1) {
+    if (step === profile.length - 1) {
+      filled.push((theme.done && theme.done.badge) || progress[progress.length - 1] || "\u25a0");
+    } else if (progress.length > 0) {
+      const progressIndex = Math.min(progress.length - 1, Math.floor((step * progress.length) / preDoneCount));
+      filled.push(progress[progressIndex]);
+    } else {
+      filled.push("\u25a0");
+    }
+  }
+
+  const visualName = String(visual.name || "").trim();
+  return {
+    ...visual,
+    name: visualName ? `${checkpoint.label} · ${visualName}` : checkpoint.label,
+    stage: index + 1,
+    progress_bar: filled.join(""),
+    journey_checkpoint: checkpoint.id,
+    journey_label: checkpoint.label,
+    journey_index: index + 1,
+    journey_total: profile.length,
+  };
+}
+
+function journeyLegend(theme, profileName) {
+  const profile = journeyProfile(profileName);
+  const resolvedProfile = JOURNEY_PROFILES[profileName] ? profileName : "codex-default";
+  const checkpoints = profile.map((checkpoint) => {
+    const visual = journeyRender(theme, resolvedProfile, checkpoint.id);
+    return [
+      "CHECKPOINT",
+      `${checkpoint.index}/${profile.length}`,
+      checkpoint.label,
+      visual.badge || "",
+      visual.name || "",
+    ].join("\t").trimEnd();
+  });
+  return [
+    `Journey profile: ${resolvedProfile}`,
+    ...checkpoints,
+    "OVERLAY\tCHECK, HITL, COMPACT, SUBAGENT, transient errors preserve the current checkpoint",
+    "ROLLBACK\tFailed tests, review findings, proof failures, and CI regressions clear invalid later checkpoints",
+  ].join("\n");
+}
+
 function isReviewPayload(payload) {
   const fields = [
     payload.tool_name,
     getPath(payload, "tool_input.command"),
+    getPath(payload, "tool_input.cmd"),
     getPath(payload, "tool_input.description"),
     getPath(payload, "tool_input.prompt"),
     getPath(payload, "tool_input.task"),
@@ -124,7 +438,7 @@ function isReviewPayload(payload) {
     payload.title,
   ];
   const text = fields.filter((value) => typeof value === "string").join(" ");
-  const toolName = String(payload.tool_name || "").toLowerCase();
+  const toolName = normalizedToolName(payload.tool_name);
   return (
     /(code[- ]?review|coder[- ]?review|\/code-review|reviewing[ +]+shipping|review[ +]+ship|codex review|claude review|cross-model review|pull request review|pr review|review deliverables|review round|ship review|reviewer|review v[0-9])/i.test(text) ||
     (toolName === "task" && /review/i.test(text)) ||
@@ -339,6 +653,54 @@ function hasSuccessfulToolResponse(value) {
   return Array.isArray(value.content);
 }
 
+function toolResponseText(value) {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(toolResponseText).filter(Boolean).join("\n");
+  if (value == null || typeof value !== "object") return "";
+  return ["output", "stdout", "text", "message", "result", "content"]
+    .map((key) => toolResponseText(value[key]))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function reviewFindingArrays(value, output = []) {
+  if (typeof value === "string") {
+    const text = value.trim();
+    const candidates = [text, ...text.split(/\r?\n/).map((line) => line.trim())];
+    for (const candidate of new Set(candidates)) {
+      if (!/^[\[{]/.test(candidate)) continue;
+      try {
+        const parsed = JSON.parse(candidate);
+        if (parsed !== candidate) reviewFindingArrays(parsed, output);
+      } catch {
+        // Review output may mix prose and JSON; only valid JSON contributes evidence.
+      }
+    }
+    return output;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => reviewFindingArrays(item, output));
+    return output;
+  }
+  if (value == null || typeof value !== "object") return output;
+  if (Array.isArray(value.findings)) output.push(value.findings);
+  Object.values(value).forEach((item) => reviewFindingArrays(item, output));
+  return output;
+}
+
+function reviewOutcomeFromResponse(value) {
+  const text = toolResponseText(value);
+  if (/(?:^|\n)\s*(?:[-*]\s*)?\[P[0-3]\]/im.test(text)) return "finding";
+
+  const findings = reviewFindingArrays(value);
+  if (findings.some((items) => items.length > 0)) return "finding";
+  if (findings.length > 0) return "passed";
+  if (/\b(?:no|zero|0)\s+(?:actionable\s+)?(?:review\s+)?(?:findings|issues)(?:\s+(?:found|identified))?\b/i.test(text)) {
+    return "passed";
+  }
+  return "";
+}
+
 function canonicalValue(value) {
   if (Array.isArray(value)) return value.map(canonicalValue);
   if (value == null || typeof value !== "object") return value;
@@ -352,6 +714,11 @@ function permissionKey(payload) {
   delete toolInput.description;
   const identity = JSON.stringify(canonicalValue([payload.turn_id || "", payload.tool_name || "", toolInput]));
   return `request:${crypto.createHash("sha256").update(identity).digest("hex").slice(0, 24)}`;
+}
+
+function journeyOperationKey(payload) {
+  const identifier = payload.tool_use_id || payload.tool_call_id || payload.call_id || "";
+  return identifier ? `operation:${identifier}` : permissionKey(payload);
 }
 
 function codexSubcommand(words) {
@@ -372,11 +739,10 @@ function codexSubcommand(words) {
   return "";
 }
 
-function isDirectForegroundReviewPayload(payload) {
-  const command = getPath(payload, "tool_input.command");
-  if (typeof command !== "string") return false;
-
-  const words = [];
+function foregroundShellSegments(command) {
+  if (typeof command !== "string") return null;
+  const segments = [];
+  let words = [];
   let word = "";
   let quote = "";
   let escaping = false;
@@ -406,7 +772,26 @@ function isDirectForegroundReviewPayload(payload) {
     if (char === "#" && (index === 0 || /\s/.test(command[index - 1]))) {
       break;
     }
-    if (/[&|;()<`\r\n]/.test(char)) return false;
+    if (char === "&" && command[index + 1] === "&") {
+      if (word !== "") words.push(word);
+      if (words.length === 0) return null;
+      segments.push(words);
+      words = [];
+      word = "";
+      index += 1;
+      continue;
+    }
+    if (char === ">") {
+      if (word !== "") {
+        words.push(word);
+        word = "";
+      }
+      const redirect = command[index + 1] === ">" ? ">>" : ">";
+      words.push(redirect);
+      if (redirect === ">>") index += 1;
+      continue;
+    }
+    if (/[&|;()<`\r\n]/.test(char)) return null;
     if (/\s/.test(char)) {
       if (word !== "") {
         words.push(word);
@@ -416,8 +801,51 @@ function isDirectForegroundReviewPayload(payload) {
     }
     word += char;
   }
-  if (escaping || quote !== "") return false;
+  if (escaping || quote !== "") return null;
   if (word !== "") words.push(word);
+  if (words.length === 0) return null;
+  segments.push(words);
+  return segments;
+}
+
+function foregroundShellWords(payload) {
+  const command = getPath(payload, "tool_input.command") ?? getPath(payload, "tool_input.cmd");
+  const segments = foregroundShellSegments(command);
+  return segments && segments.length === 1 ? commandWords(segments[0]) : null;
+}
+
+function commandWords(words) {
+  if (!Array.isArray(words)) return [];
+  const normalized = [...words];
+  const assignment = /^[A-Za-z_][A-Za-z0-9_]*=/;
+  while (assignment.test(String(normalized[0] || ""))) normalized.shift();
+
+  const executable = String(normalized[0] || "").split(/[\\/]/).pop().toLowerCase();
+  if (executable !== "env") return normalized;
+  normalized.shift();
+  while (normalized.length > 0) {
+    const word = String(normalized[0] || "");
+    if (assignment.test(word) || word === "--" || /^--(?:ignore-environment|null)$/.test(word)) {
+      normalized.shift();
+      continue;
+    }
+    if (/^(?:-u|-C|-S|--unset|--chdir|--split-string)$/.test(word)) {
+      normalized.splice(0, 2);
+      continue;
+    }
+    if (/^(?:--unset|--chdir|--split-string)=/.test(word)) {
+      normalized.shift();
+      continue;
+    }
+    break;
+  }
+  while (assignment.test(String(normalized[0] || ""))) normalized.shift();
+  return normalized;
+}
+
+function isDirectForegroundReviewPayload(payload) {
+  const words = foregroundShellWords(payload);
+  if (!words) return false;
 
   const executable = String(words[0] || "").split(/[\\/]/).pop().toLowerCase();
   const directReviewSubcommand = words.slice(1).some((value) => value.toLowerCase() === "review");
@@ -427,10 +855,276 @@ function isDirectForegroundReviewPayload(payload) {
   return (executable === "codex" || executable === "claude") && (directReviewSubcommand || directCodexExecReview);
 }
 
+function toolInputText(payload) {
+  const input = payload.tool_input;
+  if (typeof input === "string") return input;
+  if (input == null || typeof input !== "object") return "";
+  return ["command", "cmd", "input", "script", "patch", "prompt", "description"]
+    .map((key) => input[key])
+    .filter((value) => typeof value === "string")
+    .join("\n");
+}
+
+function planAggregate(payload) {
+  const plan = getPath(payload, "tool_input.plan");
+  if (!Array.isArray(plan) || plan.length === 0) return "";
+  const completed = plan.filter((item) => item && item.status === "completed").length;
+  return `Tasks ${completed}/${plan.length}`;
+}
+
+function normalizedToolName(value) {
+  return String(value || "").toLowerCase().split(/__|\./).pop();
+}
+
+function isShellCommandPayload(payload) {
+  const toolName = normalizedToolName(payload.tool_name);
+  return /^(?:bash|shell|exec_command|run_command|terminal)$/.test(toolName);
+}
+
+function packageTestCheckpoint(words) {
+  if (!Array.isArray(words) || words.length < 2) return "";
+  const normalizedWords = [...words];
+  const executable = String(normalizedWords[0] || "").split(/[\\/]/).pop().toLowerCase();
+  if (!["npm", "pnpm", "yarn", "bun"].includes(executable)) return "";
+
+  const runner = String(normalizedWords[1] || "").toLowerCase();
+  const testIndex = runner === "run" || runner === "run-script" ? 2 : 1;
+  const script = String(normalizedWords[testIndex] || "").toLowerCase();
+  if (!/^test(?:[:._-][\w.-]+)?$/.test(script)) return "";
+  const args = normalizedWords.slice(testIndex + 1);
+  const nonExecutingOption = args.some((arg) => {
+    const value = String(arg);
+    if (value === "-h") return true;
+    const match = value.match(/^--(?:help|version|list|listTests|showConfig|collect-only)(?:=(.*))?$/i);
+    return Boolean(match) && !/^(?:false|0)$/i.test(match[1] || "");
+  });
+  if (nonExecutingOption) return "non_test";
+  let positional = false;
+  let selectionOption = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = String(args[index] || "");
+    if (/^(?:-t|-g|--(?:testPathPatterns?|testNamePattern|runTestsByPath|findRelatedTests|filter|grep|fgrep|spec|project|changedSince|onlyChanged|changed|related))(?:=|$)/i.test(arg)) {
+      selectionOption = true;
+    }
+    if (arg === "--" || arg.startsWith("-")) continue;
+    if (/^(?:>|>>)$/.test(arg)) {
+      index += 1;
+      continue;
+    }
+    if (/^\d*(?:>|>>).+/.test(arg)) continue;
+    positional = true;
+  }
+  return script === "test" && !positional && !selectionOption ? "full_test" : "targeted_test";
+}
+
+function directTestArgs(args, selectionOptions, valueOptions) {
+  const positional = [];
+  let selected = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = String(args[index] || "");
+    const option = arg.includes("=") ? arg.slice(0, arg.indexOf("=")) : arg;
+    if (selectionOptions.test(option)) {
+      selected = true;
+      if (!arg.includes("=")) index += 1;
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      if (valueOptions.test(option) && !arg.includes("=")) index += 1;
+      continue;
+    }
+    positional.push(arg);
+  }
+  return { positional, selected };
+}
+
+function directTestCheckpoint(words) {
+  if (!Array.isArray(words) || words.length === 0) return "";
+  const executable = String(words[0] || "").split(/[\\/]/).pop().toLowerCase();
+  if (/^(?:pytest|py\.test)$/.test(executable)) {
+    const { positional, selected } = directTestArgs(
+      words.slice(1),
+      /^(?:-k|-m|--(?:ignore|ignore-glob|deselect|lf|last-failed|ff|failed-first))$/i,
+      /^(?:--maxfail|--tb|--capture|--color|--durations|--durations-min|--junitxml|--junit-prefix|--basetemp|--rootdir|--confcutdir|--import-mode|-o|--override-ini)$/i,
+    );
+    return !selected && positional.length === 0 ? "full_test" : "targeted_test";
+  }
+  if (executable === "cargo" && String(words[1] || "").toLowerCase() === "test") {
+    const { positional, selected } = directTestArgs(
+      words.slice(2),
+      /^(?:-p|--(?:package|workspace|exclude|lib|bin|bins|example|examples|test|tests|bench|benches|doc))$/i,
+      /^(?:-j|--jobs|--features|--target|--target-dir|--color|--message-format|--manifest-path|--profile|--timings)$/i,
+    );
+    return !selected && positional.length === 0 ? "full_test" : "targeted_test";
+  }
+  if (executable === "go" && String(words[1] || "").toLowerCase() === "test") {
+    const { positional, selected } = directTestArgs(
+      words.slice(2),
+      /^(?:-run|-skip|-list)$/i,
+      /^(?:-count|-timeout|-parallel|-cpu|-benchtime|-shuffle|-vet|-coverprofile|-covermode|-coverpkg|-exec|-fuzztime|-fuzzminimizetime)$/i,
+    );
+    return !selected && positional.length === 1 && positional[0] === "./..." ? "full_test" : "targeted_test";
+  }
+  if (executable === "node" && String(words[1] || "").toLowerCase() === "--test") {
+    const { positional, selected } = directTestArgs(
+      words.slice(2),
+      /^--test-(?:name-pattern|only)$/i,
+      /^--test-(?:reporter|reporter-destination|concurrency|timeout)$/i,
+    );
+    return !selected && positional.length === 0 ? "full_test" : "targeted_test";
+  }
+  return "";
+}
+
+function isRunAllCommand(words) {
+  if (!Array.isArray(words) || words.length === 0) return false;
+  const executablePath = String(words[0] || "").replace(/\\/g, "/");
+  const executable = executablePath.split("/").pop().toLowerCase();
+  if (executable === "run-all.sh" && /(?:^|\/)tests\/run-all\.sh$/i.test(executablePath)) {
+    return true;
+  }
+  if (!/^(?:bash|sh|zsh)$/.test(executable)) return false;
+  const script = words.slice(1).find((word) => !String(word).startsWith("-"));
+  return /(?:^|[\\/])tests[\\/]run-all\.sh$/i.test(String(script || ""));
+}
+
+function testCheckpointForCommand(command, words) {
+  const boundary = "(?:^|[;&|]\\s*)";
+  const packageTest = new RegExp(
+    `${boundary}(?:npm|pnpm|yarn|bun)\\s+(?:(?:run|run-script)\\s+)?test(?:[:._-][\\w.-]+)?(?=\\s|$)`,
+    "im",
+  );
+  const directTest = new RegExp(
+    `${boundary}(?:pytest|go\\s+test|cargo\\s+test)(?=\\s|$)`,
+    "im",
+  );
+  const shellTest = new RegExp(
+    `${boundary}(?:bash|sh|zsh)\\s+(?:-[\\w-]+\\s+)*(?:(?:[^\\s;&|]+/)*tests?/[^\\s;&|]+|(?:[^\\s;&|]+/)*test-[^\\s;&|]+\\.sh)(?=\\s|$)`,
+    "im",
+  );
+  const nodeTest = new RegExp(
+    `${boundary}node\\s+(?:--test(?=\\s|$)|[^\\n;&|]*(?:^|[/_.-])(?:test|spec)(?=[/_.-]|$))`,
+    "im",
+  );
+  const packageCheckpoint = packageTestCheckpoint(words);
+  if (packageCheckpoint === "non_test") return "";
+  if (packageCheckpoint) return packageCheckpoint;
+  const directCheckpoint = directTestCheckpoint(words);
+  if (directCheckpoint) return directCheckpoint;
+  if (isRunAllCommand(words)) return "full_test";
+  return packageTest.test(command) || directTest.test(command) || shellTest.test(command) || nodeTest.test(command)
+    ? "targeted_test"
+    : "";
+}
+
+function foregroundTestCheckpoint(command) {
+  const segments = foregroundShellSegments(command);
+  if (!segments) return "";
+  let checkpoint = "";
+  for (const words of segments) {
+    const normalizedWords = commandWords(words);
+    const candidate = testCheckpointForCommand(normalizedWords.join(" "), normalizedWords);
+    if (candidate === "full_test") return candidate;
+    if (candidate === "targeted_test") checkpoint = candidate;
+  }
+  return checkpoint;
+}
+
+function sourceMutationCheckpoint(command) {
+  const text = String(command || "");
+  const sourcePath = /(?:^|[\s'"=])((?:\.?\.?\/)*(?:(?:src|lib|app|scripts?|tests?|docs?)\/[^\s'";|&]+|[^\s'";|&]+\.(?:c|cc|cpp|css|go|h|hpp|html|java|js|json|jsx|lua|md|mjs|py|rb|rs|sh|ts|tsx|ya?ml)))/gim;
+  const paths = [...text.matchAll(sourcePath)].map((match) => match[1]);
+  const hasSourcePath = paths.length > 0;
+  const inlineEdit = /(?:^|[;&|]\s*)(?:sed\b[^\n;&|]*(?:\s-i(?:\s|$)|--in-place)|perl\b[^\n;&|]*\s-pi)/im;
+  const formatterWrite = /(?:^|[;&|]\s*)(?:(?:npx|pnpm\s+exec|bunx)\s+)?(?:prettier|biome|eslint|clang-format)\b[^\n;&|]*(?:--write|--fix|\s-i\b)|(?:^|[;&|]\s*)(?:gofmt\s+-w|cargo\s+fmt\b)/im;
+  const redirectedWrite = /(?:^|[;&|]\s*)(?:cat|printf|echo|tee)\b[^\n;&|]*(?:>|>>)/im;
+  const fileMutation = /(?:^|[;&|]\s*)(?:cp|mv|rm|touch|install)\b/im;
+  const codegen = /(?:^|[;&|]\s*)(?:npm|pnpm|yarn|bun)\s+(?:(?:run|run-script)\s+)?(?:generate|codegen|gen)(?=\s|$)/im;
+  const mutation = (hasSourcePath && (inlineEdit.test(text) || redirectedWrite.test(text) || fileMutation.test(text)))
+    || formatterWrite.test(text) || codegen.test(text);
+  if (!mutation) return "";
+  return paths.length > 0 && paths.every(isTestFilePath) ? "tdd_red" : "implement";
+}
+
+function isTestFilePath(file) {
+  const normalized = String(file || "").trim().replace(/^['"]|['"]$/g, "").replace(/\\/g, "/");
+  return /(?:^|\/)(?:tests?|__tests__)(?:\/|$)/i.test(normalized)
+    || /(?:^|[._-])(?:test|spec)\.[^/]+$/i.test(normalized);
+}
+
+function isTestOnlyPatchPayload(payload) {
+  const toolName = normalizedToolName(payload.tool_name);
+  if (toolName !== "apply_patch") return false;
+  const files = [...toolInputText(payload).matchAll(/^\*\*\* (?:Add|Update|Delete) File:\s+(.+)$/gm)]
+    .map((match) => match[1]);
+  return files.length > 0 && files.every(isTestFilePath);
+}
+
+function journeyCheckpointForPayload(payload) {
+  if (typeof payload.journey_checkpoint === "string" && payload.journey_checkpoint) {
+    return payload.journey_checkpoint;
+  }
+
+  const toolName = normalizedToolName(payload.tool_name);
+  const text = toolInputText(payload);
+  const shellCommand = isShellCommandPayload(payload);
+  const foregroundWords = shellCommand ? foregroundShellWords(payload) : [];
+  const directForeground = !shellCommand || foregroundWords !== null;
+  if (toolName === "update_plan") return "plan";
+  if (toolName === "apply_patch") return isTestOnlyPatchPayload(payload) ? "tdd_red" : "implement";
+  if (shellCommand && /git-guard\.cjs\s+prove\b/i.test(text)) return "proof";
+  if (isReviewPayload(payload) && (!shellCommand || isDirectForegroundReviewPayload(payload))) return "final_review";
+  if (shellCommand) {
+    const mutationCheckpoint = sourceMutationCheckpoint(text);
+    if (mutationCheckpoint) return mutationCheckpoint;
+  }
+  if (shellCommand) return foregroundTestCheckpoint(text);
+  if (!directForeground) return "";
+  if (/^(?:read|find|search|open|list_mcp_resources|read_mcp_resource|view_image)$/.test(toolName)) return "discovery";
+  return "";
+}
+
+function withJourneySignal(result, original) {
+  if (!result) return result;
+  const checkpoint = journeyCheckpointForPayload(original);
+  const aggregate = planAggregate(original) || original.journey_aggregate || "";
+  let outcome = original.journey_outcome || "";
+  const eventName = original.hook_event_name || "";
+
+  if (!outcome && checkpoint) {
+    if (eventName === "PreToolUse") {
+      outcome = "started";
+    } else if (eventName === "PostToolUse" && hasFailedToolResponse(original.tool_response)) {
+      outcome = "failed";
+    } else if (eventName === "PostToolUse" && hasSuccessfulToolResponse(original.tool_response)) {
+      if (isTestOnlyPatchPayload(original)) {
+        outcome = "active";
+      } else if (checkpoint === "final_review" && isReviewPayload(original)) {
+        outcome = reviewOutcomeFromResponse(original.tool_response);
+      } else {
+        outcome = "passed";
+      }
+    } else if (eventName === "PostToolUseFailure") {
+      outcome = "failed";
+    }
+  }
+
+  const terminalUnknown = Boolean(checkpoint && !outcome && eventName === "PostToolUse");
+
+  return {
+    ...result,
+    ...(checkpoint && outcome ? { journey_checkpoint: checkpoint, journey_outcome: outcome } : {}),
+    ...(checkpoint ? { journey_operation_key: journeyOperationKey(original) } : {}),
+    ...(terminalUnknown ? { journey_terminal: true } : {}),
+    ...(aggregate ? { journey_aggregate: aggregate } : {}),
+  };
+}
+
 function codexPayload(payload) {
+  let result;
   switch (payload.hook_event_name || "") {
     case "PreToolUse":
-      return { ...payload, permission_key: permissionKey(payload) };
+      result = { ...payload, permission_key: permissionKey(payload) };
+      break;
     case "PostToolUseFailure":
     case "UserPromptSubmit":
     case "Stop":
@@ -439,11 +1133,12 @@ function codexPayload(payload) {
     case "PostCompact":
     case "SubagentStart":
     case "SubagentStop":
-      return payload;
+      result = payload;
+      break;
     case "PostToolUse":
       if (hasFailedToolResponse(payload.tool_response)) {
         const reviewFailure = isReviewPayload(payload);
-        return {
+        result = {
           ...payload,
           hook_event_name: "PostToolUseFailure",
           source_event: "PostToolUse",
@@ -451,19 +1146,22 @@ function codexPayload(payload) {
           review_failure: reviewFailure,
           permission_key: permissionKey(payload),
         };
+        break;
       }
-      return hasSuccessfulToolResponse(payload.tool_response) && isReviewPayload(payload) && isDirectForegroundReviewPayload(payload)
+      result = hasSuccessfulToolResponse(payload.tool_response) && isReviewPayload(payload) && isDirectForegroundReviewPayload(payload)
         ? { ...payload, hook_event_name: "TaskCompleted", source_event: "PostToolUse", permission_key: permissionKey(payload) }
         : { ...payload, permission_key: permissionKey(payload) };
+      break;
     case "SessionStart":
-      return {
+      result = {
         hook_event_name: "Stop",
         session_id: payload.session_id || "",
         source_event: "SessionStart",
         start_source: payload.source || payload.start_source || "",
       };
+      break;
     case "PermissionRequest":
-      return {
+      result = {
         hook_event_name: "Notification",
         notification_type: "permission_prompt",
         message: getPath(payload, "tool_input.description") || "Codex is requesting permission",
@@ -473,9 +1171,11 @@ function codexPayload(payload) {
         tool_input: payload.tool_input || {},
         permission_key: permissionKey(payload),
       };
+      break;
     default:
       return null;
   }
+  return withJourneySignal(result, payload);
 }
 
 function themeLegend(theme) {
@@ -691,6 +1391,62 @@ try {
       line(Array.isArray(theme.progress_bar) ? theme.progress_bar.length : 0);
       break;
     }
+    case "journey-profile":
+      compact(journeyProfile(process.argv[3] || "codex-default"));
+      break;
+    case "journey-transition":
+      compact(journeyTransition(
+        process.argv[3] || "codex-default",
+        process.argv[4] || "",
+        process.argv[5] || "",
+        process.argv[6] || "started",
+        process.argv[7] || 0,
+      ));
+      break;
+    case "journey-payload":
+      compact(journeyPayload(
+        process.argv[3] || "codex-default",
+        process.argv[4] || "",
+        process.argv[5] || "started",
+      ));
+      break;
+    case "journey-render": {
+      const theme = readJsonFile(process.argv[3]);
+      compact(journeyRender(theme, process.argv[4] || "codex-default", process.argv[5] || ""));
+      break;
+    }
+    case "journey-apply": {
+      const payload = parseJson(readStdin(), {});
+      compact(journeyApply(
+        process.argv[3] || "codex-default",
+        process.argv[4],
+        process.argv[5],
+        process.argv[6],
+        process.argv[7],
+        payload,
+      ));
+      break;
+    }
+    case "journey-complete-read-only":
+      compact(journeyCompleteReadOnly(
+        process.argv[3] || "codex-default",
+        process.argv[4],
+        process.argv[5],
+        process.argv[6],
+      ));
+      break;
+    case "journey-render-file":
+      compact(journeyRender(
+        readJsonFile(process.argv[3]),
+        process.argv[4] || "codex-default",
+        readJsonFile(process.argv[5]).current,
+      ));
+      break;
+    case "journey-legend": {
+      const theme = readJsonFile(process.argv[3]);
+      line(journeyLegend(theme, process.argv[4] || "codex-default"));
+      break;
+    }
     case "state": {
       const theme = readJsonFile(process.argv[3]);
       compact(themeState(theme, process.argv[4], process.argv[5]));
@@ -708,7 +1464,17 @@ try {
     case "state-fields": {
       const state = parseJson(readStdin(), {});
       const color = Array.isArray(state.color) ? state.color : ["", "", ""];
-      line([color[0] ?? "", color[1] ?? "", color[2] ?? "", state.sprite || "", state.badge || "", state.name || "", state.stage ?? ""].join("\x1f"));
+      line([
+        color[0] ?? "",
+        color[1] ?? "",
+        color[2] ?? "",
+        state.sprite || "",
+        state.badge || "",
+        state.name || "",
+        state.stage ?? "",
+        state.progress_bar || "",
+        state.journey_total ?? "",
+      ].join("\x1f"));
       break;
     }
     case "review-payload": {

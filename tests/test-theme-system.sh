@@ -131,6 +131,7 @@ fi
 README_DOC=$(cat "$ROOT_DIR/README.md")
 ARCH_DOC=$(cat "$ROOT_DIR/ARCHITECTURE.md")
 ROADMAP_DOC=$(cat "$ROOT_DIR/ROADMAP.md")
+ACTIVE_ROADMAP=$(sed -n '/^## Active Goal$/,/^## Completion Criteria$/p' "$ROOT_DIR/ROADMAP.md")
 TESTING_DOC=$(cat "$ROOT_DIR/TESTING.md")
 AGENTS_DOC=$(cat "$ROOT_DIR/AGENTS.md")
 SDLC_SKILL_DOC=$(cat "$ROOT_DIR/.agents/skills/sdlc/SKILL.md")
@@ -194,7 +195,9 @@ assert_contains "Roadmap links active Codex state semantics issue #10" "issues/1
 assert_contains "Roadmap links active reliability issue #9" "issues/9" "$ROADMAP_DOC"
 assert_contains "Roadmap links active reliability issue #7" "issues/7" "$ROADMAP_DOC"
 assert_contains "Roadmap links active setup issue #5" "issues/5" "$ROADMAP_DOC"
-assert_contains "Roadmap links active Windows issue #3" "issues/3" "$ROADMAP_DOC"
+assert_not_contains "Deferred Windows issue #3 is not a v1.2 blocker" "issues/3" "$ACTIVE_ROADMAP"
+assert_contains "Roadmap has a deferred Windows compatibility track" "## Deferred - Windows Compatibility" "$ROADMAP_DOC"
+assert_contains "Roadmap retains deferred Windows issue #3" "issues/3" "$ROADMAP_DOC"
 assert_contains "Roadmap links active setup issue #2" "issues/2" "$ROADMAP_DOC"
 assert_contains "Roadmap links next theme issue #4" "issues/4" "$ROADMAP_DOC"
 assert_contains "Roadmap links next guided theme-pack issue #12" "issues/12" "$ROADMAP_DOC"

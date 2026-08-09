@@ -170,6 +170,24 @@ assert_eq "PostCompact hook registered" "true" "$(hook_registered "$target/.code
 assert_eq "SubagentStart hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "SubagentStart" "visualhud-codex.sh")"
 assert_eq "SubagentStop hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "SubagentStop" "visualhud-codex.sh")"
 assert_eq "Unsupported PostToolUseFailure hook is absent" "false" "$(hook_registered "$target/.codex/hooks.json" "PostToolUseFailure" "visualhud-codex.sh")"
+profile_engine="$TMP_ROOT/profile-engine.sh"
+profile_log="$TMP_ROOT/profile.log"
+cat > "$profile_engine" <<'SH'
+#!/bin/bash
+cat >/dev/null
+printf '%s\n' "${VISUALHUD_JOURNEY_PROFILE:-}" >> "$VISUALHUD_TEST_PROFILE_LOG"
+SH
+chmod +x "$profile_engine"
+cp "$profile_engine" "$target/.visualhud/engine.sh"
+unset VISUALHUD_JOURNEY_PROFILE
+(cd "$target" && printf '%s' '{"hook_event_name":"PreToolUse","tool_name":"Read"}' | \
+    VISUALHUD_TEST_PROFILE_LOG="$profile_log" bash .codex/hooks/visualhud-codex.sh)
+assert_eq "Installed wrapper gives a plain Codex repo the coarse journey" "codex-default" "$(tail -n 1 "$profile_log")"
+mkdir -p "$target/.agents/skills/sdlc"
+touch "$target/.agents/skills/sdlc/SKILL.md"
+(cd "$target" && printf '%s' '{"hook_event_name":"PreToolUse","tool_name":"Read"}' | \
+    VISUALHUD_TEST_PROFILE_LOG="$profile_log" bash .codex/hooks/visualhud-codex.sh)
+assert_eq "Installed wrapper selects the richer journey from SDLC evidence" "sdlc" "$(tail -n 1 "$profile_log")"
 echo ""
 
 echo "--- Test 3: Codex install preserves existing hooks and is idempotent ---"

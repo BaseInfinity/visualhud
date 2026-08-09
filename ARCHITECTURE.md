@@ -20,6 +20,7 @@
 ┌─────────────────────────────────────────────────────────┐
 │ engine.sh (theme-driven VisualHUD engine)                │
 │  ├── Reads normalized lifecycle events                   │
+│  ├── Applies reversible task-checkpoint transitions       │
 │  ├── Keeps tool count as internal telemetry              │
 │  ├── Reads selected theme JSON                           │
 │  ├── Sets iTerm2 visuals (escape sequences)              │
@@ -75,12 +76,13 @@
 - Current stage/sprite marker: `claude-cooking-stage_${SESSION_KEY}`
 - Context/token alert marker: `claude-cooking-context_${SESSION_KEY}`
 - Active code-review/background-verification marker: `claude-cooking-review_${SESSION_KEY}`
+- Current task journey: `visualhud-journey_${SESSION_KEY}_${PROJECT_KEY}.json`
+- Journey transition history: `visualhud-journey-history_${SESSION_KEY}_${PROJECT_KEY}.jsonl`
+- Secondary plan/milestone status: `visualhud-aggregate_${SESSION_KEY}_${PROJECT_KEY}`
 
-## Planned Codex Task Journey
+## Codex Task Journey
 
-This is the agreed design direction, not a description of the current
-tool-count runtime. The first implementation target is a Codex-first task journey
-driven by trustworthy task and SDLC checkpoints. Each filled top-bar block
+The Codex-first task journey is driven by trustworthy task and SDLC checkpoints. Each filled top-bar block
 represents one named checkpoint with a matching theme stage, color, and
 character when the selected visual lane provides one. Tool activity may animate
 the current checkpoint, but it cannot advance task completion.
@@ -119,15 +121,37 @@ are complete and belongs in a secondary status surface. Milestone counts must
 come from GitHub or another authoritative tracker and must never advance the
 current task's character journey.
 
-Claude Code journey mapping is intentionally deferred until this design is
-validated in Codex. Claude has a different host lifecycle and may need a
-different adapter mapping while preserving the same journey semantics.
+The Codex wrapper selects `sdlc` when it finds repo-local SDLC evidence and
+`codex-default` otherwise. `VISUALHUD_JOURNEY_PROFILE=release` selects the
+release journey for an actual release slice; `off` disables journey mode. The
+engine also accepts normalized `journey_checkpoint`, `journey_outcome`, and
+`journey_aggregate` fields from adapters.
+
+Normal `started` and `passed` evidence is monotonic: routine discovery or plan
+bookkeeping after implementation cannot rewind the journey. Starting a new
+source edit invalidates later verification and returns to implementation;
+starting a test-only edit returns to TDD RED. Other backward movement requires
+`failed`, `finding`, `invalidated`, or an expected TDD RED signal. The
+final-review gate advances only from explicit clean-review evidence; a zero exit
+status without a clean result preserves the active review checkpoint. The
+bundled CLI records gates that cannot be inferred safely from local hooks, such
+as `visualhud journey set ci passed --profile release`; publish and smoke use the
+same command shape. A completed task clears its task-scoped aggregate before the
+next prompt initializes a new journey. The selected profile remains attached to
+an in-flight journey so ordinary repo-default hooks cannot reinterpret
+release-only checkpoints. iTerm2, Windows Terminal, and WezTerm all derive CLI
+and hook state from the same pane-stable session identity.
+
+Claude Code journey mapping is intentionally deferred. Claude has a different host
+lifecycle and may need a different adapter mapping while preserving the same
+journey semantics.
 
 ## Activity And Calibration
 
-Normal agent activity renders the theme's stable `working` state. The tool-call
-counter is telemetry, not completion, and therefore does not drive ordinary
-colors, sprites, titles, or determinate progress indicators. The historical
+Codex journey mode renders the current task checkpoint. Without a selected
+journey, normal agent activity renders the theme's stable `working` state. The
+tool-call counter is telemetry, not completion, and therefore does not drive
+ordinary colors, sprites, titles, or determinate progress indicators. The historical
 11-stage logarithmic progression remains available to deterministic theme
 calibration and explicit legacy mode.
 
@@ -161,7 +185,7 @@ The default Pokemon theme preserves the original progression:
 | IDLE | `idle_prompt` notification | Eevee | Waiting state |
 
 Codex maps `PermissionRequest` to a correlated `permission_prompt` because Codex exposes no later prompt-shown event. Stable content-derived keys survive Codex's changing event identifier shape, and a lock-protected pending set retains overlapping requests. Matching tool lifecycle events clear only their request without allowing unrelated concurrent tools to hide the remaining HITL state. The adapter also maps
-`SessionStart` to the done state so a new Codex session starts idle, and maps
+`SessionStart` to an idle rendering so a new Codex session does not look like active work, and maps
 object-shaped `PostToolUse` responses with an explicit failure status to the
 engine's `PostToolUseFailure` event. Codex unified shell responses expose raw
 output without an exit status, so VisualHUD forwards completion without guessing
@@ -172,6 +196,14 @@ review shell segment remain in review, and failed review/plan calls do
 not decrement unrelated activity telemetry. Codex does not register
 Claude-only lifecycle names such as `TaskCompleted`, `CwdChanged`, or
 `PostToolUseFailure` directly.
+
+Journey evidence is accepted only for an actual foreground command. Merely
+reading a test-runner path cannot create verification evidence. Started tool
+operations record the current journey generation under their stable request
+key; an implementation or test edit increments that generation, so an older
+concurrent test or review completion cannot revalidate changed code. A coarse
+Codex read-only turn may complete on `Stop` only while its latest transition is
+still understanding/discovery evidence.
 
 The Codex TMNT theme uses the same stage thresholds with a wider character/color
 spectrum: Leonardo blue, Michelangelo orange, Donatello purple, Raphael red,
@@ -194,7 +226,7 @@ Joy/Blissey, while TMNT maps critical context to Casey Jones.
 ## Key Technical Decisions
 
 - **Renderer split**: iTerm2 uses direct escape sequences for tab color, title, badge, selection/background/neutral surface palette and the Python API for background images. Windows Terminal/PowerShell uses title plus `OSC 9;4` progress status. WezTerm receives a `visualhudState` user var and applies per-window colors/backgrounds through Lua `window:set_config_overrides()`.
-- **Semantic default**: Ordinary work is stable and indeterminate. Logarithmic stages are retained for calibration and explicit legacy mode only.
+- **Semantic default**: Codex uses an evidence-driven task journey when its wrapper selects a profile. Ordinary work without a journey is stable and indeterminate. Logarithmic stages are retained for calibration and explicit legacy mode only.
 - **File-based state**: Simple, no dependencies, naturally per-session via env var.
 - **SetUserVar**: "Claude-proof" title that Claude Code can't overwrite with its own title.
 - **Delayed reapply**: Adapters set `VISUALHUD_REAPPLY_DELAY=0.12` by default so the engine re-emits title/color variables shortly after hook exit. This prevents Codex/Claude TUI repaints from leaving stale prompt-box or tab chrome colors.

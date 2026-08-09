@@ -98,6 +98,21 @@ assert_not_contains() {
     fi
 }
 
+assert_in_order() {
+    local label="$1" haystack="$2" needle
+    shift 2
+    local remaining="$haystack"
+    TOTAL=$((TOTAL + 1))
+    for needle in "$@"; do
+        if [[ "$remaining" != *"$needle"* ]]; then
+            fail "$label (missing or out of order: $needle)"
+            return
+        fi
+        remaining=${remaining#*"$needle"}
+    done
+    pass "$label"
+}
+
 assert_no_repo_match() {
     local label="$1" pattern="$2"
     shift 2
@@ -131,7 +146,8 @@ fi
 README_DOC=$(cat "$ROOT_DIR/README.md")
 ARCH_DOC=$(cat "$ROOT_DIR/ARCHITECTURE.md")
 ROADMAP_DOC=$(cat "$ROOT_DIR/ROADMAP.md")
-ACTIVE_ROADMAP=$(sed -n '/^## Active Goal$/,/^## Completion Criteria$/p' "$ROOT_DIR/ROADMAP.md")
+OVERNIGHT_ROADMAP=$(sed -n '/^### Unattended Overnight Scope$/,/^### Supervised Release Scope$/p' "$ROOT_DIR/ROADMAP.md")
+SUPERVISED_ROADMAP=$(sed -n '/^### Supervised Release Scope$/,/^## Completion Criteria$/p' "$ROOT_DIR/ROADMAP.md")
 TESTING_DOC=$(cat "$ROOT_DIR/TESTING.md")
 AGENTS_DOC=$(cat "$ROOT_DIR/AGENTS.md")
 SDLC_SKILL_DOC=$(cat "$ROOT_DIR/.agents/skills/sdlc/SKILL.md")
@@ -193,17 +209,27 @@ assert_contains "Roadmap links the next v1.3.0 milestone" "v1.3.0 - Theme and UX
 assert_contains "Roadmap links active regression matrix issue #11" "issues/11" "$ROADMAP_DOC"
 assert_contains "Roadmap links active Codex state semantics issue #10" "issues/10" "$ROADMAP_DOC"
 assert_contains "Roadmap links active reliability issue #9" "issues/9" "$ROADMAP_DOC"
-assert_contains "Roadmap links active reliability issue #7" "issues/7" "$ROADMAP_DOC"
 assert_contains "Roadmap links active setup issue #5" "issues/5" "$ROADMAP_DOC"
-assert_not_contains "Deferred Windows issue #3 is not a v1.2 blocker" "issues/3" "$ACTIVE_ROADMAP"
-assert_contains "Roadmap has a deferred Windows compatibility track" "## Deferred - Windows Compatibility" "$ROADMAP_DOC"
-assert_contains "Roadmap retains deferred Windows issue #3" "issues/3" "$ROADMAP_DOC"
 assert_contains "Roadmap links active setup issue #2" "issues/2" "$ROADMAP_DOC"
+assert_contains "Roadmap links active release documentation issue #15" "issues/15" "$ROADMAP_DOC"
+assert_contains "Roadmap links supervised canary issue #16" "issues/16" "$SUPERVISED_ROADMAP"
+assert_contains "Roadmap links final publication issue #17" "issues/17" "$SUPERVISED_ROADMAP"
+assert_not_contains "Overnight scope excludes the supervised canary" "issues/16" "$OVERNIGHT_ROADMAP"
+assert_not_contains "Overnight scope excludes npm publication" "issues/17" "$OVERNIGHT_ROADMAP"
+assert_contains "Roadmap explicitly excludes npm publication from overnight work" "Never publish npm" "$OVERNIGHT_ROADMAP"
+assert_in_order "Roadmap orders unattended v1.2 work by dependency" "$OVERNIGHT_ROADMAP" "issues/9" "issues/10" "issues/11" "issues/5" "issues/2" "issues/15"
+assert_in_order "Roadmap keeps canary before publication" "$SUPERVISED_ROADMAP" "issues/16" "issues/17"
+assert_not_contains "Closed Claude conflict #7 leaves the open roadmap" "issues/7" "$ROADMAP_DOC"
 assert_contains "Roadmap links next theme issue #4" "issues/4" "$ROADMAP_DOC"
 assert_contains "Roadmap links next guided theme-pack issue #12" "issues/12" "$ROADMAP_DOC"
-assert_contains "Roadmap links next theme-demo documentation issue #13" "issues/13" "$ROADMAP_DOC"
+assert_contains "Roadmap links next theme-demo issue #13" "issues/13" "$ROADMAP_DOC"
 assert_contains "Roadmap links next Stardew-inspired theme issue #14" "issues/14" "$ROADMAP_DOC"
 assert_contains "Roadmap names v1.3 as Priority 2" "## Priority 2 - Build v1.3.0" "$ROADMAP_DOC"
+assert_in_order "Roadmap orders v1.3 implementation before demos" "$ROADMAP_DOC" "## Priority 2 - Build v1.3.0" "issues/12" "issues/4" "issues/14" "issues/13"
+assert_contains "Roadmap names v1.4 as Priority 3" "## Priority 3 - Expand v1.4.0" "$ROADMAP_DOC"
+assert_contains "Roadmap links the v1.4 host and platform milestone" "v1.4.0 - Host and Platform Parity" "$ROADMAP_DOC"
+assert_contains "Roadmap assigns Windows renderer work to v1.4" "issues/3" "$ROADMAP_DOC"
+assert_contains "Roadmap assigns Claude journey parity to v1.4" "issues/18" "$ROADMAP_DOC"
 assert_not_contains "Roadmap does not duplicate open issue checklists" "- [ ]" "$ROADMAP_DOC"
 assert_not_contains "Roadmap does not retain completed-history checklists" "- [x]" "$ROADMAP_DOC"
 assert_contains "Roadmap identifies the active goal" "## Active Goal" "$ROADMAP_DOC"

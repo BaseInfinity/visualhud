@@ -73,7 +73,7 @@ run_engine() {
     printf '%s' "$payload" | \
         ITERM_SESSION_ID="$SESSION_ID" \
         VISUALHUD_STATE_DIR="$STATE_ROOT" \
-        VISUALHUD_TTY="$TTY_LOG" \
+        VISUALHUD_TTY="${VISUALHUD_TEST_TTY:-$TTY_LOG}" \
         VISUALHUD_THEMES_DIR="$ROOT_DIR/themes" \
         VISUALHUD_THEME="${VISUALHUD_TEST_THEME:-pokemon}" \
         VISUALHUD_JOURNEY_PROFILE="${VISUALHUD_TEST_PROFILE:-sdlc}" \
@@ -183,10 +183,10 @@ export VISUALHUD_SET_BG="$MOCK_SET_BG"
 export VISUALHUD_SET_BG_LOG="$SET_BG_LOG"
 export VISUALHUD_BG=on
 touch "$STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
-VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"implement","journey_outcome":"started"}'
+VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"implement","journey_outcome":"started"}'
 for _ in 1 2 3 4 5; do [ -s "$SET_BG_LOG" ] && break; sleep 0.1; done
 assert_contains "Sprite-backed checkpoint sets character art" "/pokemon/sprites/" "$(cat "$SET_BG_LOG" 2>/dev/null)"
-VISUALHUD_TEST_THEME=power-rangers run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"plan","journey_outcome":"started"}'
+VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=power-rangers run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"plan","journey_outcome":"started"}'
 for _ in 1 2 3 4 5; do
     [ -f "$SET_BG_LOG" ] && [ "$(wc -l < "$SET_BG_LOG" | tr -d ' ')" -ge 2 ] && break
     sleep 0.1

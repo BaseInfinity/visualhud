@@ -190,6 +190,8 @@ assert_contains "README documents theme switch without restart" "next hook" "$RE
 assert_contains "README documents calibration command" "./visualhud theme calibrate" "$README_DOC"
 assert_contains "README documents the semantic legend command" "./visualhud theme legend" "$README_DOC"
 assert_contains "README labels ordinary work as indeterminate" "WORKING is indeterminate" "$README_DOC"
+assert_contains "README documents doctor's real engine capture" "side-effect-free capture through the real engine" "$README_DOC"
+assert_contains "README marks doctor CLI complete" "- [x] CLI: \`visualhud doctor\`" "$README_DOC"
 assert_contains "README documents create-theme workflow" "## Create A Theme" "$README_DOC"
 assert_contains "README tells agents to follow theme docs" "Tell your agent to follow \`THEMES.md\`" "$README_DOC"
 assert_contains "README documents theme JSON scaffold path" "themes/<name>/theme.json" "$README_DOC"
@@ -558,12 +560,15 @@ export VISUALHUD_TTY="$TTY_LOG"
 export VISUALHUD_BG="on"
 
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "third-theme"}'
+assert_eq "Third theme count 1 uses Alpha sprite" "alpha" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_contains "Third theme writes Alpha tint escape" "SetColors=bg=030609" "$(cat "$TTY_LOG" 2>/dev/null)"
+
+rm -f "$COUNTER_FILE" "$STAGE_FILE"
+VISUALHUD_TTY=/dev/null run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "third-theme"}'
 for _ in 1 2 3 4 5; do
     [ -f "$SET_BG_LOG" ] && break
     sleep 0.1
 done
-assert_eq "Third theme count 1 uses Alpha sprite" "alpha" "$(cat "$STAGE_FILE" 2>/dev/null)"
-assert_contains "Third theme writes Alpha tint escape" "SetColors=bg=030609" "$(cat "$TTY_LOG" 2>/dev/null)"
 assert_eq "Third theme calls set_bg with theme-local Alpha sprite when VISUALHUD_BG=on" \
     "$(cygpath -m "$THIRD_THEME/sprites/alpha.png" 2>/dev/null || printf '%s' "$THIRD_THEME/sprites/alpha.png")" \
     "$(tail -n 1 "$SET_BG_LOG" 2>/dev/null)"

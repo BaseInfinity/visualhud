@@ -58,8 +58,10 @@ direct equivalent is `./setup-iterm2.sh`.
 .visualhud/visualhud doctor
 ```
 
-Reports active theme, themes directory, jq/python3 presence, engine + setup
-helper status. Use it whenever a hook silently does nothing.
+Reports the active theme, dependencies, resolved terminal target, and a
+side-effect-free capture through the real engine. The capture verifies emitted
+badge, tab-color, and title sequences without changing the live background.
+Use it whenever a hook silently does nothing.
 
 **Compact-by-default rendering.** v1.0 ships without the full-pane sprite
 background — visual identity comes from the bottom tab bar, title progress bar,
@@ -714,7 +716,7 @@ What makes it a real tool people can actually use:
 
 - [ ] CLI: `visualhud install`, `visualhud theme list`, `visualhud theme set <name>`
 - [ ] CLI: `visualhud theme preview` — cycle through stages in current terminal
-- [ ] CLI: `visualhud doctor` — validate setup (terminal, hooks, theme, permissions)
+- [x] CLI: `visualhud doctor` — validate dependencies, theme, terminal target, and real engine output
 - [ ] Auto-configure Claude Code hooks in `settings.json`
 - [ ] Validate theme configs on install
 - [ ] Uninstall / reset terminal to defaults

@@ -53,6 +53,7 @@ cleanup() {
     rm -f "$MODEL_FILE" "$EFFORT_FILE" "$BG_CLEAR_FILE" "$COMPACT_FILE" "$SUBAGENT_FILE" "$TOKENS_FILE" "$PERMISSION_FILE" 2>/dev/null
     rm -rf "$SUBAGENT_DIR" "${SUBAGENT_DIR}.lock" "$PERMISSION_DIR" "$PERMISSION_ACTIVE_DIR" "${PERMISSION_DIR}.lock" 2>/dev/null
     unset VISUALHUD_THEME VISUALHUD_SET_BG VISUALHUD_SET_BG_LOG VISUALHUD_SPRITES_DIR
+    unset VISUALHUD_RENDERER VISUALHUD_BG
     unset VISUALHUD_TTY VISUALHUD_CONTEXT_USED_PERCENT VISUALHUD_CODEX_SESSION_FILE CODEX_HOME
     unset VISUALHUD_REAPPLY_DELAY
     export VISUALHUD_THEMES_DIR="$ROOT_DIR/themes"
@@ -1818,6 +1819,11 @@ cleanup
 result=$(VISUALHUD_TTY="/tmp/visualhud-explicit-tty" bash "$SCRIPT_UNDER_TEST" --resolve-tty </dev/null 2>/dev/null || true)
 assert_eq "VISUALHUD_TTY override honored by --resolve-tty" "/tmp/visualhud-explicit-tty" "$result"
 
+# 32a.1: a failed /dev/tty probe must not leak its redirection error.
+TTY_PROBE_STDERR="$TEST_ROOT/tty-probe-stderr.log"
+LC_ALL=C bash "$SCRIPT_UNDER_TEST" --resolve-tty </dev/null >/dev/null 2>"$TTY_PROBE_STDERR" || true
+assert_not_contains "Failed /dev/tty probe is silent" "/dev/tty:" "$(cat "$TTY_PROBE_STDERR" 2>/dev/null || true)"
+
 # 32b: without override, returns a non-empty, non-/dev/null target when running interactively
 unset VISUALHUD_TTY
 result=$(bash "$SCRIPT_UNDER_TEST" --resolve-tty </dev/null 2>/dev/null || true)
@@ -1855,6 +1861,39 @@ else
     FAIL=$((FAIL + 1))
     printf "  FAIL: Resolved TTY device does not exist: %s (tt= vs tty= regression?)\n" "$result"
 fi
+echo ""
+
+# 32e: a regular-file VISUALHUD_TTY override is capture mode and must not
+# mutate the real iTerm2 pane through the independent Python API channel.
+cleanup
+TMP_CAPTURE_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/visualhud-capture.XXXXXX")
+CAPTURE_TTY="$TMP_CAPTURE_ROOT/tty.log"
+CAPTURE_SET_BG_LOG="$TMP_CAPTURE_ROOT/set-bg.log"
+CAPTURE_SET_BG="$TMP_CAPTURE_ROOT/set_bg.py"
+cat > "$CAPTURE_SET_BG" <<'PY'
+import os
+
+with open(os.environ["VISUALHUD_SET_BG_LOG"], "a", encoding="utf-8") as handle:
+    handle.write("called\n")
+PY
+export VISUALHUD_TTY="$CAPTURE_TTY"
+export VISUALHUD_RENDERER="iterm2"
+export VISUALHUD_BG="on"
+export VISUALHUD_SET_BG="$CAPTURE_SET_BG"
+export VISUALHUD_SET_BG_LOG="$CAPTURE_SET_BG_LOG"
+
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
+sleep 0.2
+assert_file_not_exists "Capture mode does not set a live background" "$CAPTURE_SET_BG_LOG"
+
+unset VISUALHUD_BG
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
+sleep 0.2
+assert_file_not_exists "Capture mode does not clear a live background" "$CAPTURE_SET_BG_LOG"
+assert_file_not_exists "Capture mode does not persist a live-background clear marker" "$BG_CLEAR_FILE"
+
+rm -rf "$TMP_CAPTURE_ROOT"
+cleanup
 echo ""
 
 # --- TEST 33: Stop-loop detection renders visible LOOP state (Fix #3) ---

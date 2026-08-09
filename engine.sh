@@ -14,7 +14,7 @@ resolve_tty_target() {
         printf '%s' "$VISUALHUD_TTY"
         return
     fi
-    if [ -z "${VISUALHUD_NO_DEV_TTY:-}" ] && printf '' > /dev/tty 2>/dev/null; then
+    if [ -z "${VISUALHUD_NO_DEV_TTY:-}" ] && { printf '' > /dev/tty; } 2>/dev/null; then
         printf '/dev/tty'
         return
     fi
@@ -160,6 +160,11 @@ if [ -z "$RENDERER" ]; then
             *) RENDERER="iterm2" ;;
         esac
     fi
+fi
+
+BACKGROUND_API_ENABLED=false
+if [ "$RENDERER" = "iterm2" ] && { [ -z "${VISUALHUD_TTY:-}" ] || [ -c "$TTY_TARGET" ]; }; then
+    BACKGROUND_API_ENABLED=true
 fi
 
 to_hex() {
@@ -503,7 +508,7 @@ set_status_from_json() {
         printf '%s' "$sprite" > "$STAGE_FILE" 2>/dev/null
         # Background sprite is opt-in. Default is compact mode (no full-pane sprite).
         # Enable with VISUALHUD_BG=on for the full-pane sprite background.
-        if [ "$RENDERER" = "iterm2" ] && [ "${VISUALHUD_BG:-off}" = "on" ] && [ -f "$SET_BG" ]; then
+        if [ "$BACKGROUND_API_ENABLED" = "true" ] && [ "${VISUALHUD_BG:-off}" = "on" ] && [ -f "$SET_BG" ]; then
             sprite_path=$(sprite_path_for "$sprite")
             python3 "$SET_BG" "$sprite_path" "$SESSION_ID" 2>/dev/null &
         fi
@@ -597,7 +602,7 @@ CONTEXT_ALERT_JSON=$(context_alert_json "$CONTEXT_PERCENT")
 # the stale image sticks forever. One explicit clear per pane fixes it.
 # Toggling VISUALHUD_BG=on removes the marker so off→on→off re-triggers.
 BACKGROUND_NEEDS_APPLY=false
-if [ "$RENDERER" != "iterm2" ]; then
+if [ "$BACKGROUND_API_ENABLED" != "true" ]; then
     :
 elif [ "${VISUALHUD_BG:-off}" = "on" ]; then
     if [ -f "$BG_CLEAR_FILE" ]; then

@@ -261,7 +261,9 @@ set +e
 setup_out="$("$SETUP_HARNESS/visualhud" setup iterm2 2>&1)"
 setup_status=$?
 setup_reset_out="$("$SETUP_HARNESS/visualhud" setup iterm2 --reset 2>&1)"
-doctor_out="$("$SETUP_HARNESS/visualhud" doctor 2>&1)"
+DOCTOR_CAPTURE="$TMP_ROOT/doctor-capture.log"
+DOCTOR_STATE="$TMP_ROOT/doctor-state"
+doctor_out="$(VISUALHUD_TTY="$DOCTOR_CAPTURE" VISUALHUD_STATE_DIR="$DOCTOR_STATE" VISUALHUD_REAPPLY_DELAY=0 "$SETUP_HARNESS/visualhud" doctor 2>&1)"
 doctor_status=$?
 set -e
 assert_eq "visualhud setup iterm2 exits 0 on success" "0" "$setup_status"
@@ -273,6 +275,38 @@ assert_contains "doctor reports JSON helper" "JSON helper" "$doctor_out"
 assert_contains "doctor reports python3" "python3" "$doctor_out"
 assert_contains "doctor reports active theme line" "active theme" "$(printf '%s' "$doctor_out" | tr '[:upper:]' '[:lower:]')"
 assert_contains "doctor reports themes directory" "themes" "$doctor_out"
+assert_contains "doctor reports resolved TTY target" "tty target" "$(printf '%s' "$doctor_out" | tr '[:upper:]' '[:lower:]')"
+assert_contains "doctor runs the real engine chain" "engine chain" "$(printf '%s' "$doctor_out" | tr '[:upper:]' '[:lower:]')"
+assert_contains "doctor reports captured escape-sequence bytes" "bytes emitted" "$(printf '%s' "$doctor_out" | tr '[:upper:]' '[:lower:]')"
+
+set +e
+bad_capture_out="$(VISUALHUD_TTY="$TMP_ROOT/missing/doctor-capture.log" VISUALHUD_STATE_DIR="$DOCTOR_STATE" VISUALHUD_REAPPLY_DELAY=0 "$SETUP_HARNESS/visualhud" doctor 2>&1)"
+bad_capture_status=$?
+set -e
+assert_eq "doctor rejects a capture target with an unusable parent" "1" "$bad_capture_status"
+assert_contains "doctor explains an unusable capture target" "capture target parent is not writable" "$bad_capture_out"
+
+DANGLING_CAPTURE="$TMP_ROOT/dangling-capture.log"
+ln -s "$TMP_ROOT/missing-target/tty.log" "$DANGLING_CAPTURE"
+set +e
+dangling_capture_out="$(VISUALHUD_TTY="$DANGLING_CAPTURE" VISUALHUD_STATE_DIR="$DOCTOR_STATE" VISUALHUD_REAPPLY_DELAY=0 "$SETUP_HARNESS/visualhud" doctor 2>&1)"
+dangling_capture_status=$?
+set -e
+assert_eq "doctor rejects a dangling capture-target symlink" "1" "$dangling_capture_status"
+assert_contains "doctor explains a dangling capture-target symlink" "capture target is not writable" "$dangling_capture_out"
+
+cp "$SETUP_HARNESS/scripts/visualhud-json.js" "$SETUP_HARNESS/scripts/visualhud-json.good.js"
+cat > "$SETUP_HARNESS/scripts/visualhud-json.js" <<'EOF'
+console.error("doctor helper exploded");
+process.exit(9);
+EOF
+set +e
+broken_doctor_out="$(VISUALHUD_TTY="$DOCTOR_CAPTURE" VISUALHUD_STATE_DIR="$DOCTOR_STATE" VISUALHUD_REAPPLY_DELAY=0 "$SETUP_HARNESS/visualhud" doctor 2>&1)"
+broken_doctor_status=$?
+set -e
+assert_eq "doctor exits nonzero when the real JSON path fails" "1" "$broken_doctor_status"
+assert_contains "doctor surfaces a real-chain JSON failure" "doctor helper exploded" "$broken_doctor_out"
+mv "$SETUP_HARNESS/scripts/visualhud-json.good.js" "$SETUP_HARNESS/scripts/visualhud-json.js"
 
 unset VISUALHUD_ROOT
 rm -rf "$SETUP_HARNESS"

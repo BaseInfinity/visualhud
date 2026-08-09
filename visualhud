@@ -350,7 +350,9 @@ setup_iterm2() {
 }
 
 doctor() {
-    local status=0 theme themes_root
+    local status=0 chain_ready=1 theme themes_root doctor_tmp tty_target tty_error tty_parent
+    local payload parsed_event json_error capture_file state_dir engine_error
+    local engine_status emitted_bytes
     themes_root="$THEMES_DIR"
     theme=$(active_theme)
 
@@ -364,6 +366,7 @@ doctor() {
     else
         printf '  [missing] node  (install Node.js)\n'
         status=1
+        chain_ready=0
     fi
 
     if [ -f "$JSON_HELPER" ]; then
@@ -371,6 +374,7 @@ doctor() {
     else
         printf '  [missing] JSON helper     %s\n' "$JSON_HELPER"
         status=1
+        chain_ready=0
     fi
 
     if command -v python3 >/dev/null 2>&1; then
@@ -392,6 +396,7 @@ doctor() {
     else
         printf '  [missing] active theme.json (theme: %s)\n' "$theme"
         status=1
+        chain_ready=0
     fi
 
     if [ -f "$ROOT_DIR/engine.sh" ]; then
@@ -399,6 +404,7 @@ doctor() {
     else
         printf '  [missing] engine.sh\n'
         status=1
+        chain_ready=0
     fi
 
     if [ -f "$ROOT_DIR/set_bg.py" ]; then
@@ -414,6 +420,104 @@ doctor() {
         printf '  [missing] setup-iterm2.sh\n'
         status=1
     fi
+
+    doctor_tmp=$(mktemp -d "${TMPDIR:-/tmp}/visualhud-doctor.XXXXXX") || {
+        printf '  [error] diagnostics       could not create temporary workspace\n'
+        return 1
+    }
+    tty_error="$doctor_tmp/tty.stderr"
+    tty_target=""
+    if [ -f "$ENGINE" ]; then
+        if tty_target=$(LC_ALL=C bash "$ENGINE" --resolve-tty </dev/null 2>"$tty_error"); then
+            if [ -s "$tty_error" ]; then
+                printf '  [error] tty target probe wrote to stderr:\n'
+                sed 's/^/    /' "$tty_error"
+                status=1
+            elif [ "$tty_target" = "/dev/null" ]; then
+                printf '  [warn] tty target : /dev/null (no controlling terminal; set VISUALHUD_TTY)\n'
+                status=1
+            elif [ -n "${VISUALHUD_TTY:-}" ] && [ ! -c "$tty_target" ]; then
+                tty_parent=$(dirname -- "$tty_target")
+                if [ -L "$tty_target" ] && [ ! -e "$tty_target" ]; then
+                    printf '  [error] capture target is not writable: %s (dangling symlink)\n' "$tty_target"
+                    status=1
+                elif [ -e "$tty_target" ] && { [ ! -f "$tty_target" ] || [ ! -w "$tty_target" ]; }; then
+                    printf '  [error] capture target is not a writable regular file: %s\n' "$tty_target"
+                    status=1
+                elif [ ! -e "$tty_target" ] && { [ ! -d "$tty_parent" ] || [ ! -w "$tty_parent" ]; }; then
+                    printf '  [error] capture target parent is not writable: %s\n' "$tty_parent"
+                    status=1
+                else
+                    printf '  [ok] tty target   : %s (capture mode; background API disabled)\n' "$tty_target"
+                fi
+            elif [ -c "$tty_target" ]; then
+                printf '  [ok] tty target   : %s\n' "$tty_target"
+            else
+                printf '  [error] tty target: %s is not a character device\n' "${tty_target:-empty}"
+                status=1
+            fi
+        else
+            printf '  [error] tty target probe failed:\n'
+            sed 's/^/    /' "$tty_error"
+            status=1
+        fi
+    fi
+
+    payload='{"hook_event_name":"Stop","session_id":"visualhud-doctor","cwd":"/visualhud-doctor"}'
+    json_error="$doctor_tmp/json.stderr"
+    if [ "$chain_ready" -eq 1 ]; then
+        if parsed_event=$(printf '%s' "$payload" | LC_ALL=C node "$JSON_HELPER" event-name 2>"$json_error") && [ "$parsed_event" = "Stop" ]; then
+            printf '  [ok] JSON payload          parsed as Stop\n'
+        else
+            printf '  [error] JSON payload       parser failed\n'
+            if [ -s "$json_error" ]; then
+                sed 's/^/    /' "$json_error"
+            fi
+            status=1
+            chain_ready=0
+        fi
+    fi
+
+    if [ "$chain_ready" -eq 1 ]; then
+        capture_file="$doctor_tmp/engine.capture"
+        state_dir="$doctor_tmp/state"
+        engine_error="$doctor_tmp/engine.stderr"
+        mkdir -p "$state_dir"
+        : > "$capture_file"
+        engine_status=0
+        if printf '%s' "$payload" | env \
+            LC_ALL=C \
+            VISUALHUD_TTY="$capture_file" \
+            VISUALHUD_RENDERER=iterm2 \
+            VISUALHUD_BG=on \
+            VISUALHUD_REAPPLY_DELAY=0 \
+            VISUALHUD_STATE_DIR="$state_dir" \
+            VISUALHUD_THEME="$theme" \
+            VISUALHUD_THEMES_DIR="$themes_root" \
+            VISUALHUD_JSON_HELPER="$JSON_HELPER" \
+            VISUALHUD_JOURNEY_PROFILE=off \
+            bash "$ENGINE" >/dev/null 2>"$engine_error"; then
+            engine_status=0
+        else
+            engine_status=$?
+        fi
+        emitted_bytes=$(wc -c < "$capture_file" | tr -d '[:space:]')
+        if [ "$engine_status" -eq 0 ] && [ ! -s "$engine_error" ] && \
+            [ "${emitted_bytes:-0}" -gt 0 ] && \
+            LC_ALL=C grep -q 'SetBadgeFormat=' "$capture_file" && \
+            LC_ALL=C grep -q 'SetColors=tab=' "$capture_file" && \
+            LC_ALL=C grep -q 'SetUserVar=hudProgress=' "$capture_file"; then
+            printf '  [ok] engine chain          %s bytes emitted with badge, tab color, and title\n' "$emitted_bytes"
+        else
+            printf '  [error] engine chain       failed (exit %s, %s bytes emitted)\n' "$engine_status" "${emitted_bytes:-0}"
+            if [ -s "$engine_error" ]; then
+                sed 's/^/    /' "$engine_error"
+            fi
+            status=1
+        fi
+    fi
+
+    rm -rf "$doctor_tmp"
 
     if [ "$status" -eq 0 ]; then
         printf 'VisualHUD looks healthy.\n'

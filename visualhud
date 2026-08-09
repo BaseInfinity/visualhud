@@ -349,6 +349,30 @@ setup_iterm2() {
     exec "$script" "$@"
 }
 
+report_repo_setup_phases() {
+    local host="$1" runtime_dir="$2"
+    printf 'Setup status:\n'
+    printf '  [ok] repo runtime installed: %s\n' "$runtime_dir"
+    printf '  [ok] %s hooks installed\n' "$host"
+}
+
+apply_iterm2_platform_helper() {
+    local runtime_dir="$1" helper_output status
+    local helper="$runtime_dir/setup-iterm2.sh"
+    if helper_output=$("$helper" 2>&1); then
+        printf '  [ok] iTerm2 platform helper applied\n'
+        printf '%s\n' "$helper_output"
+        return 0
+    else
+        status=$?
+    fi
+    printf '  [blocked] iTerm2 platform helper (exit %s); repo runtime and hooks remain installed\n' "$status" >&2
+    if [ -n "$helper_output" ]; then
+        printf '%s\n' "$helper_output" | sed 's/^/    /' >&2
+    fi
+    return "$status"
+}
+
 doctor() {
     local status=0 chain_ready=1 theme themes_root doctor_tmp tty_target tty_error tty_parent
     local payload parsed_event json_error capture_file state_dir engine_error
@@ -738,7 +762,8 @@ install_claude() {
     printf 'Installed VisualHUD Claude hooks in: %s\n' "$target_root"
     printf 'Active theme: %s\n' "$theme"
     printf 'Runtime: %s\n' "$runtime_dir"
-    printf 'If iTerm2 visuals are not enabled yet, run: %s/setup-iterm2.sh\n' "$runtime_dir"
+    report_repo_setup_phases "Claude" "$runtime_dir"
+    apply_iterm2_platform_helper "$runtime_dir" || return $?
     printf 'Then start Claude Code in the target repo: claude\n'
 }
 
@@ -815,10 +840,11 @@ install_codex() {
     printf 'Installed VisualHUD Codex hooks in: %s\n' "$target_root"
     printf 'Active theme: %s\n' "$theme"
     printf 'Runtime: %s\n' "$runtime_dir"
+    report_repo_setup_phases "Codex" "$runtime_dir"
     case "$renderer" in
         iterm2)
             printf 'Renderer: iTerm2\n'
-            printf 'If iTerm2 visuals are not enabled yet, run: %s/setup-iterm2.sh\n' "$runtime_dir"
+            apply_iterm2_platform_helper "$runtime_dir" || return $?
             ;;
         windows)
             printf 'Renderer: Windows Terminal/PowerShell\n'

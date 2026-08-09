@@ -40,6 +40,18 @@ assert_contains() {
     fi
 }
 
+assert_not_contains() {
+    local label="$1" needle="$2" haystack="$3"
+    TOTAL=$((TOTAL + 1))
+    if [[ "$haystack" != *"$needle"* ]]; then
+        PASS=$((PASS + 1))
+        printf "  PASS: %s\n" "$label"
+    else
+        FAIL=$((FAIL + 1))
+        printf "  FAIL: %s (expected output not to contain '%s')\n" "$label" "$needle"
+    fi
+}
+
 assert_file_exists() {
     local label="$1" filepath="$2"
     TOTAL=$((TOTAL + 1))
@@ -71,6 +83,27 @@ make_repo() {
     git -C "$target" init -q
     printf '%s\n' "$target"
 }
+
+FAKE_BIN="$TMP_ROOT/fake-bin"
+TEST_HOME="$TMP_ROOT/home"
+DEFAULTS_LOG="$TMP_ROOT/defaults.log"
+mkdir -p "$FAKE_BIN" "$TEST_HOME"
+cat > "$FAKE_BIN/defaults" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$*" >> "$VISUALHUD_TEST_DEFAULTS_LOG"
+[ "${VISUALHUD_TEST_DEFAULTS_FAIL:-0}" != "1" ]
+EOF
+cat > "$FAKE_BIN/pgrep" <<'EOF'
+#!/bin/bash
+if [ -n "${VISUALHUD_TEST_PGREP_STATUS:-}" ]; then
+    exit "$VISUALHUD_TEST_PGREP_STATUS"
+fi
+[ "${VISUALHUD_TEST_ITERM_RUNNING:-0}" = "1" ]
+EOF
+chmod +x "$FAKE_BIN/defaults" "$FAKE_BIN/pgrep"
+export HOME="$TEST_HOME"
+export PATH="$FAKE_BIN:$PATH"
+export VISUALHUD_TEST_DEFAULTS_LOG="$DEFAULTS_LOG"
 
 hook_registered() {
     local hooks_json="$1" event="$2" needle="$3"
@@ -134,9 +167,15 @@ echo ""
 
 echo "--- Test 2: Codex macOS install creates a repo-local VisualHUD runtime ---"
 target="$(make_repo mac-codex)"
-output="$("$CLI" install codex --target "$target" --platform macos 2>&1)"
+output="$(TERM_PROGRAM='' ITERM_SESSION_ID='' "$CLI" install codex --target "$target" --platform macos 2>&1)"
 assert_contains "Install reports target" "Installed VisualHUD Codex hooks in:" "$output"
 assert_contains "Install reports active theme" "Active theme: pokemon" "$output"
+assert_contains "Install reports runtime phase" "[ok] repo runtime installed" "$output"
+assert_contains "Install reports hooks phase" "[ok] Codex hooks installed" "$output"
+assert_contains "Install applies the iTerm2 helper" "[ok] iTerm2 platform helper applied" "$output"
+assert_contains "Install reports restart state" "[ok] iTerm2 restart not currently required" "$output"
+assert_contains "Install writes iTerm2 preferences through the helper" "write com.googlecode.iterm2 EnableAPIServer -bool true" "$(cat "$DEFAULTS_LOG")"
+assert_file_exists "Install writes the iTerm2 dynamic profile" "$TEST_HOME/Library/Application Support/iTerm2/DynamicProfiles/visualhud-profile.json"
 assert_file_exists "Target Codex hook wrapper exists" "$target/.codex/hooks/visualhud-codex.sh"
 assert_executable "Target Codex hook wrapper is executable" "$target/.codex/hooks/visualhud-codex.sh"
 assert_file_exists "Target Codex hooks.json exists" "$target/.codex/hooks.json"
@@ -238,6 +277,49 @@ assert_file_exists "Existing repo skill is preserved" "$target/.agents/skills/ex
 assert_file_exists "Installed runtime self-repair keeps Pokemon sprites" "$target/.visualhud/themes/pokemon/sprites/charmander.png"
 assert_file_exists "Installed runtime self-repair keeps VisualHUD skills" "$target/.agents/skills/visualhud-update/SKILL.md"
 assert_eq "Installed runtime self-repair can switch theme" "tmnt" "$(cat "$target/.visualhud/theme")"
+echo ""
+
+echo "--- Test 3a: macOS setup stays non-disruptive and reports blockers ---"
+target="$(make_repo mac-running)"
+set +e
+running_output="$(TERM_PROGRAM='' ITERM_SESSION_ID='' VISUALHUD_TEST_ITERM_RUNNING=1 \
+    "$CLI" install codex --target "$target" --platform macos 2>&1)"
+running_status=$?
+set -e
+assert_eq "Running iTerm2 does not block repo installation" "0" "$running_status"
+assert_contains "Running iTerm2 reports deferred visual refresh" "[pending] iTerm2 restart later to refresh terminal visuals" "$running_output"
+assert_not_contains "Running iTerm2 never prompts to quit" "Continue anyway?" "$running_output"
+
+target="$(make_repo mac-term-program-detected)"
+term_program_output="$(TERM_PROGRAM=iTerm.app ITERM_SESSION_ID='' VISUALHUD_TEST_PGREP_STATUS=3 \
+    "$CLI" install codex --target "$target" --platform macos 2>&1)"
+assert_contains "TERM_PROGRAM survives a denied process probe" "[pending] iTerm2 restart later to refresh terminal visuals" "$term_program_output"
+
+target="$(make_repo mac-session-detected)"
+session_output="$(TERM_PROGRAM='' ITERM_SESSION_ID=visualhud-test VISUALHUD_TEST_PGREP_STATUS=3 \
+    "$CLI" install codex --target "$target" --platform macos 2>&1)"
+assert_contains "ITERM_SESSION_ID survives a denied process probe" "[pending] iTerm2 restart later to refresh terminal visuals" "$session_output"
+
+target="$(make_repo mac-process-unknown)"
+unknown_output="$(TERM_PROGRAM='' ITERM_SESSION_ID='' VISUALHUD_TEST_PGREP_STATUS=3 \
+    "$CLI" install codex --target "$target" --platform macos 2>&1)"
+assert_contains "Denied process inspection reports an honest pending state" "[pending] iTerm2 process status unavailable" "$unknown_output"
+
+target="$(make_repo mac-helper-blocked)"
+set +e
+blocked_output="$(VISUALHUD_TEST_DEFAULTS_FAIL=1 "$CLI" install codex --target "$target" --platform macos 2>&1)"
+blocked_status=$?
+set -e
+assert_eq "A failed platform helper marks setup blocked" "1" "$blocked_status"
+assert_contains "Blocked setup preserves the runtime phase" "[ok] repo runtime installed" "$blocked_output"
+assert_contains "Blocked setup preserves the hooks phase" "[ok] Codex hooks installed" "$blocked_output"
+assert_contains "Blocked setup reports the helper phase" "[blocked] iTerm2 platform helper" "$blocked_output"
+assert_contains "Blocked setup includes the helper failure reason" "iTerm2 settings could not be written" "$blocked_output"
+assert_file_exists "Blocked platform setup still installs Codex hooks" "$target/.codex/hooks.json"
+
+reset_output="$(VISUALHUD_TEST_DEFAULTS_FAIL=0 "$target/.visualhud/setup-iterm2.sh" --reset 2>&1)"
+assert_contains "Reset reports a deferred visual refresh" "[pending] Restart iTerm2 later" "$reset_output"
+assert_eq "Reset removes the VisualHUD dynamic profile" "absent" "$([ ! -e "$TEST_HOME/Library/Application Support/iTerm2/DynamicProfiles/visualhud-profile.json" ] && printf absent || printf present)"
 echo ""
 
 echo "--- Test 3b: Claude install wires repo-local Claude hooks and runtime ---"

@@ -19,6 +19,11 @@ the user a manual setup step unless a local config merge is ambiguous.
    ```bash
    ./visualhud install codex --target /path/to/repo --theme pokemon --platform macos
    ```
+   The macOS installer applies setup-iterm2.sh automatically after installing
+   the repo runtime and hooks. Treat its restart-later state as non-blocking:
+   the user can keep working and refresh terminal-side visuals at the next
+   normal iTerm2 restart. Treat an explicit platform-helper failure as blocked
+   even though the repo runtime and hooks remain installed.
    On Windows/WezTerm, prefer:
    ```powershell
    ./visualhud install codex --target C:/path/to/repo --theme pokemon --platform wezterm
@@ -48,6 +53,7 @@ the user a manual setup step unless a local config merge is ambiguous.
 - Default clean Mac Codex installs to Pokemon because it is the most polished first-party theme.
 - Preserve existing `.codex/hooks.json` entries and existing `.agents/skills/*`.
 - The installed skills live under `.agents/skills/visualhud-*` so Codex can discover them in that repo.
-- Do not report setup complete while leaving `setup-wezterm.ps1` or `setup-iterm2.sh` as a manual next step unless permissions or ambiguous user config blocked automation.
+- Do not rerun `setup-iterm2.sh` manually after a successful macOS install; the installer already applied it. Surface its explicit restart-later or blocked state.
+- Do not report setup complete while leaving `setup-wezterm.ps1` as a manual next step unless permissions or ambiguous user config blocked automation.
 - Keep Windows renderer limits explicit: Windows Terminal/PowerShell is title/progress only; WezTerm is the Windows path for live colors/background sprites.
 - If colors work but images do not, inspect `.visualhud/themes/<theme>/sprites/` and `set_bg.py` before changing theme JSON.

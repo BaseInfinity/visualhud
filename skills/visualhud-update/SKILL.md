@@ -22,6 +22,8 @@ Refresh VisualHUD without clobbering local choices.
    ```bash
    ./visualhud install codex --target /path/to/repo --theme "$(cat /path/to/repo/.visualhud/theme)" --platform macos
    ```
+   The macOS install command reapplies the iTerm2 helper automatically and
+   reports whether visuals are ready now, pending a normal restart, or blocked.
    For a WezTerm install, use the preserved renderer and rerun the platform helper yourself:
    ```powershell
    ./visualhud install codex --target C:/path/to/repo --theme "$(cat C:/path/to/repo/.visualhud/theme)" --platform wezterm
@@ -47,4 +49,5 @@ Refresh VisualHUD without clobbering local choices.
 - Preserve unrelated `.codex/hooks.json` entries and unrelated `.agents/skills/*`.
 - Do not use legacy global hook folders or global Codex hooks as a source of truth.
 - Do not report a WezTerm update complete until `setup-wezterm.ps1` has been run or an ambiguous local config merge has been surfaced as the blocker.
+- Do not add a separate iTerm2 helper command after a successful macOS update; use the install command's platform-helper status.
 - If a bundled theme references a missing sprite, treat that as a VisualHUD source bug, not a target-repo customization.

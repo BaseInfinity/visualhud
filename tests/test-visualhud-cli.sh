@@ -323,7 +323,7 @@ else
     printf "  FAIL: setup-iterm2.sh writes TabViewType=1 (bottom tab bar)\n"
 fi
 TOTAL=$((TOTAL + 1))
-RESET_BLOCK=$(sed -n '/--reset/,/^fi$/p' "$SETUP_SCRIPT")
+RESET_BLOCK=$(sed -n '/^reset_iterm2()/,/^}/p' "$SETUP_SCRIPT")
 if printf '%s\n' "$RESET_BLOCK" | grep -qE 'defaults (delete|write) com\.googlecode\.iterm2 TabViewType'; then
     PASS=$((PASS + 1))
     printf "  PASS: setup-iterm2.sh --reset reverts TabViewType\n"

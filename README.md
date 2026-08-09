@@ -40,15 +40,22 @@ skill should install with `--platform wezterm`, run `setup-wezterm.ps1`, and
 handle straightforward config merges instead of sending you manual follow-up
 commands.
 
+On macOS, the installer automatically applies the copied iTerm2 helper after
+the repo runtime and hooks are installed. If iTerm2 is open, setup stays
+non-disruptive: keep working and restart iTerm2 normally later to refresh any
+terminal-side visuals. If preference writes fail, the installer reports the
+platform helper as blocked while leaving the repo runtime and hooks available.
+
 **One-shot iTerm2 setup (run once per machine):**
 
 ```bash
 npx -y visualhud@latest setup iterm2
 ```
 
-That writes the iTerm2 defaults VisualHUD needs (Minimal theme, tab bar at
+That reapplies the iTerm2 defaults VisualHUD needs (Minimal theme, tab bar at
 bottom for the hero-banner-footer look, per-pane background image, Python API,
-dynamic profile). Quit and reopen iTerm2 for changes to stick. Undo with
+dynamic profile). It never asks you to quit an active workspace; restart iTerm2
+later if the command reports a pending visual refresh. Undo with
 `npx -y visualhud@latest setup iterm2 --reset`. From a source checkout, the
 direct equivalent is `./setup-iterm2.sh`.
 

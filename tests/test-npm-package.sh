@@ -9,6 +9,21 @@ TOTAL=0
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/visualhud-npm.XXXXXX")"
+FAKE_BIN="$TMP_ROOT/fake-bin"
+TEST_HOME="$TMP_ROOT/home"
+mkdir -p "$FAKE_BIN" "$TEST_HOME"
+cat > "$FAKE_BIN/defaults" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$*" >> "$VISUALHUD_TEST_DEFAULTS_LOG"
+EOF
+cat > "$FAKE_BIN/pgrep" <<'EOF'
+#!/bin/bash
+exit 1
+EOF
+chmod +x "$FAKE_BIN/defaults" "$FAKE_BIN/pgrep"
+export HOME="$TEST_HOME"
+export PATH="$FAKE_BIN:$PATH"
+export VISUALHUD_TEST_DEFAULTS_LOG="$TMP_ROOT/defaults.log"
 
 cleanup() {
     rm -rf "$TMP_ROOT"
@@ -146,6 +161,8 @@ if [ -n "$tarball" ]; then
     set -e
     assert_eq "npx install succeeds" "0" "$npx_status"
     assert_contains "npx output reports install" "Installed VisualHUD Codex hooks in:" "$npx_output"
+    assert_contains "npx install automatically applies iTerm2 helper" "[ok] iTerm2 platform helper applied" "$npx_output"
+    assert_not_contains "npx install leaves no manual iTerm2 helper step" "If iTerm2 visuals are not enabled yet" "$npx_output"
     assert_eq "npx install defaults target to Pokemon" "pokemon" "$(cat "$target/.visualhud/theme" 2>/dev/null || true)"
     assert_file_exists "npx install writes target hook" "$target/.codex/hooks/visualhud-codex.sh"
     assert_file_exists "npx install writes Pokemon sprite" "$target/.visualhud/themes/pokemon/sprites/charmander.png"
@@ -166,6 +183,7 @@ if [ -n "$tarball" ]; then
     set -e
     assert_eq "npx cwd install succeeds" "0" "$cwd_npx_status"
     assert_contains "npx cwd install reports target" "Installed VisualHUD Codex hooks in:" "$cwd_npx_output"
+    assert_contains "npx cwd install reports complete iTerm2 setup" "[ok] iTerm2 platform helper applied" "$cwd_npx_output"
     assert_eq "npx cwd install defaults to Pokemon" "pokemon" "$(cat "$cwd_target/.visualhud/theme" 2>/dev/null || true)"
     assert_file_exists "npx cwd install writes setup skill" "$cwd_target/.agents/skills/visualhud-setup/SKILL.md"
 else

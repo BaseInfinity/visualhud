@@ -184,7 +184,7 @@ assert_contains "README records Power Rangers as a future theme candidate" "Powe
 assert_contains "README records Sonic as a future theme candidate" "Sonic" "$README_DOC"
 assert_contains "README documents Windows status renderer" "Windows Terminal/PowerShell is supported for Codex hook install" "$README_DOC"
 assert_file_not_exists "Planning stays consolidated without GOALS.md" "$ROOT_DIR/GOALS.md"
-assert_eq "Repo-local VisualHUD runtime is ignored" "true" "$(git -C "$ROOT_DIR" check-ignore -q .visualhud && printf true || printf false)"
+assert_eq "Repo-local VisualHUD runtime is ignored" "true" "$(git -C "$ROOT_DIR" check-ignore -q .visualhud/engine.sh && printf true || printf false)"
 assert_contains "Roadmap delegates release scope to GitHub milestones" "GitHub milestones define release scope" "$ROADMAP_DOC"
 assert_contains "Roadmap names v1.2 as Priority 1" "## Priority 1 - Ship v1.2.0" "$ROADMAP_DOC"
 assert_contains "Roadmap states issue order is execution priority" "ordered by execution priority" "$ROADMAP_DOC"

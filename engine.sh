@@ -87,6 +87,8 @@ REVIEW_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-review_${SESSION_KEY}"
 MODEL_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-model_${SESSION_KEY}"
 EFFORT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-effort_${SESSION_KEY}"
 BG_CLEAR_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
+BG_TARGET_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-bg-target_${SESSION_KEY}"
+BG_APPLY_LOCK="$VISUALHUD_STATE_ROOT/claude-cooking-bg-apply_${SESSION_KEY}.lock"
 COMPACT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-compacting_${SESSION_KEY}"
 SUBAGENT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-subagent_${SESSION_KEY}"
 SUBAGENT_DIR="${SUBAGENT_FILE}.d"
@@ -206,9 +208,102 @@ sprite_path_for() {
     fi
 }
 
+apply_background_path() {
+    (
+        local expected_path current_path
+        mkdir "$BG_APPLY_LOCK" 2>/dev/null || exit 0
+        trap 'rmdir "$BG_APPLY_LOCK" 2>/dev/null || true' EXIT
+
+        while :; do
+            expected_path=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
+            python3 "$SET_BG" "$expected_path" "$SESSION_ID" 2>/dev/null
+            current_path=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
+            [ "$current_path" != "$expected_path" ] || break
+        done
+
+        trap - EXIT
+        rmdir "$BG_APPLY_LOCK" 2>/dev/null || true
+        current_path=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
+        if [ "$current_path" != "$expected_path" ]; then
+            apply_background_path "$current_path"
+        fi
+    ) >/dev/null 2>&1 &
+}
+
 badge_text_for() {
     local badge_emoji="$1"
     printf '%s' "$badge_emoji"
+}
+
+terminal_columns() {
+    local columns="${VISUALHUD_TITLE_WIDTH:-${COLUMNS:-}}" size
+
+    case "$columns" in
+        ''|*[!0-9]*) ;;
+        *) printf '%s' "$columns"; return ;;
+    esac
+
+    if [ -c "$TTY_TARGET" ]; then
+        size=$(stty -f "$TTY_TARGET" size 2>/dev/null || stty -F "$TTY_TARGET" size 2>/dev/null || true)
+        columns=${size##* }
+        case "$columns" in
+            ''|*[!0-9]*) ;;
+            *) printf '%s' "$columns"; return ;;
+        esac
+    fi
+
+    printf '0'
+}
+
+journey_title() {
+    local progress="$1" badge="$2" stage_name="$3" stage_num="$4" journey_total="$5"
+    local context_title="${6:-}" overlay_label="${7:-}"
+    local checkpoint title_width core compact with_progress with_project full suffix=""
+
+    checkpoint="${stage_name%% · *}"
+    core="${stage_num}/${journey_total} ${checkpoint}"
+    if [ -n "$badge" ]; then
+        core="${core} ${badge}"
+    fi
+
+    title_width=$(terminal_columns)
+    with_progress="${progress} ${core}"
+    with_project="${with_progress} | ${PROJECT_NAME}"
+    full="$with_project"
+    if [ -n "${AGGREGATE_STATUS:-}" ]; then
+        full="${full} | ${AGGREGATE_STATUS}"
+    fi
+    if [ -n "$overlay_label" ]; then
+        suffix=" | ${overlay_label}"
+    fi
+    if [ -n "$context_title" ]; then
+        suffix="${suffix} | ${context_title}"
+    fi
+    compact="$core"
+    if [ -n "$overlay_label" ]; then
+        compact="${compact} ${overlay_label}"
+    fi
+
+    json_helper fit-title "$title_width" \
+        "${full}${suffix}" \
+        "${with_project}${suffix}" \
+        "${with_progress}${suffix}" \
+        "${core}${suffix}" \
+        "$compact" \
+        "$core"
+}
+
+journey_overlay_label() {
+    case "$1" in
+        permission) printf 'HITL' ;;
+        blocked) printf 'BLOCKED' ;;
+        compacting) printf 'COMPACT' ;;
+        subagent) printf 'AGENT' ;;
+        error) printf 'Error' ;;
+        review) printf 'REVIEW' ;;
+        working) printf 'WORK' ;;
+        *) printf '%s' "$1" | tr '[:lower:]' '[:upper:]' ;;
+    esac
 }
 
 context_percent_from_json() {
@@ -446,7 +541,9 @@ set_status_from_json() {
     local state_json="$1" fallback_stage_num="${2:-}" state_kind="${3:-progress}"
     local r g b sprite badge_emoji stage_name stage_num rh gh bh tr tg tb badge_text title sprite_path
     local context_alert context_level context_percent context_badge context_name context_title reapply_delay
-    local state_fields state_progress_bar state_journey_total
+    local state_fields state_progress_bar state_journey_total background_should_apply last_background_path
+    local journey_overlay=false overlay_label journey_state_json journey_fields
+    local journey_name journey_num journey_progress journey_total
 
     state_fields=$(printf '%s' "$state_json" | json_helper state-fields)
     IFS=$'\037' read -r r g b sprite badge_emoji stage_name stage_num state_progress_bar state_journey_total <<< "$state_fields"
@@ -461,7 +558,7 @@ set_status_from_json() {
 
     if [ "$state_kind" = "journey" ] && [ -n "$stage_num" ]; then
         badge_text=$(badge_text_for "$badge_emoji" "$stage_name" "$stage_num")
-        title="${state_progress_bar} ${badge_emoji} ${stage_name} — ${PROJECT_NAME}"
+        title=$(journey_title "$state_progress_bar" "$badge_emoji" "$stage_name" "$stage_num" "$state_journey_total")
     elif [ "$state_kind" = "progress" ] && [ -n "$stage_num" ]; then
         badge_text=$(badge_text_for "$badge_emoji" "$stage_name" "$stage_num")
         if [ -n "$stage_name" ]; then
@@ -477,6 +574,22 @@ set_status_from_json() {
         title="${badge_emoji} ${PROJECT_NAME}"
     fi
 
+    if [ "$JOURNEY_ENABLED" = "true" ] && [ "$state_kind" != "journey" ] && [ "$state_kind" != "progress" ]; then
+        journey_state_json="$JOURNEY_RENDER_JSON"
+        if [ -z "$journey_state_json" ] && [ -f "$JOURNEY_FILE" ]; then
+            journey_state_json=$(json_helper journey-render-file "$THEME_FILE" "$JOURNEY_PROFILE" "$JOURNEY_FILE")
+        fi
+        if [ -n "$journey_state_json" ] && [ "$journey_state_json" != "null" ]; then
+            journey_fields=$(printf '%s' "$journey_state_json" | json_helper state-fields)
+            IFS=$'\037' read -r _ _ _ _ _ journey_name journey_num journey_progress journey_total <<< "$journey_fields"
+            if [ -n "$journey_num" ] && [ -n "$journey_total" ]; then
+                overlay_label=$(journey_overlay_label "$state_kind")
+                title=$(journey_title "$journey_progress" "" "$journey_name" "$journey_num" "$journey_total" "" "$overlay_label")
+                journey_overlay=true
+            fi
+        fi
+    fi
+
     context_alert="${CONTEXT_ALERT_JSON:-}"
     if [ -n "$context_alert" ]; then
         local alert_fields
@@ -485,7 +598,13 @@ set_status_from_json() {
 
         badge_text="${badge_text} ${context_badge}${context_percent}"
         context_title="${context_name} CTX ${context_percent}%"
-        title="${title} | ${context_title}"
+        if [ "$journey_overlay" = "true" ]; then
+            title=$(journey_title "$journey_progress" "" "$journey_name" "$journey_num" "$journey_total" "$context_title" "$overlay_label")
+        elif [ "$state_kind" = "journey" ] && [ -n "$stage_num" ]; then
+            title=$(journey_title "$state_progress_bar" "$badge_emoji" "$stage_name" "$stage_num" "$state_journey_total" "$context_title")
+        else
+            title="${title} | ${context_title}"
+        fi
         printf '%s:%s' "$context_level" "$context_percent" > "$CONTEXT_FILE" 2>/dev/null || true
     else
         context_title=""
@@ -493,25 +612,30 @@ set_status_from_json() {
     fi
 
     sprite_path=$(sprite_path_for "$sprite")
+    printf '%s' "$sprite" > "$STAGE_FILE" 2>/dev/null || true
+    background_should_apply=false
+    last_background_path=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
+    if [ ! -f "$BG_TARGET_FILE" ] || [ "$last_background_path" != "$sprite_path" ] || [ "${BACKGROUND_RESTORE_REQUESTED:-false}" = "true" ]; then
+        background_should_apply=true
+    else
+        case "$EVENT" in
+            PreCompact|PostCompact|Stop) background_should_apply=true ;;
+        esac
+    fi
     emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total"
+    if [ "$background_should_apply" = "true" ] && [ "$BACKGROUND_API_ENABLED" = "true" ] && [ "${VISUALHUD_BG:-off}" = "on" ] && [ -f "$SET_BG" ]; then
+        printf '%s' "$sprite_path" > "$BG_TARGET_FILE" 2>/dev/null || true
+        apply_background_path "$sprite_path"
+    fi
     reapply_delay="${VISUALHUD_REAPPLY_DELAY:-0}"
     if [ -n "$reapply_delay" ] && [ "$reapply_delay" != "0" ]; then
         (
             sleep "$reapply_delay"
             emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total"
+            if [ "$BACKGROUND_API_ENABLED" = "true" ] && [ "${VISUALHUD_BG:-off}" = "on" ] && [ -f "$SET_BG" ]; then
+                apply_background_path "$sprite_path"
+            fi
         ) >/dev/null 2>&1 &
-    fi
-
-    local last_stage=""
-    [ -f "$STAGE_FILE" ] && last_stage=$(cat "$STAGE_FILE")
-    if [ ! -f "$STAGE_FILE" ] || [ "$sprite" != "$last_stage" ] || [ "${BACKGROUND_NEEDS_APPLY:-false}" = "true" ]; then
-        printf '%s' "$sprite" > "$STAGE_FILE" 2>/dev/null
-        # Background sprite is opt-in. Default is compact mode (no full-pane sprite).
-        # Enable with VISUALHUD_BG=on for the full-pane sprite background.
-        if [ "$BACKGROUND_API_ENABLED" = "true" ] && [ "${VISUALHUD_BG:-off}" = "on" ] && [ -f "$SET_BG" ]; then
-            sprite_path=$(sprite_path_for "$sprite")
-            python3 "$SET_BG" "$sprite_path" "$SESSION_ID" 2>/dev/null &
-        fi
     fi
 }
 
@@ -601,16 +725,17 @@ CONTEXT_ALERT_JSON=$(context_alert_json "$CONTEXT_PERCENT")
 # per-pane state; with compact-by-default we never call set_bg.py again, so
 # the stale image sticks forever. One explicit clear per pane fixes it.
 # Toggling VISUALHUD_BG=on removes the marker so off→on→off re-triggers.
-BACKGROUND_NEEDS_APPLY=false
+BACKGROUND_RESTORE_REQUESTED=false
 if [ "$BACKGROUND_API_ENABLED" != "true" ]; then
     :
 elif [ "${VISUALHUD_BG:-off}" = "on" ]; then
     if [ -f "$BG_CLEAR_FILE" ]; then
-        BACKGROUND_NEEDS_APPLY=true
+        BACKGROUND_RESTORE_REQUESTED=true
     fi
     rm -f "$BG_CLEAR_FILE" 2>/dev/null
 elif [ ! -f "$BG_CLEAR_FILE" ] && [ -f "$SET_BG" ]; then
-    python3 "$SET_BG" "" "$SESSION_ID" 2>/dev/null &
+    printf '' > "$BG_TARGET_FILE" 2>/dev/null || true
+    apply_background_path ""
     touch "$BG_CLEAR_FILE" 2>/dev/null
 fi
 PERMISSION_MODE=$(printf '%s' "$INPUT" | json_helper field permission_mode 2>/dev/null || true)

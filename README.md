@@ -132,8 +132,17 @@ together. Failed tests, review findings, proof failures, and CI regressions move
 the journey backward and clear invalid later blocks. `CHECK`, `HITL`, compaction,
 subagent work, and transient failures are overlays that preserve the checkpoint.
 With `VISUALHUD_BG=on`, sprite-backed themes change character with the active
-checkpoint; colors-only themes actively clear stale character art.
+checkpoint and reapply it after lifecycle repaints; colors-only themes actively
+clear stale character art. DONE uses one completion badge while the checkpoint
+track remains a track, so the marker is not duplicated.
 `CHECK` is a neutral host permission preflight and does not claim human action is required. Codex `PermissionRequest` maps to correlated `HITL` because Codex exposes no later prompt-shown event; matching tool lifecycle events clear it, and `HITL` emits an iTerm2 notification.
+
+Journey titles are task-first: checkpoint blocks and `current/total STATE` come
+first, followed by project and authoritative aggregate status when the pane is
+wide enough. Narrow panes drop aggregate and project metadata before checkpoint
+state. Character identity stays in the visual lane instead of duplicating model,
+effort, or host details already present in Codex. Set `VISUALHUD_TITLE_WIDTH` to
+override automatic terminal-width detection for testing or unusual terminals.
 
 Release-only evidence is explicit because VisualHUD cannot infer remote gate
 semantics from arbitrary commands:
@@ -148,7 +157,9 @@ Use `failed`, `invalidated`, or `transient` instead of `passed` when that is the
 observed outcome. Routine reads, plan updates, and other earlier-stage activity
 never rewind a later checkpoint. New source edits return to implementation,
 test-only edits return to TDD RED, and explicit invalidating evidence can return
-to any named earlier checkpoint. Review commands advance only when their result
+to any named earlier checkpoint. Ignored `.visualhud/feedback/**` records and
+GitHub issue bookkeeping preserve product journey state; mixed patches use the
+strictest product or test classification. Review commands advance only when their result
 explicitly reports no findings; exit status alone does not prove a clean review.
 
 Development checkout install:

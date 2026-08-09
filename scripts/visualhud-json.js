@@ -109,6 +109,49 @@ function progressBar(theme, stageArg) {
   return output;
 }
 
+function isFullWidthCodePoint(codePoint) {
+  return codePoint >= 0x1100 && (
+    codePoint <= 0x115f
+    || codePoint === 0x2329
+    || codePoint === 0x232a
+    || (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f)
+    || (codePoint >= 0xac00 && codePoint <= 0xd7a3)
+    || (codePoint >= 0xf900 && codePoint <= 0xfaff)
+    || (codePoint >= 0xfe10 && codePoint <= 0xfe19)
+    || (codePoint >= 0xfe30 && codePoint <= 0xfe6f)
+    || (codePoint >= 0xff00 && codePoint <= 0xff60)
+    || (codePoint >= 0xffe0 && codePoint <= 0xffe6)
+    || (codePoint >= 0x20000 && codePoint <= 0x3fffd)
+  );
+}
+
+function displayWidth(text) {
+  const segments = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(String(text || ""));
+  let width = 0;
+  for (const { segment } of segments) {
+    if (/^[\u{1f1e6}-\u{1f1ff}]{2}$/u.test(segment)
+      || /^[#*0-9]\ufe0f?\u20e3$/u.test(segment)
+      || /\p{Extended_Pictographic}/u.test(segment)) {
+      width += 2;
+      continue;
+    }
+    const visible = [...segment].find((char) => !/[\p{Mark}\u200d\ufe0e\ufe0f]/u.test(char));
+    if (!visible) continue;
+    const codePoint = visible.codePointAt(0);
+    if (codePoint < 0x20 || (codePoint >= 0x7f && codePoint < 0xa0)) continue;
+    width += isFullWidthCodePoint(codePoint) ? 2 : 1;
+  }
+  return width;
+}
+
+function firstFittingText(widthArg, candidates) {
+  const width = Number(widthArg || 0);
+  if (!Number.isFinite(width) || width <= 0) return candidates[0] || "";
+  return candidates.find((candidate) => displayWidth(candidate) <= width)
+    || candidates[candidates.length - 1]
+    || "";
+}
+
 const JOURNEY_PROFILES = {
   "codex-default": [
     ["understand", "UNDERSTAND"],
@@ -379,7 +422,7 @@ function journeyRender(theme, profileName, currentArg) {
   const filled = [];
   for (let step = 0; step <= index; step += 1) {
     if (step === profile.length - 1) {
-      filled.push((theme.done && theme.done.badge) || progress[progress.length - 1] || "\u25a0");
+      filled.push(progress[progress.length - 1] || "\u25a0");
     } else if (progress.length > 0) {
       const progressIndex = Math.min(progress.length - 1, Math.floor((step * progress.length) / preDoneCount));
       filled.push(progress[progressIndex]);
@@ -1051,11 +1094,29 @@ function isTestFilePath(file) {
     || /(?:^|[._-])(?:test|spec)\.[^/]+$/i.test(normalized);
 }
 
-function isTestOnlyPatchPayload(payload) {
+function patchPayloadFiles(payload) {
   const toolName = normalizedToolName(payload.tool_name);
-  if (toolName !== "apply_patch") return false;
-  const files = [...toolInputText(payload).matchAll(/^\*\*\* (?:Add|Update|Delete) File:\s+(.+)$/gm)]
+  if (toolName !== "apply_patch") return [];
+  return [...toolInputText(payload).matchAll(/^\*\*\* (?:(?:Add|Update|Delete) File:|Move to:)\s+(.+)$/gm)]
     .map((match) => match[1]);
+}
+
+function isJourneyNeutralPath(file) {
+  const normalized = String(file || "").trim().replace(/^['"]|['"]$/g, "").replace(/\\/g, "/");
+  return /(?:^|\/)\.visualhud\/feedback(?:\/|$)/i.test(normalized);
+}
+
+function journeyRelevantPatchFiles(payload) {
+  return patchPayloadFiles(payload).filter((file) => !isJourneyNeutralPath(file));
+}
+
+function isJourneyNeutralPatchPayload(payload) {
+  const files = patchPayloadFiles(payload);
+  return files.length > 0 && files.every(isJourneyNeutralPath);
+}
+
+function isTestOnlyPatchPayload(payload) {
+  const files = journeyRelevantPatchFiles(payload);
   return files.length > 0 && files.every(isTestFilePath);
 }
 
@@ -1070,7 +1131,10 @@ function journeyCheckpointForPayload(payload) {
   const foregroundWords = shellCommand ? foregroundShellWords(payload) : [];
   const directForeground = !shellCommand || foregroundWords !== null;
   if (toolName === "update_plan") return "plan";
-  if (toolName === "apply_patch") return isTestOnlyPatchPayload(payload) ? "tdd_red" : "implement";
+  if (toolName === "apply_patch") {
+    if (isJourneyNeutralPatchPayload(payload)) return "";
+    return isTestOnlyPatchPayload(payload) ? "tdd_red" : "implement";
+  }
   if (shellCommand && /git-guard\.cjs\s+prove\b/i.test(text)) return "proof";
   if (isReviewPayload(payload) && (!shellCommand || isDirectForegroundReviewPayload(payload))) return "final_review";
   if (shellCommand) {
@@ -1391,6 +1455,9 @@ try {
       line(Array.isArray(theme.progress_bar) ? theme.progress_bar.length : 0);
       break;
     }
+    case "fit-title":
+      line(firstFittingText(process.argv[3], process.argv.slice(4)));
+      break;
     case "journey-profile":
       compact(journeyProfile(process.argv[3] || "codex-default"));
       break;

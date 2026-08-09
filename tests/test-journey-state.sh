@@ -78,7 +78,8 @@ run_engine() {
         VISUALHUD_THEME="${VISUALHUD_TEST_THEME:-pokemon}" \
         VISUALHUD_JOURNEY_PROFILE="${VISUALHUD_TEST_PROFILE:-sdlc}" \
         VISUALHUD_ACTIVITY_MODE=semantic \
-        VISUALHUD_REAPPLY_DELAY=0 \
+        VISUALHUD_REAPPLY_DELAY="${VISUALHUD_TEST_REAPPLY_DELAY:-0}" \
+        VISUALHUD_TITLE_WIDTH="${VISUALHUD_TEST_TITLE_WIDTH:-}" \
         bash "$ENGINE"
 }
 
@@ -99,6 +100,10 @@ assert_eq "SDLC profile includes local proof checkpoints" \
 assert_eq "Release profile extends SDLC through verified shipping" \
     "intake,discovery,plan,tdd_red,implement,implemented,targeted_test,full_test,self_review,final_review,proof,ci,publish,smoke,done" \
     "$(node "$JSON_HELPER" journey-profile release | jq -r '[.[].id] | join(",")')"
+assert_eq "Flag graphemes count as double-width in responsive titles" "fallback" \
+    "$(node "$JSON_HELPER" fit-title 4 "🇺🇸🇺🇸X" fallback)"
+assert_eq "Keycap graphemes count as double-width in responsive titles" "fallback" \
+    "$(node "$JSON_HELPER" fit-title 2 "1️⃣X" fallback)"
 echo ""
 
 echo "--- Test 2: Pure transitions move forward, backward, or preserve honestly ---"
@@ -177,6 +182,9 @@ import os
 import sys
 
 with open(os.environ["VISUALHUD_SET_BG_LOG"], "a", encoding="utf-8") as handle:
+    if os.path.basename(sys.argv[1] if len(sys.argv) > 1 else "") == os.environ.get("VISUALHUD_TEST_DELAY_SPRITE"):
+        import time
+        time.sleep(0.3)
     handle.write((sys.argv[1] if len(sys.argv) > 1 else "") + "\n")
 PY
 export VISUALHUD_SET_BG="$MOCK_SET_BG"
@@ -186,24 +194,93 @@ touch "$STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
 VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"implement","journey_outcome":"started"}'
 for _ in 1 2 3 4 5; do [ -s "$SET_BG_LOG" ] && break; sleep 0.1; done
 assert_contains "Sprite-backed checkpoint sets character art" "/pokemon/sprites/" "$(cat "$SET_BG_LOG" 2>/dev/null)"
+VISUALHUD_TEST_TTY=/dev/null run_engine '{"hook_event_name":"PostToolUse","session_id":"journey:test","journey_checkpoint":"proof","journey_outcome":"passed"}'
+for _ in 1 2 3 4 5; do
+    grep -q '/pokemon/sprites/mew.png' "$SET_BG_LOG" 2>/dev/null && break
+    sleep 0.1
+done
+assert_contains "DONE applies the matching completion sprite" "/pokemon/sprites/mew.png" "$(cat "$SET_BG_LOG" 2>/dev/null)"
+: > "$SET_BG_LOG"
+VISUALHUD_TEST_TTY=/dev/null run_engine '{"hook_event_name":"PostCompact","session_id":"journey:test"}'
+for _ in 1 2 3 4 5; do [ -s "$SET_BG_LOG" ] && break; sleep 0.1; done
+assert_contains "Lifecycle repaint restores the current journey sprite" "/pokemon/sprites/mew.png" "$(cat "$SET_BG_LOG" 2>/dev/null)"
+: > "$SET_BG_LOG"
+export VISUALHUD_TEST_DELAY_SPRITE=raichu.png
+VISUALHUD_TEST_TTY=/dev/null run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"implement","journey_outcome":"started"}'
+VISUALHUD_TEST_TTY=/dev/null run_engine '{"hook_event_name":"PostToolUse","session_id":"journey:test","journey_checkpoint":"proof","journey_outcome":"passed"}'
+sleep 0.6
+assert_contains "Latest DONE sprite wins over an older slow background update" "/pokemon/sprites/mew.png" "$(tail -n 1 "$SET_BG_LOG" 2>/dev/null)"
+unset VISUALHUD_TEST_DELAY_SPRITE
 VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=power-rangers run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"plan","journey_outcome":"started"}'
 for _ in 1 2 3 4 5; do
-    [ -f "$SET_BG_LOG" ] && [ "$(wc -l < "$SET_BG_LOG" | tr -d ' ')" -ge 2 ] && break
+    [ -f "$SET_BG_LOG" ] && [ -z "$(tail -n 1 "$SET_BG_LOG" 2>/dev/null)" ] && break
     sleep 0.1
 done
 assert_eq "Colors-only checkpoint actively clears stale character art" "" "$(tail -n 1 "$SET_BG_LOG" 2>/dev/null)"
+: > "$SET_BG_LOG"
+rm -f "$STATE_ROOT/claude-cooking-bg-target_${SESSION_KEY}"
+VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=power-rangers run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"plan","journey_outcome":"started"}'
+for _ in 1 2 3 4 5; do [ -s "$SET_BG_LOG" ] && break; sleep 0.1; done
+assert_eq "Fresh colors-only state explicitly clears unknown background art" "1" \
+    "$(wc -l < "$SET_BG_LOG" | tr -d ' ')"
+: > "$SET_BG_LOG"
+VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"implement","journey_outcome":"started"}'
+for _ in 1 2 3 4 5; do [ -s "$SET_BG_LOG" ] && break; sleep 0.1; done
+: > "$SET_BG_LOG"
+VISUALHUD_TEST_REAPPLY_DELAY=0.05 VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","tool_name":"read"}'
+for _ in 1 2 3 4 5; do [ -s "$SET_BG_LOG" ] && break; sleep 0.1; done
+assert_contains "Delayed ordinary hook restores an unchanged journey sprite" "/pokemon/sprites/" "$(cat "$SET_BG_LOG" 2>/dev/null)"
 unset VISUALHUD_SET_BG VISUALHUD_SET_BG_LOG VISUALHUD_BG
 echo ""
 
 echo "--- Test 6: A completed task resets only when the next task begins ---"
 VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"proof","journey_outcome":"started"}'
+: > "$TTY_LOG"
 VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PostToolUse","session_id":"journey:test","journey_checkpoint":"proof","journey_outcome":"passed"}'
 assert_eq "Passing the final required gate reaches done" "done" "$(journey_state)"
+assert_not_contains "DONE title does not duplicate its completion marker" "⭐ ⭐" "$(cat "$TTY_LOG")"
+assert_contains "DONE title prioritizes checkpoint position" "12/12 DONE" "$(cat "$TTY_LOG")"
 : > "$TTY_LOG"
 VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"UserPromptSubmit","session_id":"journey:test","prompt":"start the next task"}'
 assert_eq "Next prompt starts a fresh journey after completion" "intake" "$(journey_state)"
 assert_eq "Next prompt clears the completed task aggregate" "absent" "$([ -f "$AGGREGATE_FILE" ] && printf present || printf absent)"
 assert_not_contains "Fresh journey does not render the old aggregate" "VGFza3MgMi80" "$(cat "$TTY_LOG")"
+echo ""
+
+echo "--- Test 6b: Journey titles are task-first and responsive ---"
+rm -f "$JOURNEY_FILE"
+: > "$TTY_LOG"
+VISUALHUD_TEST_TITLE_WIDTH=120 VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"proof","journey_outcome":"started","journey_aggregate":"Tasks 2/4"}'
+assert_contains "Wide title names checkpoint position before metadata" "11/12 PROOF" "$(cat "$TTY_LOG")"
+assert_contains "Wide title includes authoritative aggregate" "Tasks 2/4" "$(cat "$TTY_LOG")"
+assert_not_contains "Wide title omits redundant character name" "Blastoise" "$(cat "$TTY_LOG")"
+: > "$TTY_LOG"
+VISUALHUD_TEST_TITLE_WIDTH=61 VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PostCompact","session_id":"journey:test","journey_aggregate":"Milestone 123456789/123456789"}'
+assert_contains "Measured title retains checkpoint at an intermediate width" "11/12 PROOF" "$(cat "$TTY_LOG")"
+assert_not_contains "Measured title drops aggregate metadata that does not fit" "Milestone 123456789/123456789" "$(cat "$TTY_LOG")"
+: > "$TTY_LOG"
+export VISUALHUD_CONTEXT_USED_PERCENT=80
+VISUALHUD_TEST_TITLE_WIDTH=61 VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PostCompact","session_id":"journey:test"}'
+assert_contains "Context-aware title retains checkpoint state" "11/12 PROOF" "$(cat "$TTY_LOG")"
+assert_contains "Context-aware title retains the active alert" "Pokemon Center CTX 80%" "$(cat "$TTY_LOG")"
+assert_not_contains "Context-aware title drops project metadata to fit" "visualhud" "$(cat "$TTY_LOG")"
+assert_not_contains "Context-aware title drops progress blocks to fit" "🟥" "$(cat "$TTY_LOG")"
+unset VISUALHUD_CONTEXT_USED_PERCENT
+: > "$TTY_LOG"
+VISUALHUD_TEST_TITLE_WIDTH=33 VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PostCompact","session_id":"journey:test"}'
+assert_contains "Measured narrow title retains checkpoint position" "11/12 PROOF" "$(cat "$TTY_LOG")"
+assert_not_contains "Measured narrow title drops a double-width progress track that does not fit" "🟥" "$(cat "$TTY_LOG")"
+: > "$TTY_LOG"
+VISUALHUD_TEST_TITLE_WIDTH=24 VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PostCompact","session_id":"journey:test"}'
+assert_contains "Narrow title retains checkpoint position and state" "11/12 PROOF" "$(cat "$TTY_LOG")"
+assert_not_contains "Narrow title drops project metadata first" "visualhud" "$(cat "$TTY_LOG")"
+assert_not_contains "Narrow title drops aggregate metadata before task state" "Tasks 2/4" "$(cat "$TTY_LOG")"
+: > "$TTY_LOG"
+VISUALHUD_TEST_TITLE_WIDTH=20 VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"Notification","notification_type":"permission_prompt","permission_key":"responsive-hitl","session_id":"journey:test"}'
+assert_contains "Narrow HITL overlay retains checkpoint position" "11/12 PROOF" "$(cat "$TTY_LOG")"
+assert_contains "Narrow HITL overlay retains its semantic label" "HITL" "$(cat "$TTY_LOG")"
+assert_not_contains "Narrow HITL overlay drops redundant state prose" "Approval required — visualhud" "$(cat "$TTY_LOG")"
+unset VISUALHUD_TEST_TITLE_WIDTH
 echo ""
 
 echo "--- Test 7: An active release journey keeps its persisted profile ---"

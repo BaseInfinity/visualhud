@@ -121,6 +121,12 @@ are complete and belongs in a secondary status surface. Milestone counts must
 come from GitHub or another authoritative tracker and must never advance the
 current task's character journey.
 
+The tab title is task-first and width-aware. It prioritizes checkpoint blocks,
+`current/total STATE`, and semantic overlays; project and aggregate metadata are
+added only when the pane has room. Character, host, model, effort, token, and
+context branding do not displace task state. The engine detects the controlling
+TTY width when possible; `VISUALHUD_TITLE_WIDTH` is an explicit override.
+
 The Codex wrapper selects `sdlc` when it finds repo-local SDLC evidence and
 `codex-default` otherwise. `VISUALHUD_JOURNEY_PROFILE=release` selects the
 release journey for an actual release slice; `off` disables journey mode. The
@@ -130,7 +136,9 @@ engine also accepts normalized `journey_checkpoint`, `journey_outcome`, and
 Normal `started` and `passed` evidence is monotonic: routine discovery or plan
 bookkeeping after implementation cannot rewind the journey. Starting a new
 source edit invalidates later verification and returns to implementation;
-starting a test-only edit returns to TDD RED. Other backward movement requires
+starting a test-only edit returns to TDD RED. Ignored
+`.visualhud/feedback/**` patches and GitHub issue bookkeeping are journey-neutral,
+while mixed patches use the strictest relevant classification. Other backward movement requires
 `failed`, `finding`, `invalidated`, or an expected TDD RED signal. The
 final-review gate advances only from explicit clean-review evidence; a zero exit
 status without a clean result preserves the active review checkpoint. The
@@ -229,7 +237,7 @@ Joy/Blissey, while TMNT maps critical context to Casey Jones.
 - **Semantic default**: Codex uses an evidence-driven task journey when its wrapper selects a profile. Ordinary work without a journey is stable and indeterminate. Logarithmic stages are retained for calibration and explicit legacy mode only.
 - **File-based state**: Simple, no dependencies, naturally per-session via env var.
 - **SetUserVar**: "Claude-proof" title that Claude Code can't overwrite with its own title.
-- **Delayed reapply**: Adapters set `VISUALHUD_REAPPLY_DELAY=0.12` by default so the engine re-emits title/color variables shortly after hook exit. This prevents Codex/Claude TUI repaints from leaving stale prompt-box or tab chrome colors.
+- **Delayed reapply**: Adapters set `VISUALHUD_REAPPLY_DELAY=0.12` by default so the engine re-emits title/color variables and the selected iTerm background shortly after hook exit. This prevents Codex/Claude TUI repaints from leaving stale prompt-box, tab chrome, or character state.
 
 ## Deployment
 

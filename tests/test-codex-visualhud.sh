@@ -195,6 +195,21 @@ run_adapter '{"hook_event_name":"PreToolUse","session_id":"codex-session","tool_
 assert_eq "Test-only patch starts TDD RED" "tdd_red:started" "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
 run_adapter '{"hook_event_name":"PostToolUse","session_id":"codex-session","tool_name":"apply_patch","tool_input":{"patch":"*** Begin Patch\n*** Update File: tests/example.test.js\n@@"},"tool_response":{"success":true}}' >"$OUT_FILE"
 assert_eq "Successful test-only patch stays in TDD RED" "tdd_red:active" "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
+run_adapter '{"hook_event_name":"PreToolUse","session_id":"codex-session","tool_name":"apply_patch","tool_input":{"patch":"*** Begin Patch\n*** Update File: .visualhud/feedback/session.jsonl\n@@"}}' >"$OUT_FILE"
+assert_eq "Ignored VisualHUD feedback bookkeeping preserves product journey" "absent" \
+    "$(last_event_field 'if has("journey_checkpoint") then "present" else "absent" end')"
+run_adapter '{"hook_event_name":"PreToolUse","session_id":"codex-session","tool_name":"apply_patch","tool_input":{"patch":"*** Begin Patch\n*** Update File: .visualhud/feedback/session.jsonl\n@@\n*** Update File: engine.sh\n@@"}}' >"$OUT_FILE"
+assert_eq "Mixed feedback and product edits use strict product classification" "implement:started" \
+    "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
+run_adapter '{"hook_event_name":"PreToolUse","session_id":"codex-session","tool_name":"apply_patch","tool_input":{"patch":"*** Begin Patch\n*** Update File: .visualhud/feedback/note.js\n*** Move to: src/runtime.js\n@@"}}' >"$OUT_FILE"
+assert_eq "Moving feedback into product code uses product classification" "implement:started" \
+    "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
+run_adapter '{"hook_event_name":"PreToolUse","session_id":"codex-session","tool_name":"apply_patch","tool_input":{"patch":"*** Begin Patch\n*** Update File: .visualhud/feedback/note.js\n*** Move to: tests/runtime.test.js\n@@"}}' >"$OUT_FILE"
+assert_eq "Moving feedback into tests uses test classification" "tdd_red:started" \
+    "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
+run_adapter '{"hook_event_name":"PreToolUse","session_id":"codex-session","tool_name":"functions.exec_command","tool_input":{"cmd":"gh issue comment 10 --body feedback.md"}}' >"$OUT_FILE"
+assert_eq "GitHub issue bookkeeping does not enter implementation" "absent" \
+    "$(last_event_field 'if has("journey_checkpoint") then "present" else "absent" end')"
 run_adapter '{"hook_event_name":"PreToolUse","session_id":"codex-session","tool_name":"Bash","tool_input":{"command":"bash tests/test-journey-state.sh"}}' >"$OUT_FILE"
 assert_eq "Focused test starts targeted verification" "targeted_test:started" "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
 run_adapter '{"hook_event_name":"PostToolUse","session_id":"codex-session","tool_name":"Bash","tool_input":{"command":"bash tests/test-journey-state.sh"},"tool_response":{"exit_code":1}}' >"$OUT_FILE"

@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "contract": "host-renderer-lifecycle",
+  "hosts": [
+    {
+      "id": "codex",
+      "name": "Codex CLI",
+      "adapter": ".codex/hooks/visualhud-codex.sh",
+      "hook_config": ".codex/hooks.json",
+      "fixture": "tests/fixtures/compatibility/codex.v1.json",
+      "coverage": "fixture-tested",
+      "registered_events": [
+        "PermissionRequest",
+        "PostCompact",
+        "PostToolUse",
+        "PreCompact",
+        "PreToolUse",
+        "SessionStart",
+        "Stop",
+        "SubagentStart",
+        "SubagentStop",
+        "UserPromptSubmit"
+      ]
+    },
+    {
+      "id": "claude",
+      "name": "Claude Code",
+      "adapter": ".claude/hooks/visualhud-claude.sh",
+      "hook_config": ".claude/settings.json",
+      "fixture": "tests/fixtures/compatibility/claude.v1.json",
+      "coverage": "fixture-tested",
+      "registered_events": [
+        "CwdChanged",
+        "Notification",
+        "PostCompact",
+        "PostToolUseFailure",
+        "PreCompact",
+        "PreToolUse",
+        "SessionStart",
+        "Stop",
+        "StopFailure",
+        "SubagentStart",
+        "SubagentStop",
+        "TaskCompleted",
+        "UserPromptSubmit"
+      ]
+    }
+  ],
+  "renderers": [
+    {
+      "id": "iterm2",
+      "name": "iTerm2",
+      "coverage": "fixture-tested",
+      "capabilities": [
+        "title",
+        "badge",
+        "tab-color",
+        "terminal-palette",
+        "background-image"
+      ],
+      "limitations": []
+    },
+    {
+      "id": "wezterm",
+      "name": "WezTerm",
+      "coverage": "fixture-tested",
+      "capabilities": [
+        "title",
+        "status",
+        "terminal-palette",
+        "background-image"
+      ],
+      "limitations": []
+    },
+    {
+      "id": "windows",
+      "name": "Windows Terminal/PowerShell",
+      "coverage": "fixture-tested",
+      "capabilities": [
+        "title",
+        "taskbar-progress"
+      ],
+      "limitations": [
+        "no dynamic background images"
+      ]
+    }
+  ],
+  "lifecycle_states": [
+    "work",
+    "plan",
+    "approval",
+    "failure",
+    "review",
+    "compaction",
+    "subagent",
+    "idle",
+    "done"
+  ],
+  "model_lanes": [
+    {
+      "host": "codex",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "coverage": "supervised",
+      "issue": 16
+    },
+    {
+      "host": "codex",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "coverage": "supervised",
+      "issue": 16
+    }
+  ],
+  "policy": {
+    "default_ci": {
+      "network_credentials": false,
+      "paid_authenticated_tests": false,
+      "real_terminal_mutation": false
+    },
+    "live_canary": {
+      "coverage": "supervised",
+      "issue": 16,
+      "timeout_required": true,
+      "cost_boundary_required": true,
+      "cleanup_required": true
+    }
+  }
+}

@@ -1851,7 +1851,10 @@ echo ""
 # 32d: Resolved TTY path must point to a real device (regression: tt= gave /dev/s014 which doesn't exist)
 result=$(VISUALHUD_NO_DEV_TTY=1 bash "$SCRIPT_UNDER_TEST" --resolve-tty </dev/null 2>/dev/null || true)
 TOTAL=$((TOTAL + 1))
-if [ "$result" = "/dev/null" ] || [ -z "$result" ]; then
+if [ -n "${VISUALHUD_TEST_CAPTURE_DIR:-}" ] && [ "$result" = "$VISUALHUD_TEST_CAPTURE_DIR/terminal.log" ]; then
+    PASS=$((PASS + 1))
+    printf "  PASS: Isolated suite resolves to its terminal capture (%s)\n" "$result"
+elif [ "$result" = "/dev/null" ] || [ -z "$result" ]; then
     PASS=$((PASS + 1))
     printf "  PASS: PPID-walk returned /dev/null (sandboxed context — device check N/A)\n"
 elif [ -c "$result" ]; then

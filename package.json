@@ -14,6 +14,8 @@
     "scripts",
     "wezterm",
     "docs/screenshots",
+    "docs/compatibility-matrix.v1.json",
+    "tests/fixtures/compatibility",
     "themes",
     "skills",
     ".codex/hooks/visualhud-codex.sh",
@@ -25,6 +27,8 @@
   ],
   "scripts": {
     "test": "bash tests/run-all.sh",
+    "test:matrix": "bash tests/test-host-renderer-matrix.sh",
+    "coverage:matrix": "node scripts/visualhud-compatibility.js report",
     "test:pokemon-theme": "node tests/test-pokemon-theme-lifecycle.js",
     "test:e2e": "bash tests/test-npm-package.sh",
     "pack:local": "npm pack",

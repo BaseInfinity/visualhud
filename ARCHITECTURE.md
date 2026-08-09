@@ -239,6 +239,26 @@ Joy/Blissey, while TMNT maps critical context to Casey Jones.
 - **SetUserVar**: "Claude-proof" title that Claude Code can't overwrite with its own title.
 - **Delayed reapply**: Adapters set `VISUALHUD_REAPPLY_DELAY=0.12` by default so the engine re-emits title/color variables and the selected iTerm background shortly after hook exit. This prevents Codex/Claude TUI repaints from leaving stale prompt-box, tab chrome, or character state.
 
+### Compatibility And Test Isolation
+
+`docs/compatibility-matrix.v1.json` is the machine-readable host, renderer,
+lifecycle, and model-lane contract. Sanitized fixtures exercise every event
+that actually invokes a VisualHUD adapter. Renderable lifecycle fixtures pass
+through each host adapter and the real engine for iTerm2, WezTerm, and Windows
+Terminal; failures name the exact host, renderer, event, model, and effort lane.
+
+The full deterministic suite clears inherited `ITERM_SESSION_ID`, `WT_SESSION`,
+and `WEZTERM_PANE`. When a test does not provide an explicit capture target,
+`VISUALHUD_TEST_CAPTURE_DIR` forces terminal control output into a temporary
+file and disables the default iTerm2 background API helper. Tests may still
+provide an explicit `VISUALHUD_TTY` or `VISUALHUD_SET_BG` double for focused
+renderer assertions. This boundary applies only to tests and prevents routine
+`npm test` runs from repainting the developer's active pane.
+
+Codex is the host protocol; Sol model and effort selections are compatibility
+lanes within Codex. Authenticated model and real-pane testing remain outside
+default CI and are tracked as a supervised release canary.
+
 ## Deployment
 
 Local only. Source lives in the repo. Codex reads `.codex/hooks.json` and

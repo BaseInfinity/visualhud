@@ -1,0 +1,247 @@
+{
+  "schema_version": 1,
+  "host": "codex",
+  "cases": [
+    {
+      "id": "session-start",
+      "registered_event": "SessionStart",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "payload": {
+        "hook_event_name": "SessionStart",
+        "session_id": "codex-fixture",
+        "source": "startup",
+        "model": "gpt-5.6-sol",
+        "effort": {
+          "level": "medium"
+        }
+      },
+      "expected_event": "Stop",
+      "render": {
+        "title": "Your turn",
+        "state_kind": "idle",
+        "windows_state": "0"
+      }
+    },
+    {
+      "id": "prompt-submit",
+      "registered_event": "UserPromptSubmit",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "payload": {
+        "hook_event_name": "UserPromptSubmit",
+        "session_id": "codex-fixture",
+        "turn_id": "turn-prompt",
+        "prompt": "Implement the fixture contract"
+      },
+      "expected_event": "UserPromptSubmit",
+      "render": null
+    },
+    {
+      "id": "tool-start",
+      "registered_event": "PreToolUse",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "payload": {
+        "hook_event_name": "PreToolUse",
+        "session_id": "codex-fixture",
+        "turn_id": "turn-tool",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "README.md"
+        }
+      },
+      "expected_event": "PreToolUse",
+      "render": {
+        "title": "WORKING",
+        "state_kind": "working",
+        "windows_state": "3"
+      }
+    },
+    {
+      "id": "permission-request",
+      "registered_event": "PermissionRequest",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "payload": {
+        "hook_event_name": "PermissionRequest",
+        "session_id": "codex-fixture",
+        "turn_id": "turn-permission",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "npm install"
+        },
+        "message": "Codex needs permission"
+      },
+      "expected_event": "Notification",
+      "render": {
+        "title": "Approval required",
+        "state_kind": "blocked",
+        "windows_state": "4"
+      }
+    },
+    {
+      "id": "plan-mode",
+      "registered_event": "PreToolUse",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "payload": {
+        "hook_event_name": "PreToolUse",
+        "session_id": "codex-fixture",
+        "turn_id": "turn-plan",
+        "permission_mode": "plan",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "ROADMAP.md"
+        }
+      },
+      "expected_event": "PreToolUse",
+      "render": {
+        "title": "Planning",
+        "state_kind": "plan",
+        "windows_state": "0"
+      }
+    },
+    {
+      "id": "review-start",
+      "registered_event": "PreToolUse",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "PreToolUse",
+        "session_id": "codex-fixture",
+        "turn_id": "turn-review",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "codex review --uncommitted"
+        }
+      },
+      "expected_event": "PreToolUse",
+      "render": {
+        "title": "Reviewing",
+        "state_kind": "review",
+        "windows_state": "3"
+      }
+    },
+    {
+      "id": "tool-success",
+      "registered_event": "PostToolUse",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "payload": {
+        "hook_event_name": "PostToolUse",
+        "session_id": "codex-fixture",
+        "turn_id": "turn-success",
+        "tool_name": "Read",
+        "tool_response": {
+          "exit_code": 0
+        }
+      },
+      "expected_event": "PostToolUse",
+      "render": null
+    },
+    {
+      "id": "tool-failure",
+      "registered_event": "PostToolUse",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "PostToolUse",
+        "session_id": "codex-fixture",
+        "turn_id": "turn-failure",
+        "tool_name": "Bash",
+        "tool_response": {
+          "exit_code": 1
+        }
+      },
+      "expected_event": "PostToolUseFailure",
+      "render": {
+        "title": "Error",
+        "state_kind": "error",
+        "windows_state": "2"
+      }
+    },
+    {
+      "id": "pre-compact",
+      "registered_event": "PreCompact",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "PreCompact",
+        "session_id": "codex-fixture"
+      },
+      "expected_event": "PreCompact",
+      "render": {
+        "title": "Compacting",
+        "state_kind": "compacting",
+        "windows_state": "0"
+      }
+    },
+    {
+      "id": "post-compact",
+      "registered_event": "PostCompact",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "PostCompact",
+        "session_id": "codex-fixture"
+      },
+      "expected_event": "PostCompact",
+      "render": null
+    },
+    {
+      "id": "subagent-start",
+      "registered_event": "SubagentStart",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "SubagentStart",
+        "session_id": "codex-fixture",
+        "agent_id": "agent-1",
+        "agent_type": "reviewer"
+      },
+      "expected_event": "SubagentStart",
+      "render": {
+        "title": "Subagent",
+        "state_kind": "subagent",
+        "windows_state": "0"
+      }
+    },
+    {
+      "id": "subagent-stop",
+      "registered_event": "SubagentStop",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "SubagentStop",
+        "session_id": "codex-fixture",
+        "agent_id": "agent-1",
+        "agent_type": "reviewer"
+      },
+      "expected_event": "SubagentStop",
+      "render": {
+        "title": "WORKING",
+        "state_kind": "working",
+        "windows_state": "3"
+      }
+    },
+    {
+      "id": "stop",
+      "registered_event": "Stop",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "Stop",
+        "session_id": "codex-fixture",
+        "turn_id": "turn-stop",
+        "last_assistant_message": "Completed"
+      },
+      "expected_event": "Stop",
+      "render": {
+        "title": "Complete",
+        "state_kind": "done",
+        "windows_state": "0"
+      }
+    }
+  ]
+}

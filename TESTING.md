@@ -20,6 +20,8 @@
 | npm/npx package install test | `bash tests/test-npm-package.sh` |
 | npm release automation test | `bash tests/test-npm-release.sh` |
 | Theme calibration test | `bash tests/test-theme-calibration.sh` |
+| Host/renderer matrix | `npm run test:matrix` |
+| Compatibility report | `npm run coverage:matrix` |
 | Lint | `shellcheck *.sh` |
 
 ## Stack
@@ -33,6 +35,21 @@
   advancement, rollback, overlay preservation, aggregate separation, immediate
   repainting, stale-sprite clearing, read-only completion, and rejection of
   stale concurrent verification after an invalidating edit.
+- The versioned compatibility matrix validates every registered VisualHUD host
+  event from sanitized Codex and Claude fixtures, then checks semantic output
+  through iTerm2, WezTerm, and Windows Terminal renderer encodings.
+
+## Live And Isolated Tests
+
+`npm test` is credential-free and cannot target the developer's active pane.
+The suite clears inherited terminal session identifiers, routes fallback output
+through `VISUALHUD_TEST_CAPTURE_DIR`, and suppresses the real iTerm2 background
+helper unless a test explicitly provides a deterministic double.
+
+Authenticated Sol medium/high smoke sessions, real iTerm2 API assertions, and
+Computer Use screenshot review belong to supervised issue #16. They require
+explicit cost, credential, timeout, and cleanup boundaries and never run in
+default CI.
 
 ## Testing Diamond
 
@@ -77,12 +94,13 @@ tests/
   test-cooking-status.sh    <- Main hook integration tests
   test-codex-visualhud.sh   <- Codex adapter integration tests
   test-journey-state.sh     <- Reversible task-journey integration tests
+  test-host-renderer-matrix.sh <- Versioned host/renderer/lifecycle contract
   test-visualhud-skills.sh  <- Packaged skill docs + install discovery tests
   test-npm-package.sh       <- npm pack + npx tarball consumer install test
   test-npm-release.sh       <- npm auth/test/dry-run/publish automation test
   test-theme-calibration.sh <- Ordered theme calibration and mocked live walk
   test-<feature>.sh         <- Per-feature test files
-  fixtures/                 <- Shared test data
+  fixtures/compatibility/   <- Sanitized versioned host payload shapes
 ```
 
 ## Test Code is First-Class

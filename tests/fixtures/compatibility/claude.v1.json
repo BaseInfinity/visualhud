@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "host": "claude",
+  "cases": [
+    {
+      "id": "session-start",
+      "registered_event": "SessionStart",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "SessionStart",
+        "session_id": "claude-fixture",
+        "source": "startup",
+        "model": "claude-fixture"
+      },
+      "expected_event": "SessionStart",
+      "render": null
+    },
+    {
+      "id": "prompt-submit",
+      "registered_event": "UserPromptSubmit",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "UserPromptSubmit",
+        "session_id": "claude-fixture",
+        "prompt": "Implement the fixture contract"
+      },
+      "expected_event": "UserPromptSubmit",
+      "render": null
+    },
+    {
+      "id": "tool-start",
+      "registered_event": "PreToolUse",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "PreToolUse",
+        "session_id": "claude-fixture",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "README.md"
+        }
+      },
+      "expected_event": "PreToolUse",
+      "render": {
+        "title": "WORKING",
+        "state_kind": "working",
+        "windows_state": "3"
+      }
+    },
+    {
+      "id": "permission-notification",
+      "registered_event": "Notification",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "Notification",
+        "session_id": "claude-fixture",
+        "notification_type": "permission_prompt",
+        "message": "Claude needs permission"
+      },
+      "expected_event": "Notification",
+      "render": {
+        "title": "Approval required",
+        "state_kind": "blocked",
+        "windows_state": "4"
+      }
+    },
+    {
+      "id": "idle-notification",
+      "registered_event": "Notification",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "Notification",
+        "session_id": "claude-fixture",
+        "notification_type": "idle_prompt",
+        "message": "Claude is idle"
+      },
+      "expected_event": "Notification",
+      "render": {
+        "title": "Your turn",
+        "state_kind": "idle",
+        "windows_state": "0"
+      }
+    },
+    {
+      "id": "tool-failure",
+      "registered_event": "PostToolUseFailure",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "PostToolUseFailure",
+        "session_id": "claude-fixture",
+        "tool_name": "Bash",
+        "tool_use_id": "tool-failure"
+      },
+      "expected_event": "PostToolUseFailure",
+      "render": {
+        "title": "Error",
+        "state_kind": "error",
+        "windows_state": "2"
+      }
+    },
+    {
+      "id": "pre-compact",
+      "registered_event": "PreCompact",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "PreCompact",
+        "session_id": "claude-fixture"
+      },
+      "expected_event": "PreCompact",
+      "render": {
+        "title": "Compacting",
+        "state_kind": "compacting",
+        "windows_state": "0"
+      }
+    },
+    {
+      "id": "post-compact",
+      "registered_event": "PostCompact",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "PostCompact",
+        "session_id": "claude-fixture"
+      },
+      "expected_event": "PostCompact",
+      "render": null
+    },
+    {
+      "id": "subagent-start",
+      "registered_event": "SubagentStart",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "SubagentStart",
+        "session_id": "claude-fixture",
+        "agent_id": "agent-1",
+        "agent_type": "reviewer"
+      },
+      "expected_event": "SubagentStart",
+      "render": {
+        "title": "Subagent",
+        "state_kind": "subagent",
+        "windows_state": "0"
+      }
+    },
+    {
+      "id": "subagent-stop",
+      "registered_event": "SubagentStop",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "SubagentStop",
+        "session_id": "claude-fixture",
+        "agent_id": "agent-1",
+        "agent_type": "reviewer"
+      },
+      "expected_event": "SubagentStop",
+      "render": {
+        "title": "WORKING",
+        "state_kind": "working",
+        "windows_state": "3"
+      }
+    },
+    {
+      "id": "stop",
+      "registered_event": "Stop",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "Stop",
+        "session_id": "claude-fixture",
+        "last_assistant_message": "Completed"
+      },
+      "expected_event": "Stop",
+      "render": {
+        "title": "Complete",
+        "state_kind": "done",
+        "windows_state": "0"
+      }
+    },
+    {
+      "id": "stop-failure",
+      "registered_event": "StopFailure",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "StopFailure",
+        "session_id": "claude-fixture",
+        "error": "sanitized failure"
+      },
+      "expected_event": "StopFailure",
+      "render": {
+        "title": "Error",
+        "state_kind": "error",
+        "windows_state": "2"
+      }
+    },
+    {
+      "id": "task-completed",
+      "registered_event": "TaskCompleted",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "TaskCompleted",
+        "session_id": "claude-fixture",
+        "task": "code review finished"
+      },
+      "expected_event": "TaskCompleted",
+      "render": {
+        "title": "Complete",
+        "state_kind": "done",
+        "windows_state": "0"
+      }
+    },
+    {
+      "id": "cwd-changed",
+      "registered_event": "CwdChanged",
+      "model": "claude-fixture",
+      "effort": "high",
+      "payload": {
+        "hook_event_name": "CwdChanged",
+        "session_id": "claude-fixture",
+        "cwd": "."
+      },
+      "expected_event": "CwdChanged",
+      "render": {
+        "title": "Your turn",
+        "state_kind": "idle",
+        "windows_state": "0"
+      }
+    }
+  ]
+}

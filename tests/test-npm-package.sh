@@ -84,6 +84,7 @@ if [ -f "$ROOT_DIR/package.json" ]; then
     assert_eq "Package bin exposes npm-normalized visualhud command" "visualhud" "$(jq -r '.bin.visualhud' "$ROOT_DIR/package.json")"
     assert_contains "Package files include themes" '"themes"' "$(jq -c '.files' "$ROOT_DIR/package.json")"
     assert_contains "Package files include screenshots" '"docs/screenshots"' "$(jq -c '.files' "$ROOT_DIR/package.json")"
+    assert_contains "Package files include compatibility fixtures" '"tests/fixtures/compatibility"' "$(jq -c '.files' "$ROOT_DIR/package.json")"
     assert_contains "Package files include skills" '"skills"' "$(jq -c '.files' "$ROOT_DIR/package.json")"
     assert_eq "Package test script runs full suite" "bash tests/run-all.sh" "$(jq -r '.scripts.test' "$ROOT_DIR/package.json")"
     assert_eq "Package exposes package E2E script" "bash tests/test-npm-package.sh" "$(jq -r '.scripts["test:e2e"]' "$ROOT_DIR/package.json")"
@@ -119,6 +120,18 @@ if [ "$pack_status" -eq 0 ]; then
     assert_contains "Tarball includes Pokemon screenshot" "package/docs/screenshots/pokemon-contact-sheet.png" "$tar_contents"
     assert_contains "Tarball includes TMNT screenshot" "package/docs/screenshots/tmnt-contact-sheet.png" "$tar_contents"
     assert_contains "Tarball includes VisualHUD skills" "package/skills/visualhud-setup/SKILL.md" "$tar_contents"
+    assert_contains "Tarball includes compatibility matrix" "package/docs/compatibility-matrix.v1.json" "$tar_contents"
+    assert_contains "Tarball includes Codex compatibility fixtures" "package/tests/fixtures/compatibility/codex.v1.json" "$tar_contents"
+    assert_contains "Tarball includes Claude compatibility fixtures" "package/tests/fixtures/compatibility/claude.v1.json" "$tar_contents"
+    unpacked="$TMP_ROOT/unpacked"
+    mkdir -p "$unpacked"
+    tar -xzf "$tarball" -C "$unpacked"
+    set +e
+    compatibility_output="$(cd "$unpacked/package" && node scripts/visualhud-compatibility.js report 2>&1)"
+    compatibility_status=$?
+    set -e
+    assert_eq "Packed compatibility report runs" "0" "$compatibility_status"
+    assert_contains "Packed compatibility report names Codex" "Codex CLI (host)" "$compatibility_output"
 fi
 echo ""
 

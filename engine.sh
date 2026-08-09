@@ -14,6 +14,11 @@ resolve_tty_target() {
         printf '%s' "$VISUALHUD_TTY"
         return
     fi
+    if [ -n "${VISUALHUD_TEST_CAPTURE_DIR:-}" ]; then
+        mkdir -p "$VISUALHUD_TEST_CAPTURE_DIR" 2>/dev/null || true
+        printf '%s/terminal.log' "$VISUALHUD_TEST_CAPTURE_DIR"
+        return
+    fi
     if [ -z "${VISUALHUD_NO_DEV_TTY:-}" ] && { printf '' > /dev/tty; } 2>/dev/null; then
         printf '/dev/tty'
         return
@@ -165,7 +170,9 @@ if [ -z "$RENDERER" ]; then
 fi
 
 BACKGROUND_API_ENABLED=false
-if [ "$RENDERER" = "iterm2" ] && { [ -z "${VISUALHUD_TTY:-}" ] || [ -c "$TTY_TARGET" ]; }; then
+if [ -n "${VISUALHUD_TEST_CAPTURE_DIR:-}" ] && [ -z "${VISUALHUD_SET_BG:-}" ]; then
+    BACKGROUND_API_ENABLED=false
+elif [ "$RENDERER" = "iterm2" ] && { [ -z "${VISUALHUD_TTY:-}" ] || [ -c "$TTY_TARGET" ]; }; then
     BACKGROUND_API_ENABLED=true
 fi
 

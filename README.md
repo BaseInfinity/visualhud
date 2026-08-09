@@ -359,6 +359,24 @@ review or background verification task is still running, VisualHUD shows the
 theme's `review` state and keeps `done`/Mew/Pizza Party reserved for when that
 review task completes.
 
+### Compatibility Matrix
+
+Codex is the host; GPT-5.6 Sol is a model lane inside that host, not a separate
+VisualHUD protocol. The versioned compatibility contract is
+`docs/compatibility-matrix.v1.json`. It records fixture-tested host events,
+iTerm2/WezTerm/Windows renderer capabilities, known limitations, and the
+supervised Sol medium/high smoke lanes.
+
+Run the deterministic matrix without credentials or network model calls:
+
+```bash
+npm run test:matrix
+npm run coverage:matrix
+```
+
+The authenticated Codex/iTerm2 canary is a separate supervised release gate.
+It is never invoked by `npm test` or default CI.
+
 ## Themes
 
 A theme is a directory with a config file and optional assets:

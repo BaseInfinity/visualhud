@@ -252,6 +252,9 @@ cat > "$SETUP_HARNESS/setup-iterm2.sh" <<'EOF'
 #!/bin/bash
 printf 'mock setup-iterm2 invoked\n'
 printf 'args: %s\n' "$*"
+printf 'status: %s\n' "${VISUALHUD_SETUP_STATUS_FILE:-missing}"
+mkdir -p "$(dirname "${VISUALHUD_SETUP_STATUS_FILE:?}")"
+printf 'restart-required\n' > "$VISUALHUD_SETUP_STATUS_FILE"
 exit 0
 EOF
 chmod +x "$SETUP_HARNESS/setup-iterm2.sh"
@@ -269,6 +272,7 @@ set -e
 assert_eq "visualhud setup iterm2 exits 0 on success" "0" "$setup_status"
 assert_contains "visualhud setup iterm2 dispatches to setup-iterm2.sh" "mock setup-iterm2 invoked" "$setup_out"
 assert_contains "visualhud setup iterm2 --reset forwards flags" "args: --reset" "$setup_reset_out"
+assert_contains "direct iTerm2 setup writes the doctor status path" "status: $SETUP_HARNESS/.visualhud/iterm2-setup-status" "$setup_out"
 assert_eq "visualhud doctor exits 0 when healthy" "0" "$doctor_status"
 assert_contains "doctor reports node" "node" "$doctor_out"
 assert_contains "doctor reports JSON helper" "JSON helper" "$doctor_out"
@@ -278,6 +282,15 @@ assert_contains "doctor reports themes directory" "themes" "$doctor_out"
 assert_contains "doctor reports resolved TTY target" "tty target" "$(printf '%s' "$doctor_out" | tr '[:upper:]' '[:lower:]')"
 assert_contains "doctor runs the real engine chain" "engine chain" "$(printf '%s' "$doctor_out" | tr '[:upper:]' '[:lower:]')"
 assert_contains "doctor reports captured escape-sequence bytes" "bytes emitted" "$(printf '%s' "$doctor_out" | tr '[:upper:]' '[:lower:]')"
+assert_contains "doctor reports direct iTerm2 setup state" "Restart iTerm2 later to refresh changed terminal preferences" "$doctor_out"
+
+touch "$SETUP_HARNESS/.visualhud/codex-restart-required"
+printf 'restart-required\n' > "$SETUP_HARNESS/.visualhud/iterm2-setup-status"
+pending_doctor_out="$(VISUALHUD_TTY="$DOCTOR_CAPTURE" VISUALHUD_STATE_DIR="$DOCTOR_STATE" VISUALHUD_REAPPLY_DELAY=0 "$SETUP_HARNESS/visualhud" doctor 2>&1)"
+assert_contains "doctor reports pending Codex discovery" "[restart required] Reopen Codex to load hooks and skills" "$pending_doctor_out"
+assert_contains "doctor gives the exact Codex restart action" "Next: exit this Codex session, then run: codex --yolo" "$pending_doctor_out"
+assert_contains "doctor reports changed terminal preferences separately" "Restart iTerm2 later to refresh changed terminal preferences" "$pending_doctor_out"
+rm -f "$SETUP_HARNESS/.visualhud/codex-restart-required" "$SETUP_HARNESS/.visualhud/iterm2-setup-status"
 
 set +e
 bad_capture_out="$(VISUALHUD_TTY="$TMP_ROOT/missing/doctor-capture.log" VISUALHUD_STATE_DIR="$DOCTOR_STATE" VISUALHUD_REAPPLY_DELAY=0 "$SETUP_HARNESS/visualhud" doctor 2>&1)"

@@ -639,6 +639,31 @@ function mergeCodexHooks(existing, command) {
   return data;
 }
 
+function codexVisualHudRegistration(existing) {
+  const hooks = existing && typeof existing.hooks === "object" ? existing.hooks : {};
+  const registrations = [];
+
+  for (const event of Object.keys(hooks).sort()) {
+    const groups = Array.isArray(hooks[event]) ? hooks[event] : [];
+    for (const group of groups) {
+      const commands = Array.isArray(group.hooks) ? group.hooks : [];
+      for (const hook of commands) {
+        const command = String(hook.command || "");
+        if (!command.includes("visualhud-codex.sh")) continue;
+        registrations.push({
+          event,
+          matcher: String(group.matcher || ""),
+          type: String(hook.type || ""),
+          command,
+        });
+      }
+    }
+  }
+
+  registrations.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  return registrations;
+}
+
 function mergeClaudeHooks(existing, command) {
   const data = existing && typeof existing === "object" ? existing : {};
   data.hooks = data.hooks && typeof data.hooks === "object" ? data.hooks : {};
@@ -1576,6 +1601,12 @@ try {
       const file = process.argv[3];
       const existing = fs.existsSync(file) ? readJsonFile(file) : { hooks: {} };
       process.stdout.write(`${JSON.stringify(mergeCodexHooks(existing, process.argv[4] || ""), null, 2)}\n`);
+      break;
+    }
+    case "codex-visualhud-registration": {
+      const file = process.argv[3];
+      const existing = file && fs.existsSync(file) ? readJsonFile(file) : { hooks: {} };
+      compact(codexVisualHudRegistration(existing));
       break;
     }
     case "merge-claude-hooks": {

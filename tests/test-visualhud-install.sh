@@ -64,6 +64,18 @@ assert_file_exists() {
     fi
 }
 
+assert_file_not_exists() {
+    local label="$1" filepath="$2"
+    TOTAL=$((TOTAL + 1))
+    if [ ! -e "$filepath" ]; then
+        PASS=$((PASS + 1))
+        printf "  PASS: %s\n" "$label"
+    else
+        FAIL=$((FAIL + 1))
+        printf "  FAIL: %s (unexpected file: %s)\n" "$label" "$filepath"
+    fi
+}
+
 assert_executable() {
     local label="$1" filepath="$2"
     TOTAL=$((TOTAL + 1))
@@ -91,19 +103,47 @@ mkdir -p "$FAKE_BIN" "$TEST_HOME"
 cat > "$FAKE_BIN/defaults" <<'EOF'
 #!/bin/bash
 printf '%s\n' "$*" >> "$VISUALHUD_TEST_DEFAULTS_LOG"
-[ "${VISUALHUD_TEST_DEFAULTS_FAIL:-0}" != "1" ]
+[ "${VISUALHUD_TEST_DEFAULTS_FAIL:-0}" != "1" ] || exit 1
+state_dir="${VISUALHUD_TEST_DEFAULTS_STATE:?}"
+mkdir -p "$state_dir"
+operation="${1:-}"
+domain="${2:-}"
+key="${3:-}"
+state_file="$state_dir/${domain}_${key}"
+case "$operation" in
+    write)
+        value="${5:-}"
+        case "${4:-}" in
+            -bool) [ "$value" = true ] && value=1 || value=0 ;;
+        esac
+        printf '%s\n' "$value" > "$state_file"
+        ;;
+    read)
+        [ -f "$state_file" ] || exit 1
+        cat "$state_file"
+        ;;
+    delete)
+        rm -f "$state_file"
+        ;;
+esac
 EOF
 cat > "$FAKE_BIN/pgrep" <<'EOF'
 #!/bin/bash
 if [ -n "${VISUALHUD_TEST_PGREP_STATUS:-}" ]; then
-    exit "$VISUALHUD_TEST_PGREP_STATUS"
+    status="$VISUALHUD_TEST_PGREP_STATUS"
+else
+    [ "${VISUALHUD_TEST_ITERM_RUNNING:-0}" = "1" ] && status=0 || status=1
 fi
-[ "${VISUALHUD_TEST_ITERM_RUNNING:-0}" = "1" ]
+if [ "$status" = "0" ]; then
+    printf '%s\n' "${VISUALHUD_TEST_PGREP_PID:-4242}"
+fi
+exit "$status"
 EOF
 chmod +x "$FAKE_BIN/defaults" "$FAKE_BIN/pgrep"
 export HOME="$TEST_HOME"
 export PATH="$FAKE_BIN:$PATH"
 export VISUALHUD_TEST_DEFAULTS_LOG="$DEFAULTS_LOG"
+export VISUALHUD_TEST_DEFAULTS_STATE="$TMP_ROOT/defaults-state"
 
 hook_registered() {
     local hooks_json="$1" event="$2" needle="$3"
@@ -163,6 +203,7 @@ assert_file_exists "Bare install writes Codex hooks" "$target/.codex/hooks.json"
 assert_file_exists "Bare install writes runtime CLI" "$target/.visualhud/visualhud"
 assert_file_exists "Bare install writes iTerm2 setup helper" "$target/.visualhud/setup-iterm2.sh"
 assert_eq "Bare install defaults to Pokemon" "pokemon" "$(cat "$target/.visualhud/theme")"
+"$target/.visualhud/setup-iterm2.sh" --reset >/dev/null
 echo ""
 
 echo "--- Test 2: Codex macOS install creates a repo-local VisualHUD runtime ---"
@@ -174,8 +215,11 @@ assert_contains "Install reports runtime phase" "[ok] repo runtime installed" "$
 assert_contains "Install reports hooks phase" "[ok] Codex hooks installed" "$output"
 assert_contains "Install applies the iTerm2 helper" "[ok] iTerm2 platform helper applied" "$output"
 assert_contains "Install reports restart state" "[ok] iTerm2 restart not currently required" "$output"
+assert_contains "Fresh install requires a new Codex session" "[restart required] Reopen Codex to load hooks and skills" "$output"
+assert_contains "Fresh install gives the exact Codex action" "Next: exit this Codex session, then run: codex --yolo" "$output"
 assert_contains "Install writes iTerm2 preferences through the helper" "write com.googlecode.iterm2 EnableAPIServer -bool true" "$(cat "$DEFAULTS_LOG")"
 assert_file_exists "Install writes the iTerm2 dynamic profile" "$TEST_HOME/Library/Application Support/iTerm2/DynamicProfiles/visualhud-profile.json"
+assert_file_exists "Fresh install records pending Codex discovery" "$target/.visualhud/codex-restart-required"
 assert_file_exists "Target Codex hook wrapper exists" "$target/.codex/hooks/visualhud-codex.sh"
 assert_executable "Target Codex hook wrapper is executable" "$target/.codex/hooks/visualhud-codex.sh"
 assert_file_exists "Target Codex hooks.json exists" "$target/.codex/hooks.json"
@@ -209,6 +253,30 @@ assert_eq "PostCompact hook registered" "true" "$(hook_registered "$target/.code
 assert_eq "SubagentStart hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "SubagentStart" "visualhud-codex.sh")"
 assert_eq "SubagentStop hook registered" "true" "$(hook_registered "$target/.codex/hooks.json" "SubagentStop" "visualhud-codex.sh")"
 assert_eq "Unsupported PostToolUseFailure hook is absent" "false" "$(hook_registered "$target/.codex/hooks.json" "PostToolUseFailure" "visualhud-codex.sh")"
+
+doctor_capture="$TMP_ROOT/install-doctor.capture"
+doctor_state="$TMP_ROOT/install-doctor-state"
+set +e
+doctor_restart_output="$(VISUALHUD_TTY="$doctor_capture" VISUALHUD_STATE_DIR="$doctor_state" VISUALHUD_REAPPLY_DELAY=0 \
+    "$target/.visualhud/visualhud" doctor 2>&1)"
+doctor_restart_status=$?
+set -e
+assert_eq "Doctor remains healthy while Codex restart is pending" "0" "$doctor_restart_status"
+assert_contains "Doctor reports the pending Codex phase" "[restart required] Reopen Codex to load hooks and skills" "$doctor_restart_output"
+assert_contains "Doctor reports the exact Codex next action" "Next: exit this Codex session, then run: codex --yolo" "$doctor_restart_output"
+
+(cd "$target" && printf '%s' '{"hook_event_name":"SessionStart","source":"startup","session_id":"new-codex-session"}' | \
+    VISUALHUD_TTY=/dev/null VISUALHUD_BG=off VISUALHUD_REAPPLY_DELAY=0 bash .codex/hooks/visualhud-codex.sh)
+assert_file_not_exists "A new Codex SessionStart clears the discovery marker" "$target/.visualhud/codex-restart-required"
+
+jq -c . "$target/.codex/hooks.json" > "$target/.codex/hooks.json.tmp"
+mv "$target/.codex/hooks.json.tmp" "$target/.codex/hooks.json"
+reinstall_output="$(TERM_PROGRAM='' ITERM_SESSION_ID='' "$CLI" install codex --target "$target" --platform macos 2>&1)"
+assert_contains "Idempotent reinstall applies on the next hook" "[ok] Codex restart not required; runtime and theme apply on the next hook" "$reinstall_output"
+assert_contains "Unchanged iTerm preferences need no terminal restart" "[ok] iTerm2 preferences already current; terminal restart not required" "$reinstall_output"
+assert_not_contains "No-restart output does not ask to reopen Codex" "[restart required] Reopen Codex" "$reinstall_output"
+assert_not_contains "No-restart output does not ask to restart iTerm2" "restart iTerm2 later" "$reinstall_output"
+assert_not_contains "No-restart output does not contradict its current-pane action" "Then start Codex" "$reinstall_output"
 profile_engine="$TMP_ROOT/profile-engine.sh"
 profile_log="$TMP_ROOT/profile.log"
 cat > "$profile_engine" <<'SH'
@@ -227,6 +295,22 @@ touch "$target/.agents/skills/sdlc/SKILL.md"
 (cd "$target" && printf '%s' '{"hook_event_name":"PreToolUse","tool_name":"Read"}' | \
     VISUALHUD_TEST_PROFILE_LOG="$profile_log" bash .codex/hooks/visualhud-codex.sh)
 assert_eq "Installed wrapper selects the richer journey from SDLC evidence" "sdlc" "$(tail -n 1 "$profile_log")"
+
+dynamic_source="$TMP_ROOT/dynamic-skill-source"
+dynamic_target="$(make_repo dynamic-skill-target)"
+mkdir -p "$dynamic_source/.codex"
+cp "$ROOT_DIR/visualhud" "$ROOT_DIR/engine.sh" "$ROOT_DIR/set_bg.py" \
+    "$ROOT_DIR/setup-iterm2.sh" "$ROOT_DIR/setup-wezterm.ps1" "$dynamic_source/"
+cp -R "$ROOT_DIR/.codex/hooks" "$dynamic_source/.codex/hooks"
+cp -R "$ROOT_DIR/themes" "$ROOT_DIR/scripts" "$ROOT_DIR/wezterm" "$ROOT_DIR/skills" "$dynamic_source/"
+"$dynamic_source/visualhud" install codex --target "$dynamic_target" --platform windows >/dev/null
+(cd "$dynamic_target" && printf '%s' '{"hook_event_name":"SessionStart","source":"startup","session_id":"dynamic-session"}' | \
+    VISUALHUD_TTY=/dev/null VISUALHUD_BG=off VISUALHUD_REAPPLY_DELAY=0 bash .codex/hooks/visualhud-codex.sh)
+mkdir -p "$dynamic_source/skills/visualhud-extra"
+printf '%s\n' '---' 'name: visualhud-extra' '---' '# Extra VisualHUD skill' > "$dynamic_source/skills/visualhud-extra/SKILL.md"
+dynamic_output="$("$dynamic_source/visualhud" install codex --target "$dynamic_target" --platform windows 2>&1)"
+assert_file_exists "A newly added VisualHUD skill is installed" "$dynamic_target/.agents/skills/visualhud-extra/SKILL.md"
+assert_contains "A newly added VisualHUD skill requires Codex discovery" "[restart required] Reopen Codex to load hooks and skills" "$dynamic_output"
 echo ""
 
 echo "--- Test 3: Codex install preserves existing hooks and is idempotent ---"
@@ -282,26 +366,61 @@ echo ""
 echo "--- Test 3a: macOS setup stays non-disruptive and reports blockers ---"
 target="$(make_repo mac-running)"
 set +e
-running_output="$(TERM_PROGRAM='' ITERM_SESSION_ID='' VISUALHUD_TEST_ITERM_RUNNING=1 \
+running_output="$(HOME="$TMP_ROOT/home-running" VISUALHUD_TEST_DEFAULTS_STATE="$TMP_ROOT/state-running" \
+    TERM_PROGRAM='' ITERM_SESSION_ID='' VISUALHUD_TEST_ITERM_RUNNING=1 \
     "$CLI" install codex --target "$target" --platform macos 2>&1)"
 running_status=$?
 set -e
 assert_eq "Running iTerm2 does not block repo installation" "0" "$running_status"
 assert_contains "Running iTerm2 reports deferred visual refresh" "[pending] iTerm2 restart later to refresh terminal visuals" "$running_output"
 assert_not_contains "Running iTerm2 never prompts to quit" "Continue anyway?" "$running_output"
+assert_file_exists "Changed terminal preferences record a restart-later phase" "$target/.visualhud/iterm2-setup-status"
+
+running_repeat_output="$(HOME="$TMP_ROOT/home-running" VISUALHUD_TEST_DEFAULTS_STATE="$TMP_ROOT/state-running" \
+    TERM_PROGRAM='' ITERM_SESSION_ID='' VISUALHUD_TEST_ITERM_RUNNING=1 \
+    "$CLI" install codex --target "$target" --platform macos 2>&1)"
+assert_contains "Repeated setup preserves a pending terminal restart" "[pending] iTerm2 restart later to refresh terminal visuals" "$running_repeat_output"
+assert_eq "Repeated setup preserves the originating iTerm2 process" "restart-required:4242" "$(cat "$target/.visualhud/iterm2-setup-status")"
+
+running_doctor_capture="$TMP_ROOT/running-doctor.capture"
+running_doctor_state="$TMP_ROOT/running-doctor-state"
+running_doctor_output="$(VISUALHUD_TEST_ITERM_RUNNING=1 VISUALHUD_TEST_PGREP_PID=4343 \
+    VISUALHUD_TTY="$running_doctor_capture" VISUALHUD_STATE_DIR="$running_doctor_state" VISUALHUD_REAPPLY_DELAY=0 \
+    "$target/.visualhud/visualhud" doctor 2>&1)"
+assert_contains "Doctor recognizes a replacement iTerm2 process" "[ok] Terminal restart not required" "$running_doctor_output"
+assert_eq "Doctor records terminal readiness after a replacement process" "ready" "$(cat "$target/.visualhud/iterm2-setup-status")"
+
+for unresolved_status in restart-required restart-unknown; do
+    printf '%s\n' "$unresolved_status" > "$target/.visualhud/iterm2-setup-status"
+    stopped_doctor_output="$(TERM_PROGRAM='' ITERM_SESSION_ID='' VISUALHUD_TEST_ITERM_RUNNING=0 \
+        VISUALHUD_TTY="$running_doctor_capture" VISUALHUD_STATE_DIR="$running_doctor_state" VISUALHUD_REAPPLY_DELAY=0 \
+        "$target/.visualhud/visualhud" doctor 2>&1)"
+    assert_contains "Doctor clears $unresolved_status when iTerm2 is stopped" "[ok] Terminal restart not required" "$stopped_doctor_output"
+    assert_eq "Doctor records readiness after $unresolved_status" "ready" "$(cat "$target/.visualhud/iterm2-setup-status")"
+done
+printf 'ready\n' > "$target/.visualhud/iterm2-setup-status"
+
+running_restarted_output="$(HOME="$TMP_ROOT/home-running" VISUALHUD_TEST_DEFAULTS_STATE="$TMP_ROOT/state-running" \
+    TERM_PROGRAM='' ITERM_SESSION_ID='' VISUALHUD_TEST_ITERM_RUNNING=1 VISUALHUD_TEST_PGREP_PID=4343 \
+    "$CLI" install codex --target "$target" --platform macos 2>&1)"
+assert_contains "A different iTerm2 process clears the pending restart" "[ok] iTerm2 preferences already current; terminal restart not required" "$running_restarted_output"
+assert_eq "A different iTerm2 process records terminal readiness" "ready" "$(cat "$target/.visualhud/iterm2-setup-status")"
 
 target="$(make_repo mac-term-program-detected)"
-term_program_output="$(TERM_PROGRAM=iTerm.app ITERM_SESSION_ID='' VISUALHUD_TEST_PGREP_STATUS=3 \
+term_program_output="$(HOME="$TMP_ROOT/home-term" VISUALHUD_TEST_DEFAULTS_STATE="$TMP_ROOT/state-term" \
+    TERM_PROGRAM=iTerm.app ITERM_SESSION_ID='' VISUALHUD_TEST_PGREP_STATUS=3 \
     "$CLI" install codex --target "$target" --platform macos 2>&1)"
 assert_contains "TERM_PROGRAM survives a denied process probe" "[pending] iTerm2 restart later to refresh terminal visuals" "$term_program_output"
 
 target="$(make_repo mac-session-detected)"
-session_output="$(TERM_PROGRAM='' ITERM_SESSION_ID=visualhud-test VISUALHUD_TEST_PGREP_STATUS=3 \
+session_output="$(HOME="$TMP_ROOT/home-session" VISUALHUD_TEST_DEFAULTS_STATE="$TMP_ROOT/state-session" \
+    TERM_PROGRAM='' ITERM_SESSION_ID=visualhud-test VISUALHUD_TEST_PGREP_STATUS=3 \
     "$CLI" install codex --target "$target" --platform macos 2>&1)"
 assert_contains "ITERM_SESSION_ID survives a denied process probe" "[pending] iTerm2 restart later to refresh terminal visuals" "$session_output"
 
 target="$(make_repo mac-process-unknown)"
-unknown_output="$(TERM_PROGRAM='' ITERM_SESSION_ID='' VISUALHUD_TEST_PGREP_STATUS=3 \
+unknown_output="$(HOME="$TMP_ROOT/home-unknown" VISUALHUD_TEST_DEFAULTS_STATE="$TMP_ROOT/state-unknown" \
+    TERM_PROGRAM='' ITERM_SESSION_ID='' VISUALHUD_TEST_PGREP_STATUS=3 \
     "$CLI" install codex --target "$target" --platform macos 2>&1)"
 assert_contains "Denied process inspection reports an honest pending state" "[pending] iTerm2 process status unavailable" "$unknown_output"
 
@@ -317,9 +436,24 @@ assert_contains "Blocked setup reports the helper phase" "[blocked] iTerm2 platf
 assert_contains "Blocked setup includes the helper failure reason" "iTerm2 settings could not be written" "$blocked_output"
 assert_file_exists "Blocked platform setup still installs Codex hooks" "$target/.codex/hooks.json"
 
-reset_output="$(VISUALHUD_TEST_DEFAULTS_FAIL=0 "$target/.visualhud/setup-iterm2.sh" --reset 2>&1)"
-assert_contains "Reset reports a deferred visual refresh" "[pending] Restart iTerm2 later" "$reset_output"
+reset_status="$TMP_ROOT/reset-status"
+reset_output="$(TERM_PROGRAM='' ITERM_SESSION_ID='' VISUALHUD_TEST_ITERM_RUNNING=0 VISUALHUD_TEST_DEFAULTS_FAIL=0 \
+    VISUALHUD_SETUP_STATUS_FILE="$reset_status" "$target/.visualhud/setup-iterm2.sh" --reset 2>&1)"
+assert_contains "Reset while iTerm2 is closed needs no terminal restart" "[ok] iTerm2 restart not currently required" "$reset_output"
+assert_eq "Reset while iTerm2 is closed records terminal readiness" "ready" "$(cat "$reset_status")"
 assert_eq "Reset removes the VisualHUD dynamic profile" "absent" "$([ ! -e "$TEST_HOME/Library/Application Support/iTerm2/DynamicProfiles/visualhud-profile.json" ] && printf absent || printf present)"
+
+VISUALHUD_SETUP_STATUS_FILE="$reset_status" TERM_PROGRAM='' ITERM_SESSION_ID='' VISUALHUD_TEST_ITERM_RUNNING=0 \
+    "$target/.visualhud/setup-iterm2.sh" >/dev/null
+running_reset_output="$(VISUALHUD_SETUP_STATUS_FILE="$reset_status" TERM_PROGRAM='' ITERM_SESSION_ID='' \
+    VISUALHUD_TEST_ITERM_RUNNING=1 VISUALHUD_TEST_PGREP_PID=5151 \
+    "$target/.visualhud/setup-iterm2.sh" --reset 2>&1)"
+assert_contains "Reset while iTerm2 is open defers the visual refresh" "[pending] iTerm2 restart later to refresh terminal visuals" "$running_reset_output"
+assert_eq "Reset records the originating iTerm2 process" "restart-required:5151" "$(cat "$reset_status")"
+repeat_reset_output="$(VISUALHUD_SETUP_STATUS_FILE="$reset_status" TERM_PROGRAM='' ITERM_SESSION_ID='' \
+    VISUALHUD_TEST_ITERM_RUNNING=1 VISUALHUD_TEST_PGREP_PID=5151 \
+    "$target/.visualhud/setup-iterm2.sh" --reset 2>&1)"
+assert_contains "Idempotent reset preserves a pending terminal restart" "[pending] iTerm2 restart later to refresh terminal visuals" "$repeat_reset_output"
 echo ""
 
 echo "--- Test 3b: Claude install wires repo-local Claude hooks and runtime ---"

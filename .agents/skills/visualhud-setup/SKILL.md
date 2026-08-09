@@ -46,7 +46,7 @@ the user a manual setup step unless a local config merge is ambiguous.
    jq '.hooks | keys' .codex/hooks.json
    ```
 6. For WezTerm, also verify `.visualhud/setup-wezterm.ps1`, `.visualhud/wezterm/visualhud.lua`, and `VISUALHUD_RENDERER="wezterm"` in `.codex/hooks/visualhud-codex.sh`.
-7. Ask the user to restart Codex or run a tiny task in the target pane. Colors plus background images should update on the next hook for iTerm2/WezTerm; Windows Terminal gets title/progress only.
+7. Follow the installer's reported phase exactly. Reopen Codex when hook or skill registration changed so the new session discovers `.agents/skills/visualhud-*` and hook registrations. When only runtime or theme files changed, keep the current Codex session and run a small task; those changes apply on the next hook.
 
 ## Rules
 
@@ -54,6 +54,7 @@ the user a manual setup step unless a local config merge is ambiguous.
 - Preserve existing `.codex/hooks.json` entries and existing `.agents/skills/*`.
 - The installed skills live under `.agents/skills/visualhud-*` so Codex can discover them in that repo.
 - Do not rerun `setup-iterm2.sh` manually after a successful macOS install; the installer already applied it. Surface its explicit restart-later or blocked state.
+- Recommend restarting iTerm2 only when the installer says terminal preferences actually changed or their process state was unavailable. Codex restart and terminal restart are independent phases.
 - Do not report setup complete while leaving `setup-wezterm.ps1` as a manual next step unless permissions or ambiguous user config blocked automation.
 - Keep Windows renderer limits explicit: Windows Terminal/PowerShell is title/progress only; WezTerm is the Windows path for live colors/background sprites.
 - If colors work but images do not, inspect `.visualhud/themes/<theme>/sprites/` and `set_bg.py` before changing theme JSON.

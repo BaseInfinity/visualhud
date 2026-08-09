@@ -15,6 +15,28 @@ mkdir -p "$FAKE_BIN" "$TEST_HOME"
 cat > "$FAKE_BIN/defaults" <<'EOF'
 #!/bin/bash
 printf '%s\n' "$*" >> "$VISUALHUD_TEST_DEFAULTS_LOG"
+state_dir="${VISUALHUD_TEST_DEFAULTS_STATE:?}"
+mkdir -p "$state_dir"
+operation="${1:-}"
+domain="${2:-}"
+key="${3:-}"
+state_file="$state_dir/${domain}_${key}"
+case "$operation" in
+    write)
+        value="${5:-}"
+        case "${4:-}" in
+            -bool) [ "$value" = true ] && value=1 || value=0 ;;
+        esac
+        printf '%s\n' "$value" > "$state_file"
+        ;;
+    read)
+        [ -f "$state_file" ] || exit 1
+        cat "$state_file"
+        ;;
+    delete)
+        rm -f "$state_file"
+        ;;
+esac
 EOF
 cat > "$FAKE_BIN/pgrep" <<'EOF'
 #!/bin/bash
@@ -24,6 +46,7 @@ chmod +x "$FAKE_BIN/defaults" "$FAKE_BIN/pgrep"
 export HOME="$TEST_HOME"
 export PATH="$FAKE_BIN:$PATH"
 export VISUALHUD_TEST_DEFAULTS_LOG="$TMP_ROOT/defaults.log"
+export VISUALHUD_TEST_DEFAULTS_STATE="$TMP_ROOT/defaults-state"
 
 cleanup() {
     rm -rf "$TMP_ROOT"

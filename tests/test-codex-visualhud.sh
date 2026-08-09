@@ -89,6 +89,26 @@ assert_eq "Prompt reset event is forwarded" "UserPromptSubmit" "$(last_event_fie
 assert_eq "Prompt text is preserved" "build the adapter" "$(last_event_field '.prompt')"
 echo ""
 
+echo "--- Test 2a: SessionStart acknowledges newly loaded registrations ---"
+MARKER_PROJECT="$TMP_DIR/marker-project"
+MARKER_FILE="$MARKER_PROJECT/.visualhud/codex-restart-required"
+mkdir -p "$(dirname "$MARKER_FILE")"
+touch "$MARKER_FILE"
+printf '%s' '{"hook_event_name":"PreToolUse","session_id":"old-session","tool_name":"Read"}' | \
+    VISUALHUD_PROJECT_ROOT="$MARKER_PROJECT" bash "$ADAPTER" >"$OUT_FILE"
+assert_eq "Ordinary hooks preserve a pending Codex restart" "present" "$([ -f "$MARKER_FILE" ] && printf present || printf missing)"
+printf '%s' '{"hook_event_name":"SessionStart","source":"clear","session_id":"old-session"}' | \
+    VISUALHUD_PROJECT_ROOT="$MARKER_PROJECT" bash "$ADAPTER" >"$OUT_FILE"
+assert_eq "In-process clear preserves a pending Codex restart" "present" "$([ -f "$MARKER_FILE" ] && printf present || printf missing)"
+printf '%s' '{"hook_event_name":"SessionStart","source":"startup","session_id":"new-session"}' | \
+    VISUALHUD_PROJECT_ROOT="$MARKER_PROJECT" bash "$ADAPTER" >"$OUT_FILE"
+assert_eq "Startup SessionStart clears the pending Codex restart" "missing" "$([ -f "$MARKER_FILE" ] && printf present || printf missing)"
+touch "$MARKER_FILE"
+printf '%s' '{"hook_event_name":"SessionStart","source":"resume","session_id":"resumed-session"}' | \
+    VISUALHUD_PROJECT_ROOT="$MARKER_PROJECT" bash "$ADAPTER" >"$OUT_FILE"
+assert_eq "Resume SessionStart clears the pending Codex restart" "missing" "$([ -f "$MARKER_FILE" ] && printf present || printf missing)"
+echo ""
+
 echo "--- Test 3: PermissionRequest maps to correlated HITL ---"
 run_adapter '{"hook_event_name":"PermissionRequest","session_id":"codex-session","turn_id":"turn-3","tool_name":"Bash","tool_input":{"command":"npm install","cwd":"/tmp/project","description":"Codex wants network access"}}' >"$OUT_FILE"
 assert_eq "Permission request becomes Notification" "Notification" "$(last_event_field '.hook_event_name')"

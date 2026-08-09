@@ -34,6 +34,12 @@ The bare `npx -y visualhud@latest` invocation is shorthand for
 `visualhud install codex --target .` — it writes `.codex/`, `.visualhud/`, and
 `.agents/skills/visualhud-*` in the current repo.
 
+The installer reports restart scope explicitly. Runtime and theme changes apply on the next hook
+without restarting Codex. Reopen Codex only when hook or skill
+registration changed; the installer prints the exact `codex --yolo` next step.
+A terminal restart is separate and appears only when iTerm2 preferences actually
+changed while iTerm2 was open or its process state could not be inspected.
+
 VisualHUD setup/update skills should run platform setup helpers themselves. For
 example, when a Windows repo should use WezTerm for live colors/backgrounds, the
 skill should install with `--platform wezterm`, run `setup-wezterm.ps1`, and

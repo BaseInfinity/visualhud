@@ -4,6 +4,8 @@
 set -euo pipefail
 
 INPUT=$(cat)
+RAW_EVENT_NAME=""
+RAW_START_SOURCE=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ENGINE="${VISUALHUD_ENGINE:-$REPO_ROOT/engine.sh}"
@@ -24,11 +26,19 @@ if [ -z "${VISUALHUD_JOURNEY_PROFILE:-}" ]; then
   fi
 fi
 
+RAW_EVENT_NAME=$(printf '%s' "$INPUT" | node "$JSON_HELPER" event-name 2>/dev/null || true)
+RAW_START_SOURCE=$(printf '%s' "$INPUT" | node "$JSON_HELPER" field source 2>/dev/null || true)
 PAYLOAD=$(printf '%s' "$INPUT" | node "$JSON_HELPER" codex-payload 2>/dev/null || true)
 
 if [ -z "$PAYLOAD" ]; then
   exit 0
 fi
+
+case "$RAW_EVENT_NAME:$RAW_START_SOURCE" in
+  SessionStart:startup|SessionStart:resume)
+    rm -f "$VISUALHUD_PROJECT_ROOT/.visualhud/codex-restart-required"
+    ;;
+esac
 
 # Codex consumes hook stdout as protocol output. The engine writes terminal
 # control sequences to /dev/tty, so keep stdout empty for Codex.

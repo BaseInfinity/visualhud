@@ -341,12 +341,14 @@ install_codex_hooks_json() {
 }
 
 setup_iterm2() {
-    local script="$ROOT_DIR/setup-iterm2.sh"
+    local script="$ROOT_DIR/setup-iterm2.sh" status_dir
     if [ ! -x "$script" ]; then
         printf 'setup-iterm2.sh is missing or not executable at: %s\n' "$script" >&2
         return 1
     fi
-    exec "$script" "$@"
+    status_dir=$(runtime_status_dir)
+    mkdir -p "$status_dir"
+    VISUALHUD_SETUP_STATUS_FILE="$status_dir/iterm2-setup-status" exec "$script" "$@"
 }
 
 report_repo_setup_phases() {
@@ -359,7 +361,7 @@ report_repo_setup_phases() {
 apply_iterm2_platform_helper() {
     local runtime_dir="$1" helper_output status
     local helper="$runtime_dir/setup-iterm2.sh"
-    if helper_output=$("$helper" 2>&1); then
+    if helper_output=$(VISUALHUD_SETUP_STATUS_FILE="$runtime_dir/iterm2-setup-status" "$helper" 2>&1); then
         printf '  [ok] iTerm2 platform helper applied\n'
         printf '%s\n' "$helper_output"
         return 0
@@ -373,6 +375,128 @@ apply_iterm2_platform_helper() {
     return "$status"
 }
 
+codex_registration_fingerprint() {
+    local target_root="$1" hooks_json skill_file relative
+    hooks_json="$target_root/.codex/hooks.json"
+    printf 'hooks:'
+    json_helper codex-visualhud-registration "$hooks_json"
+    printf '\nskills:\n'
+    shopt -s nullglob
+    for skill_file in "$target_root"/.agents/skills/visualhud-*/SKILL.md; do
+        relative=${skill_file#"$target_root"/}
+        printf '%s:' "$relative"
+        cksum < "$skill_file"
+    done
+    shopt -u nullglob
+}
+
+report_codex_session_phase() {
+    local target_root="$1" marker
+    marker="$target_root/.visualhud/codex-restart-required"
+    if [ -f "$marker" ]; then
+        printf '  [restart required] Reopen Codex to load hooks and skills\n'
+        printf '  Next: exit this Codex session, then run: codex --yolo\n'
+    else
+        printf '  [ok] Codex restart not required; runtime and theme apply on the next hook\n'
+        printf '  Next: run a small task in the current Codex pane\n'
+    fi
+}
+
+runtime_status_dir() {
+    if [ "$(basename "$ROOT_DIR")" = ".visualhud" ]; then
+        printf '%s\n' "$ROOT_DIR"
+    elif [ -d "$ROOT_DIR/.visualhud" ]; then
+        printf '%s\n' "$ROOT_DIR/.visualhud"
+    else
+        printf '%s\n' "$ROOT_DIR/.visualhud"
+    fi
+}
+
+reconcile_iterm_status() {
+    local status_file="$1" status expected_pid current_pids probe_status
+    status=$(cat "$status_file" 2>/dev/null || true)
+    case "$status" in
+        restart-required:*)
+            expected_pid=${status#restart-required:}
+            if ! command -v pgrep >/dev/null 2>&1; then
+                printf '%s\n' "$status"
+                return
+            fi
+            if current_pids=$(pgrep -x "iTerm2" 2>/dev/null); then
+                if printf '%s\n' "$current_pids" | grep -Fxq "$expected_pid"; then
+                    printf '%s\n' "$status"
+                else
+                    printf 'ready\n' > "$status_file"
+                    printf 'ready\n'
+                fi
+                return
+            else
+                probe_status=$?
+            fi
+            if [ "$probe_status" -eq 1 ] && [ -z "${ITERM_SESSION_ID:-}" ] && [ "${TERM_PROGRAM:-}" != "iTerm.app" ]; then
+                printf 'ready\n' > "$status_file"
+                printf 'ready\n'
+            else
+                printf '%s\n' "$status"
+            fi
+            ;;
+        restart-required|restart-unknown)
+            if ! command -v pgrep >/dev/null 2>&1; then
+                printf '%s\n' "$status"
+                return
+            fi
+            if pgrep -x "iTerm2" >/dev/null 2>&1; then
+                printf '%s\n' "$status"
+                return
+            else
+                probe_status=$?
+            fi
+            if [ "$probe_status" -eq 1 ] && [ -z "${ITERM_SESSION_ID:-}" ] && [ "${TERM_PROGRAM:-}" != "iTerm.app" ]; then
+                printf 'ready\n' > "$status_file"
+                printf 'ready\n'
+            else
+                printf '%s\n' "$status"
+            fi
+            ;;
+        *)
+            printf '%s\n' "$status"
+            ;;
+    esac
+}
+
+report_setup_status() {
+    local status_dir codex_marker iterm_status
+    status_dir=$(runtime_status_dir)
+    codex_marker="$status_dir/codex-restart-required"
+    printf 'Setup phase:\n'
+    if [ -f "$codex_marker" ]; then
+        printf '  [restart required] Reopen Codex to load hooks and skills\n'
+        printf '  Next: exit this Codex session, then run: codex --yolo\n'
+    else
+        printf '  [ok] Codex session has current hook and skill registration\n'
+        printf '  Next: runtime and theme changes apply on the next hook\n'
+    fi
+    iterm_status=$(reconcile_iterm_status "$status_dir/iterm2-setup-status")
+    case "$iterm_status" in
+        restart-required|restart-required:*)
+            printf '  [pending] Restart iTerm2 later to refresh changed terminal preferences\n'
+            ;;
+        restart-unknown)
+            printf '  [pending] iTerm2 process status was unavailable; restart later if visuals are stale\n'
+            ;;
+        blocked:*)
+            printf '  [blocked] iTerm2 platform helper failed (exit %s)\n' "${iterm_status#blocked:}"
+            return 1
+            ;;
+        ready)
+            printf '  [ok] Terminal restart not required\n'
+            ;;
+        *)
+            printf '  [ok] No terminal restart is pending\n'
+            ;;
+    esac
+}
+
 doctor() {
     local status=0 chain_ready=1 theme themes_root doctor_tmp tty_target tty_error tty_parent
     local payload parsed_event json_error capture_file state_dir engine_error
@@ -384,6 +508,9 @@ doctor() {
     printf '  root        : %s\n' "$ROOT_DIR"
     printf '  themes dir  : %s\n' "$themes_root"
     printf '  active theme: %s\n' "$theme"
+    if ! report_setup_status; then
+        status=1
+    fi
 
     if command -v node >/dev/null 2>&1; then
         printf '  [ok] node       %s\n' "$(node --version 2>/dev/null || printf 'present')"
@@ -769,6 +896,7 @@ install_claude() {
 
 install_codex() {
     local target="" theme="pokemon" platform="" target_root runtime_dir renderer
+    local registration_before registration_after restart_marker
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -831,16 +959,23 @@ install_codex() {
 
     target_root=$(target_repo_root "$target")
     runtime_dir="$target_root/.visualhud"
+    registration_before=$(codex_registration_fingerprint "$target_root")
     copy_codex_runtime "$target_root"
     printf '%s\n' "$theme" > "$runtime_dir/theme"
     install_codex_skills "$target_root"
     write_codex_hook_wrapper "$target_root" "$renderer"
     install_codex_hooks_json "$target_root"
+    registration_after=$(codex_registration_fingerprint "$target_root")
+    restart_marker="$runtime_dir/codex-restart-required"
+    if [ "$registration_before" != "$registration_after" ]; then
+        : > "$restart_marker"
+    fi
 
     printf 'Installed VisualHUD Codex hooks in: %s\n' "$target_root"
     printf 'Active theme: %s\n' "$theme"
     printf 'Runtime: %s\n' "$runtime_dir"
     report_repo_setup_phases "Codex" "$runtime_dir"
+    report_codex_session_phase "$target_root"
     case "$renderer" in
         iterm2)
             printf 'Renderer: iTerm2\n'
@@ -856,7 +991,6 @@ install_codex() {
             printf 'Run once to enable live WezTerm backgrounds: pwsh -ExecutionPolicy Bypass -File "%s/setup-wezterm.ps1"\n' "$runtime_dir"
             ;;
     esac
-    printf 'Then start Codex in the target repo: codex --yolo\n'
 }
 
 calibration_counter_file() {

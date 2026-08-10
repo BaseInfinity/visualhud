@@ -2,6 +2,10 @@
 
 A themeable visual status engine for Claude Code, Codex, and iTerm2.
 
+Current release candidate: `1.2.0`. It is available from the source repository;
+the npm registry remains on the previous public version until the supervised
+publication gate is complete.
+
 Watch your terminal transform in real-time as your agent works — colors shift, backgrounds swap, and tab titles update to show exactly where things stand. Ship with themes or build your own.
 
 ## Install
@@ -34,11 +38,60 @@ The bare `npx -y visualhud@latest` invocation is shorthand for
 `visualhud install codex --target .` — it writes `.codex/`, `.visualhud/`, and
 `.agents/skills/visualhud-*` in the current repo.
 
+To update an existing Codex install from npm, preserve its active theme and
+renderer when invoking the newer installer.
+
+**Bash update:**
+
+```bash
+active_theme="$(./.visualhud/visualhud theme current)"
+renderer="$(sed -n 's/.*VISUALHUD_RENDERER="\([^\"]*\)".*/\1/p' .codex/hooks/visualhud-codex.sh | head -1)"
+case "$renderer" in
+  wezterm) platform=wezterm ;;
+  windows) platform=windows ;;
+  *) platform=macos ;;
+esac
+npx -y visualhud@latest install codex --target . --theme "$active_theme" --platform "$platform"
+if [ "$platform" = wezterm ]; then
+  pwsh -ExecutionPolicy Bypass -File ./.visualhud/setup-wezterm.ps1
+fi
+```
+
+**PowerShell update:**
+
+```powershell
+$activeTheme = (Get-Content .visualhud/theme -Raw).Trim()
+$wrapper = Get-Content .codex/hooks/visualhud-codex.sh -Raw
+$renderer = if ($wrapper -match 'VISUALHUD_RENDERER="([^"]+)"') { $Matches[1] } else { 'windows' }
+$platform = switch ($renderer) {
+  'wezterm' { 'wezterm' }
+  'windows' { 'windows' }
+  default { 'macos' }
+}
+npx -y visualhud@latest install codex --target . --theme $activeTheme --platform $platform
+if ($platform -eq 'wezterm') {
+  powershell -ExecutionPolicy Bypass -File ./.visualhud/setup-wezterm.ps1
+}
+```
+
+The packaged `visualhud-update` skill preserves these choices when a VisualHUD
+source checkout is available. Its installed-runtime fallback repairs the
+installed hooks and skills without fetching a newer package; use the npm update
+command above when a new package version is required. In either lane, the
+installer reports the exact restart scope.
+
 The installer reports restart scope explicitly. Runtime and theme changes apply on the next hook
 without restarting Codex. Reopen Codex only when hook or skill
 registration changed; the installer prints the exact `codex --yolo` next step.
 A terminal restart is separate and appears only when iTerm2 preferences actually
 changed while iTerm2 was open or its process state could not be inspected.
+
+**Restart guidance by host and renderer:**
+
+- **Codex restart guidance:** reopen Codex only after hook or skill registration changes; runtime and theme changes apply on the next hook.
+- **iTerm2 restart guidance:** restart iTerm2 only when the installer reports changed preferences or an unknown process state.
+- **WezTerm restart guidance:** runtime and theme changes apply on the next hook; after first-time config setup, reload or reopen WezTerm if the module is not active.
+- **Windows Terminal restart guidance:** title and progress updates apply on the next hook without restarting Windows Terminal; Codex registration changes still require a new Codex session.
 
 VisualHUD setup/update skills should run platform setup helpers themselves. For
 example, when a Windows repo should use WezTerm for live colors/backgrounds, the
@@ -215,6 +268,9 @@ profile settings, not a per-hook escape sequence.
 
 ## Release To npm
 
+Follow the standing [release documentation gate](https://github.com/BaseInfinity/visualhud/blob/main/RELEASE_CHECKLIST.md) before
+the supervised canary or any immutable publication action.
+
 ```bash
 scripts/release-npm.sh --dry-run
 ```
@@ -277,9 +333,8 @@ a theme requires engine changes, treat that as a theme-system contract change:
 write the failing test first, update the JSON contract deliberately, then run
 the full proof set in `THEMES.md`.
 
-Future work: a dedicated theme creator workflow should scaffold the JSON,
-sprite folders, calibration sheet, and TODO checklist automatically. Until that
-exists, `THEMES.md` is the source of truth for agents and humans creating
+The guided theme-pack picker is tracked in [issue #12](https://github.com/BaseInfinity/visualhud/issues/12).
+Until it ships, `THEMES.md` is the source of truth for agents and humans creating
 Batman, Sonic, or any third-party theme.
 
 ### 5. Use With Claude Code
@@ -466,35 +521,6 @@ work through completion. The color shows where the current task is in its
 selected journey, not context health or raw tool activity. Failed proof can move
 the track backward.
 
-## Landscape — What Else Is Out There?
-
-We researched the space. Nothing does what VisualHUD does.
-
-| Tool | Changes Terminal Appearance | Driven by Process State | Configurable Themes | Multi-Terminal |
-|---|---|---|---|---|
-| **VisualHUD (this)** | bg + tab color + images + title | Claude Code hooks | Yes (theme.json) | Goal |
-| [claude-code-iterm2-tab-status](https://github.com/JasperSui/claude-code-iterm2-tab-status) | Tab title emoji only | Claude Code hooks | No (3 hardcoded states) | No |
-| [aiterm](https://github.com/Data-Wise/aiterm) | Profile switch | Directory-based (cd) | No | Yes (6 terminals) |
-| [classmethod.jp blog](https://dev.classmethod.jp/en/articles/change-iterm2-background-color-when-claude-code-launches/) | Background color | Start/stop only | No (2 hardcoded states) | No |
-| [Zestful](https://zestful.dev/) | Separate overlay | Claude Code hooks | No | N/A |
-| [C.H.U.D.](https://github.com/realjbmangum/chud) | Separate Electron window | Claude Code hooks | No | N/A |
-| [ccstatusline](https://github.com/sirmalloc/ccstatusline) | Statusline text | Claude Code API | Yes (text themes) | N/A |
-| [claude-hud](https://github.com/jarrodwatts/claude-hud) | Statusline text | Claude Code API | No | N/A |
-
-**The gap:** Existing tools either change appearance but not based on process state (aiterm, sshbg), or react to process state through overlays / statuslines / tab emoji — not the terminal itself. Nobody ships a configurable state machine that drives full terminal appearance through hook lifecycle events.
-
-**Complementary tools we could integrate with:**
-- **ccstatusline / claude-hud** — they handle the statusline, we handle the terminal chrome
-- **aiterm** — they set a baseline profile per project, we modulate it during runtime
-- **agent-notify** — they do audio/push notifications, we do visual
-
-**Terminal escape code references for multi-terminal support:**
-- iTerm2: `OSC 1337;SetColors`, tab color via `OSC 6;1;bg`, Python API for background images
-- Kitty: `kitten @ set-colors`, background via `kitten @ set-background-image`
-- WezTerm: Lua `set_config_overrides` for colors and background
-- Ghostty: `SIGUSR2` config reload for theme switching
-- tmux: status bar styling via `set-option`
-
 ## What Works Today
 
 VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
@@ -522,6 +548,10 @@ VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
 - Background images are static only; sprite animation is parked until a terminal adapter supports it cleanly.
 - Badge content is text/emoji only because iTerm2 does not support image badges.
 - Snapshot/restore of the original terminal profile is still planned.
+- Public distribution of bundled third-party character art remains blocked by
+  [issue #17](https://github.com/BaseInfinity/visualhud/issues/17) until the
+  release gate verifies redistribution rights and required attribution, or
+  excludes any asset that cannot be cleared.
 
 **Tested and confirmed:**
 - Background image per-session isolation works via `ITERM_SESSION_ID` UUID extraction.
@@ -663,7 +693,7 @@ Documenting these so we don't repeat them:
 
 4. **Cross-window contamination** — Original implementation used TTY device for session isolation, which doesn't work in hook sandbox context (`ps` is blocked, `tty` returns garbage). Fix: use `ITERM_SESSION_ID` env var which is always inherited by child processes.
 
-5. **Badge disappears on resize/different monitors** — `badge_top_margin` is pixel-based (not percentage). When the window is shorter than the margin value, the badge goes off-screen. Moving windows between monitors with different sizes makes it worse. Dynamic recalculation in `set_bg.py` helps but only fires on stage transitions, not on resize. **Needs a resize listener in v0.1.**
+5. **Badge positioning across monitor sizes** — `badge_top_margin` is pixel-based (not percentage). Dynamic recalculation in `set_bg.py` runs on stage transitions, so a resize may not be reflected until the next lifecycle event.
 
 6. **TTY "Device not configured" in hook context** — Hook processes don't inherit a controlling terminal, so `/dev/tty` writes silently fail and badge/title/tab colors never render. Fix: `resolve_tty_target()` walks the PPID chain via `ps -o tty=` (not `tt=` — the abbreviated form gives wrong device paths like `/dev/s014` instead of `/dev/ttys014`) to discover the parent's controlling pty. Background images were unaffected since `set_bg.py` uses the iTerm2 Python API channel.
 
@@ -671,124 +701,15 @@ Documenting these so we don't repeat them:
 
 8. **Invisible /goal Stop-loop** — An unsatisfiable `/goal` condition fires Stop in a tight loop. Without visibility, the user stares at a frozen HUD. Fix: engine tracks Stop timestamps; at ≥8 fires within 30s, it emits a red "LOOP DETECTED — run /goal clear" title.
 
-## Status
+## Release Status
 
-**v1.2.** Five themes ship (Pokemon, TMNT, Power Rangers, Otter Pop, Minimal).
-Repo-local hook wiring for Codex and Claude Code via `npx visualhud install`.
-Codex supports macOS/iTerm2, Windows Terminal/PowerShell, and WezTerm. Claude
-Code support is macOS/iTerm2-only for now. v1.2 adds transcript-based cost
-tracking (`hudCost` user var), hardened hook wrappers, TTY resolution for badge/
-title/tab colors in hook context, and Stop-loop deadlock detection.
+VisualHUD `1.2.0` is a release candidate, not a published release. Five themes
+ship in the candidate: Pokemon, TMNT, Power Rangers, Otter Pop, and Minimal.
+Current scope and remaining supervised gates live in the
+[GitHub roadmap](https://github.com/BaseInfinity/visualhud/blob/main/ROADMAP.md).
+Track published packages on [npm](https://www.npmjs.com/package/visualhud),
+published versions in [GitHub Releases](https://github.com/BaseInfinity/visualhud/releases),
+and limitations or follow-up work in [GitHub Issues](https://github.com/BaseInfinity/visualhud/issues).
 
----
-
-## Ideas Borrowed From the Ecosystem
-
-Deep-dived every project above and pulled the best patterns:
-
-| Idea | Stolen From | Why It's Good |
-|------|-------------|---------------|
-| Snapshot/restore terminal state on exit | JasperSui | Clean teardown — save tab color, title, badge before we touch anything, restore when Claude stops |
-| "Needs attention" state via `Notification` hook | JasperSui | We only use PreToolUse/Stop — missing the "waiting for permission" state entirely |
-| Stale PID cleanup for orphaned state files | JasperSui | Dead sessions shouldn't leave ghost state files around |
-| Auto-contrast color adjustment | JasperSui | If theme color is too close to tab's existing color, auto-pick a visible alternative |
-| Terminal abstraction layer (per-terminal module) | aiterm | Each terminal (iTerm2, Kitty, Ghostty, WezTerm) gets its own adapter with same interface |
-| Context health thresholds (green <70%, yellow 70-84%, red 85%+) | ccstatusline | Modulate visual intensity based on context window usage |
-| DI pattern for testing (no heavy mocks) | claude-hud | Inject deps, test cleanly |
-| Config priority: env vars > config file > defaults | JasperSui | Standard, flexible, zero-surprise |
-| Hot-reload config on file mtime change | JasperSui | Change theme without restarting Claude |
-| Focus-to-dismiss attention state | JasperSui | Attention clears when user looks at the tab |
-| Multi-agent priority display (highest alert wins) | Zestful | When running multiple sessions, show the most urgent state |
-
----
-
-## Roadmap
-
-### Now — Extract & Polish (v0.1)
-
-Core engine + themeable + works reliably:
-
-**Done:**
-- [x] Per-session isolation via `ITERM_SESSION_ID` (UUID extraction)
-- [x] Background images matched to correct session (fixed `w0t0p0:UUID` → `UUID`)
-- [x] Badge emoji per-stage (🔥⚡🌿💧) with text progress bar at top-right
-- [x] Badge position fixed: top-right with zero margins (no more disappearing on resize)
-- [x] `setup-iterm2.sh` — automated iTerm2 settings configuration
-- [x] Cursor color uses iTerm2-native `SetColors=curbg=` instead of unsupported `OSC 12`
-- [x] Pokemon HOME sprites (512x512) — crisp on 4K
-- [x] 11 stages with complete evolution lines (Raichu added)
-- [x] Demo script (`demo.sh`) for testing all features
-- [x] Confirmed: GIF backgrounds don't animate in iTerm2, frame cycling works but needs hi-res source art
-- [x] Confirmed: iTerm2 badges are text/emoji only, no images
-
-**Current focus — Harden the theme engine:**
-
-The theme engine is now data-driven: `engine.sh` reads `theme.json`, advances
-stage counters, applies stage shades, resolves sprite paths, and drives iTerm2.
-Pokemon and TMNT live under `themes/`, and both Codex and Claude use repo-local
-adapters.
-
-Next work:
-- Sprite art for Power Rangers and Otter Pop (currently colors-only).
-- Replace any weak TMNT one-off cover-art states with character-focused source art.
-- Batman and Sonic theme candidates (parked on ROADMAP).
-- Terminal-renderer abstraction for Kitty, Ghostty adapters.
-- Snapshot/restore so VisualHUD can return terminal chrome to its original state.
-- Theme marketplace / community theme distribution.
-
-**Then — Polish:**
-- [ ] **Window border integration (JankyBorders)** — colored border around iTerm2 window that changes with stage progression:
-  - Uses JankyBorders (`brew install borders`) with `apply-to=<window-id>` for per-window support
-  - Border color matches current stage (red → yellow → green → blue)
-  - Border thickness increases as task progresses (thin at start, thick at done)
-  - Done state: thick border stays in final color as persistent visual indicator
-  - Supports multiple iTerm2 windows simultaneously (each gets its own border color based on its session state)
-  - Replaces any current janky border solution entirely
-  - Get window ID via macOS Accessibility API or yabai, pass to `borders apply-to=<wid> active_color=0xffRRGGBB width=N`
-  - Supports gradient (`gradient(top_left=...,bottom_right=...)`) and glow (`glow(0xAARRGGBB)`) effects
-  - Requires macOS 14.0+ (Sonoma)
-- [ ] **Snapshot/restore** — save terminal state before first hook, restore on Stop
-- [ ] **"Needs attention" state** — hook into `Notification` event for `permission_prompt`
-- [ ] **Stale state cleanup** — auto-remove state files for dead sessions
-- [ ] **Config priority** — env vars > `~/.visualhud/config.json` > defaults
-
-### Release — Easy Install & Switch (v1.0)
-
-What makes it a real tool people can actually use:
-
-- [ ] CLI: `visualhud install`, `visualhud theme list`, `visualhud theme set <name>`
-- [ ] CLI: `visualhud theme preview` — cycle through stages in current terminal
-- [x] CLI: `visualhud doctor` — validate dependencies, theme, terminal target, and real engine output
-- [ ] Auto-configure Claude Code hooks in `settings.json`
-- [ ] Validate theme configs on install
-- [ ] Uninstall / reset terminal to defaults
-- [ ] Support custom stage counts (some tasks are 5 tool calls, some are 50)
-- [ ] **Hot-reload config** — change theme.json mid-session, picks up on next hook
-- [ ] **Auto-contrast** — if theme color clashes with existing tab color, auto-adjust
-- [ ] **Terminal abstraction** — iTerm2 adapter first, then Kitty/WezTerm/Ghostty adapters
-- [ ] **Context health modulation** — intensify visuals as context window fills (70%/85% thresholds)
-- [ ] **macOS notifications + sound** — optional `afplay` on stage transitions or attention
-- [ ] Plugin marketplace distribution (Claude Code `/plugin install`)
-- [ ] README with install instructions, screenshots, GIFs
-- [ ] Pre-built theme packs (Nord, Dracula, Gruvbox color palettes as themes)
-
-### Big Brain Ideas
-
-Things that would be sick but aren't urgent:
-
-- [ ] **Theme builder CLI** — interactive wizard to define stages, pick colors, assign images
-- [ ] **Community themes** — repo of user-contributed themes, `visualhud theme install <github-url>`
-- [ ] **Sound effects** — play a short sound on stage transitions (evolution sound, anyone?)
-- [ ] **Adaptive stage count** — auto-scale stages based on historical tool-call patterns per project
-- [ ] **Multi-tool awareness** — different visuals for Read vs Write vs Bash vs Agent
-- [ ] **Multi-agent priority** — when multiple Claude sessions run, surfaces the most urgent state
-- [ ] **Focus-to-dismiss** — attention state auto-clears when user focuses the tab (iTerm2 FocusMonitor API)
-- [ ] **Team themes** — shared theme configs via dotfiles repo
-- [ ] **Image generation** — AI-generate theme assets from a prompt ("medieval RPG progression")
-- [ ] **Stats dashboard** — track cooking sessions, average tool calls, time per stage
-- [ ] **tmux support** — status bar integration for tmux users
-- [ ] **Unix socket IPC** — replace file-based state with socket for sub-millisecond updates
-- [ ] **iOS companion** — push notifications + Dynamic Island for mobile awareness
-- [ ] **Context-aware themes** — auto-switch theme based on project type (production = red safety theme)
-- [ ] **OSC 8 hyperlinks** — clickable links in terminal output
-- [ ] **ModelIntelligence score** — visual indicator of estimated quality as context fills
+The [release documentation checklist](https://github.com/BaseInfinity/visualhud/blob/main/RELEASE_CHECKLIST.md) is a standing gate
+for every milestone.

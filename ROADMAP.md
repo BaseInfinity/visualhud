@@ -13,6 +13,7 @@ Closed work remains available in GitHub issues and Releases.
 ### v1.2.0 - Release Readiness
 
 [View milestone](https://github.com/BaseInfinity/visualhud/milestone/2)
+[Release documentation gate](RELEASE_CHECKLIST.md)
 
 ## Active Goal
 
@@ -22,17 +23,9 @@ acceptance and immutable publication remain separate supervised slices.
 
 ### Unattended Overnight Scope
 
-Work through these issues one at a time. For each issue, use TDD, run the full
-suite, complete the required high review, commit intentionally, push only when
-the repository policy permits it, wait for green CI, and close the issue only
-when its acceptance evidence is recorded.
-
-1. [#9 - Make silent failures diagnosable](https://github.com/BaseInfinity/visualhud/issues/9)
-2. [#10 - Finish Codex HUD state correctness and task-first UX](https://github.com/BaseInfinity/visualhud/issues/10)
-3. [#11 - Add an isolated deterministic host and renderer regression matrix](https://github.com/BaseInfinity/visualhud/issues/11)
-4. [#5 - Apply or explicitly block the iTerm2 setup helper](https://github.com/BaseInfinity/visualhud/issues/5)
-5. [#2 - Remind Codex users when install or update requires a new session](https://github.com/BaseInfinity/visualhud/issues/2)
-6. [#15 - Make the release documentation audit a standing release gate](https://github.com/BaseInfinity/visualhud/issues/15)
+The unattended implementation and documentation slices are complete. Their
+acceptance evidence remains in the v1.2 GitHub issues, commits, and release
+audit. The remaining release work is deliberately supervised.
 
 Never publish npm, create a release tag, create a GitHub Release, close the
 milestone, or run the real-pane canary inside the unattended scope. Stop and
@@ -70,6 +63,7 @@ both expose the verified release version.
 ### v1.3.0 - Theme and UX
 
 [View milestone](https://github.com/BaseInfinity/visualhud/milestone/1)
+[Release documentation gate](RELEASE_CHECKLIST.md)
 
 1. [#12 - Add a guided theme-pack picker with visual and sound lanes](https://github.com/BaseInfinity/visualhud/issues/12)
 2. [#4 - Use Slowpoke or Psyduck for reconnect states](https://github.com/BaseInfinity/visualhud/issues/4)
@@ -84,6 +78,7 @@ behavior rather than immediately becoming stale.
 ### v1.4.0 - Host and Platform Parity
 
 [View milestone](https://github.com/BaseInfinity/visualhud/milestone/3)
+[Release documentation gate](RELEASE_CHECKLIST.md)
 
 1. [#3 - Detect missing WezTerm and explain Windows renderer support](https://github.com/BaseInfinity/visualhud/issues/3)
 2. [#18 - Add Claude Code task-journey parity after Codex stabilization](https://github.com/BaseInfinity/visualhud/issues/18)

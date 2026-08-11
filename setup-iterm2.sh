@@ -2,10 +2,11 @@
 # VisualHUD - iTerm2 Settings Setup
 # Applies required iTerm2 settings without interrupting active terminal work.
 
-set -Eeuo pipefail
+set -euo pipefail
 
 DYNAMIC_DIR="${VISUALHUD_ITERM2_DYNAMIC_DIR:-$HOME/Library/Application Support/iTerm2/DynamicProfiles}"
 STATUS_FILE="${VISUALHUD_SETUP_STATUS_FILE:-}"
+EXIT_KIND=""
 
 write_status() {
     [ -n "$STATUS_FILE" ] || return 0
@@ -54,12 +55,17 @@ profile_matches() {
 }
 
 setup_failed() {
-    local status=$?
+    local status="$1"
+    trap - EXIT
+    [ "$status" -ne 0 ] || return 0
+    if [ "$EXIT_KIND" = usage ]; then
+        exit "$status"
+    fi
     write_status "blocked:$status" || true
     printf '[blocked] iTerm2 settings could not be written (exit %s).\n' "$status" >&2
     exit "$status"
 }
-trap setup_failed ERR
+trap 'setup_failed "$?"' EXIT
 
 read_status() {
     if [ -n "$STATUS_FILE" ]; then
@@ -74,7 +80,7 @@ detect_iterm_state() {
     if command -v pgrep >/dev/null 2>&1; then
         if probe_output=$(pgrep -x "iTerm2" 2>/dev/null); then
             iterm_state=running
-            iterm_pid=$(printf '%s\n' "$probe_output" | head -n 1)
+            iterm_pid=${probe_output%%$'\n'*}
         else
             probe_status=$?
             if [ "$probe_status" -gt 1 ]; then
@@ -193,6 +199,7 @@ case "${1:-}" in
     "")
         ;;
     *)
+        EXIT_KIND=usage
         printf 'Usage: %s [--reset]\n' "$0" >&2
         exit 2
         ;;

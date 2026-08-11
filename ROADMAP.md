@@ -37,12 +37,15 @@ acceptance criteria remain materially ambiguous.
 
 These slices begin only after the unattended release candidate is green:
 
-1. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
-2. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
+1. [#19 - Prevent expected iTerm2 process probes from emitting false setup blockers](https://github.com/BaseInfinity/visualhud/issues/19)
+2. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
+3. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
 
-Issue #16 requires the maintainer to inspect the real installed Codex/iTerm2
-experience. Issue #17 remains last and requires explicit approval because npm
-versions and release tags are immutable distribution actions.
+Issue #19 invalidates the first canary artifact and must produce a corrected
+candidate before issue #16 resumes. Issue #16 requires the maintainer to inspect
+the real installed Codex/iTerm2 experience. Issue #17 remains last and requires
+explicit approval because npm versions and release tags are immutable
+distribution actions.
 
 ## Completion Criteria
 

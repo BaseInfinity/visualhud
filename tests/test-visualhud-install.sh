@@ -411,18 +411,21 @@ term_program_output="$(HOME="$TMP_ROOT/home-term" VISUALHUD_TEST_DEFAULTS_STATE=
     TERM_PROGRAM=iTerm.app ITERM_SESSION_ID='' VISUALHUD_TEST_PGREP_STATUS=3 \
     "$CLI" install codex --target "$target" --platform macos 2>&1)"
 assert_contains "TERM_PROGRAM survives a denied process probe" "[pending] iTerm2 restart later to refresh terminal visuals" "$term_program_output"
+assert_not_contains "TERM_PROGRAM fallback does not report a settings failure" "[blocked] iTerm2 settings could not be written" "$term_program_output"
 
 target="$(make_repo mac-session-detected)"
 session_output="$(HOME="$TMP_ROOT/home-session" VISUALHUD_TEST_DEFAULTS_STATE="$TMP_ROOT/state-session" \
     TERM_PROGRAM='' ITERM_SESSION_ID=visualhud-test VISUALHUD_TEST_PGREP_STATUS=3 \
     "$CLI" install codex --target "$target" --platform macos 2>&1)"
 assert_contains "ITERM_SESSION_ID survives a denied process probe" "[pending] iTerm2 restart later to refresh terminal visuals" "$session_output"
+assert_not_contains "ITERM_SESSION_ID fallback does not report a settings failure" "[blocked] iTerm2 settings could not be written" "$session_output"
 
 target="$(make_repo mac-process-unknown)"
 unknown_output="$(HOME="$TMP_ROOT/home-unknown" VISUALHUD_TEST_DEFAULTS_STATE="$TMP_ROOT/state-unknown" \
     TERM_PROGRAM='' ITERM_SESSION_ID='' VISUALHUD_TEST_PGREP_STATUS=3 \
     "$CLI" install codex --target "$target" --platform macos 2>&1)"
 assert_contains "Denied process inspection reports an honest pending state" "[pending] iTerm2 process status unavailable" "$unknown_output"
+assert_not_contains "Denied process inspection does not report a settings failure" "[blocked] iTerm2 settings could not be written" "$unknown_output"
 
 target="$(make_repo mac-helper-blocked)"
 set +e
@@ -454,6 +457,16 @@ repeat_reset_output="$(VISUALHUD_SETUP_STATUS_FILE="$reset_status" TERM_PROGRAM=
     VISUALHUD_TEST_ITERM_RUNNING=1 VISUALHUD_TEST_PGREP_PID=5151 \
     "$target/.visualhud/setup-iterm2.sh" --reset 2>&1)"
 assert_contains "Idempotent reset preserves a pending terminal restart" "[pending] iTerm2 restart later to refresh terminal visuals" "$repeat_reset_output"
+
+reset_failure_status="$TMP_ROOT/reset-failure-status"
+set +e
+reset_failure_output="$(VISUALHUD_SETUP_STATUS_FILE="$reset_failure_status" VISUALHUD_TEST_DEFAULTS_FAIL=1 \
+    "$target/.visualhud/setup-iterm2.sh" --reset 2>&1)"
+reset_failure_exit=$?
+set -e
+assert_eq "A failed reset exits nonzero" "1" "$reset_failure_exit"
+assert_eq "A failed reset records a blocked status" "blocked:1" "$(cat "$reset_failure_status" 2>/dev/null || true)"
+assert_contains "A failed reset explains the blocker" "[blocked] iTerm2 settings could not be written" "$reset_failure_output"
 echo ""
 
 echo "--- Test 3b: Claude install wires repo-local Claude hooks and runtime ---"

@@ -243,6 +243,7 @@ assert_not_contains "Closed setup issue #5 leaves the open roadmap" "https://git
 assert_not_contains "Closed setup issue #2 leaves the open roadmap" "https://github.com/BaseInfinity/visualhud/issues/2)" "$ROADMAP_DOC"
 assert_not_contains "Completed documentation issue #15 leaves the open roadmap" "https://github.com/BaseInfinity/visualhud/issues/15)" "$ROADMAP_DOC"
 assert_contains "Roadmap links canary-discovered installer blocker #19" "issues/19" "$SUPERVISED_ROADMAP"
+assert_contains "Roadmap links canary-discovered tab-placement blocker #20" "issues/20" "$SUPERVISED_ROADMAP"
 assert_contains "Roadmap links supervised canary issue #16" "issues/16" "$SUPERVISED_ROADMAP"
 assert_contains "Roadmap links final publication issue #17" "issues/17" "$SUPERVISED_ROADMAP"
 assert_not_contains "Overnight scope excludes the supervised canary" "issues/16" "$OVERNIGHT_ROADMAP"

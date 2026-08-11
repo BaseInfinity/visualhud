@@ -207,7 +207,7 @@ esac
 
 settings_changed=false
 preference_matches HideTab 0 || settings_changed=true
-preference_matches TabViewType 1 || settings_changed=true
+preference_matches TabViewType 0 || settings_changed=true
 preference_matches TabStyleWithAutomaticOption 5 || settings_changed=true
 preference_matches EnableAPIServer 1 || settings_changed=true
 preference_matches PerPaneBackgroundImage 1 || settings_changed=true
@@ -220,7 +220,7 @@ echo ""
 if [ "$settings_changed" = true ]; then
     echo "--- Appearance Settings (defaults write) ---"
     defaults write com.googlecode.iterm2 HideTab -bool false
-    defaults write com.googlecode.iterm2 TabViewType -int 1
+    defaults write com.googlecode.iterm2 TabViewType -int 0
     defaults write com.googlecode.iterm2 TabStyleWithAutomaticOption -int 5
     defaults write com.googlecode.iterm2 EnableAPIServer -bool true
     defaults write com.googlecode.iterm2 PerPaneBackgroundImage -bool true

@@ -112,7 +112,7 @@ npx -y visualhud@latest setup iterm2
 ```
 
 That reapplies the iTerm2 defaults VisualHUD needs (Minimal theme, tab bar at
-bottom for the hero-banner-footer look, per-pane background image, Python API,
+the top, per-pane background image, Python API,
 dynamic profile). It never asks you to quit an active workspace; restart iTerm2
 later if the command reports a pending visual refresh. Undo with
 `npx -y visualhud@latest setup iterm2 --reset`. From a source checkout, the
@@ -130,7 +130,7 @@ badge, tab-color, and title sequences without changing the live background.
 Use it whenever a hook silently does nothing.
 
 **Compact-by-default rendering.** v1.0 ships without the full-pane sprite
-background — visual identity comes from the bottom tab bar, title progress bar,
+background — visual identity comes from the tab bar, title progress bar,
 and badge. Opt back into the original full-pane sprite mode with
 `export VISUALHUD_BG=on` in your shell or hook environment.
 

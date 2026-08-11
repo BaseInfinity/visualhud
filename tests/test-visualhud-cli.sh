@@ -325,15 +325,15 @@ unset VISUALHUD_ROOT
 rm -rf "$SETUP_HARNESS"
 echo ""
 
-echo "--- setup-iterm2.sh: tab bar positioned at bottom (hero banner footer) ---"
+echo "--- setup-iterm2.sh: tab bar positioned at top ---"
 SETUP_SCRIPT="$ROOT_DIR/setup-iterm2.sh"
 TOTAL=$((TOTAL + 1))
-if grep -qE 'defaults write com\.googlecode\.iterm2 TabViewType -int 1' "$SETUP_SCRIPT"; then
+if grep -qE 'defaults write com\.googlecode\.iterm2 TabViewType -int 0' "$SETUP_SCRIPT"; then
     PASS=$((PASS + 1))
-    printf "  PASS: setup-iterm2.sh writes TabViewType=1 (bottom tab bar)\n"
+    printf "  PASS: setup-iterm2.sh writes TabViewType=0 (top tab bar)\n"
 else
     FAIL=$((FAIL + 1))
-    printf "  FAIL: setup-iterm2.sh writes TabViewType=1 (bottom tab bar)\n"
+    printf "  FAIL: setup-iterm2.sh writes TabViewType=0 (top tab bar)\n"
 fi
 TOTAL=$((TOTAL + 1))
 RESET_BLOCK=$(sed -n '/^reset_iterm2()/,/^}/p' "$SETUP_SCRIPT")

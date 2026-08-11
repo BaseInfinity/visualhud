@@ -37,11 +37,14 @@ acceptance criteria remain materially ambiguous.
 
 These slices begin only after the unattended release candidate is green:
 
-1. [#19 - Prevent expected iTerm2 process probes from emitting false setup blockers](https://github.com/BaseInfinity/visualhud/issues/19)
-2. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
-3. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
+1. [#20 - Preserve the iTerm2 top tab bar during VisualHUD setup](https://github.com/BaseInfinity/visualhud/issues/20)
+2. [#19 - Prevent expected iTerm2 process probes from emitting false setup blockers](https://github.com/BaseInfinity/visualhud/issues/19)
+3. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
+4. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
 
-Issue #19 invalidates the first canary artifact and must produce a corrected
+Issue #20 invalidates the candidate with SHA-256
+`01b039ca675e9d1cf58135d70ced18a853eafda521b9c3cbb230779a6043fb5f`;
+it must never be published. Issues #20 and #19 must both be verified in a new
 candidate before issue #16 resumes. Issue #16 requires the maintainer to inspect
 the real installed Codex/iTerm2 experience. Issue #17 remains last and requires
 explicit approval because npm versions and release tags are immutable

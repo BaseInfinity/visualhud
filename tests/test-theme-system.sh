@@ -277,6 +277,13 @@ assert_contains "Codex SDLC skill defaults to medium effort" "effort: medium" "$
 assert_contains "Codex project config defaults to medium reasoning" 'model_reasoning_effort = "medium"' "$CODEX_CONFIG_DOC"
 assert_contains "Agent policy selects the balanced profile" "Selected profile: balanced" "$AGENTS_DOC"
 assert_contains "Agent policy keeps high review escalation" "Sol high review" "$AGENTS_DOC"
+assert_contains "Agent policy requires one proof-aware broad run" "one broad proof run total" "$AGENTS_DOC"
+assert_contains "Agent policy reserves broad verification for one guarded proof" "Run focused tests during RED/GREEN; after self-review, run all tests exactly once through the guarded proof" "$AGENTS_DOC"
+assert_not_contains "Agent policy removes the duplicate immediate full-suite rule" "**Run ALL tests**" "$AGENTS_DOC"
+assert_contains "Self-review points to the single guarded proof" "Run the single full guarded proof from Before Every Task step 6 after this review" "$AGENTS_DOC"
+assert_contains "SDLC skill uses prompt-only review for custom proof instructions" "prompt-only review" "$SDLC_SKILL_DOC"
+assert_contains "SDLC skill forbids combining custom prompts with predefined review targets" "must not be combined with \`--uncommitted\`, \`--base\`, or \`--commit\`" "$SDLC_SKILL_DOC"
+assert_contains "SDLC skill forbids redundant broad review tests" "Do not rerun tests" "$SDLC_SKILL_DOC"
 assert_jq "Model profile selects balanced Sol medium" "$ROOT_DIR/.codex-sdlc/model-profile.json" '.selected_profile == "balanced" and .profiles.balanced.main_model == "gpt-5.6-sol" and .profiles.balanced.main_reasoning == "medium"'
 assert_jq "Balanced profile keeps Sol high review" "$ROOT_DIR/.codex-sdlc/model-profile.json" '.profiles.balanced.review_model == "gpt-5.6-sol" and .profiles.balanced.review_reasoning == "high"'
 assert_jq "Manifest records balanced medium baseline" "$ROOT_DIR/.codex-sdlc/manifest.json" '.model_profile.selected_profile == "balanced" and .model_profile.baseline_reasoning == "medium"'

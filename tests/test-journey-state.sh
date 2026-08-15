@@ -79,12 +79,36 @@ run_engine() {
         VISUALHUD_JOURNEY_PROFILE="${VISUALHUD_TEST_PROFILE:-sdlc}" \
         VISUALHUD_ACTIVITY_MODE=semantic \
         VISUALHUD_REAPPLY_DELAY="${VISUALHUD_TEST_REAPPLY_DELAY:-0}" \
+        VISUALHUD_REAPPLY_DELAYS="${VISUALHUD_TEST_REAPPLY_DELAYS:-}" \
         VISUALHUD_TITLE_WIDTH="${VISUALHUD_TEST_TITLE_WIDTH:-}" \
         bash "$ENGINE"
 }
 
 journey_state() {
     jq -r '.current' "$JOURNEY_FILE" 2>/dev/null || true
+}
+
+stale_title_after() {
+    local current_label="$1" stale_label="$2"
+    node -e '
+const fs = require("node:fs");
+const [file, currentLabel, staleLabel] = process.argv.slice(1);
+const text = fs.readFileSync(file, "utf8");
+const titles = [...text.matchAll(/\x1b\]0;([^\x07]*)\x07/g)].map((match) => match[1]);
+const currentIndex = titles.findIndex((title) => title.includes(currentLabel));
+const stale = currentIndex >= 0 && titles.slice(currentIndex + 1).some((title) => title.includes(staleLabel));
+process.stdout.write(stale ? "true" : "false");
+' "$TTY_LOG" "$current_label" "$stale_label"
+}
+
+wait_for_literal_count() {
+    local file="$1" needle="$2" expected="$3" count=0
+    for _ in $(seq 1 50); do
+        count=$(grep -ao "$needle" "$file" 2>/dev/null | wc -l | tr -d ' ')
+        [ "$count" -ge "$expected" ] && return 0
+        sleep 0.02
+    done
+    return 1
 }
 
 echo "=== Test Suite: task journey state machine ==="
@@ -255,6 +279,30 @@ assert_contains "Wide title names checkpoint position before metadata" "11/12 PR
 assert_contains "Wide title includes authoritative aggregate" "Tasks 2/4" "$(cat "$TTY_LOG")"
 assert_not_contains "Wide title omits redundant character name" "Blastoise" "$(cat "$TTY_LOG")"
 : > "$TTY_LOG"
+VISUALHUD_TEST_REAPPLY_DELAYS="0.03 0.06" VISUALHUD_TEST_TITLE_WIDTH=120 VISUALHUD_TEST_THEME=pokemon \
+    run_engine '{"hook_event_name":"PostCompact","session_id":"journey:test","journey_aggregate":"Tasks 2/4"}'
+wait_for_literal_count "$TTY_LOG" 'SetUserVar=hudProgress' 3 || true
+assert_eq "Bounded redraw window emits the checkpoint track three times" "3" \
+    "$(grep -ao 'SetUserVar=hudProgress' "$TTY_LOG" | wc -l | tr -d ' ')"
+assert_eq "Bounded redraw window keeps task aggregate in every title" "3" \
+    "$(grep -ao 'Tasks 2/4' "$TTY_LOG" | wc -l | tr -d ' ')"
+: > "$TTY_LOG"
+rm -f "$JOURNEY_FILE"
+VISUALHUD_TEST_REAPPLY_DELAYS="0.03 0.30" VISUALHUD_TEST_TITLE_WIDTH=120 VISUALHUD_TEST_THEME=pokemon \
+    run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"plan","journey_outcome":"started","journey_aggregate":"Tasks 2/4"}' &
+older_repaint_pid=$!
+sleep 0.10
+VISUALHUD_TEST_REAPPLY_DELAYS="0.03 0.30" VISUALHUD_TEST_TITLE_WIDTH=120 VISUALHUD_TEST_THEME=pokemon \
+    run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"implement","journey_outcome":"started","journey_aggregate":"Tasks 2/4"}' &
+newer_repaint_pid=$!
+wait "$older_repaint_pid"
+wait "$newer_repaint_pid"
+sleep 0.45
+assert_eq "A superseded repaint cannot overwrite the newer checkpoint" "false" \
+    "$(stale_title_after '5/12 IMPLEMENT' '3/12 PLAN')"
+VISUALHUD_TEST_REAPPLY_DELAYS="0.03 0.06" VISUALHUD_TEST_TITLE_WIDTH=120 VISUALHUD_TEST_THEME=pokemon \
+    run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"proof","journey_outcome":"started","journey_aggregate":"Tasks 2/4"}'
+: > "$TTY_LOG"
 VISUALHUD_TEST_TITLE_WIDTH=61 VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PostCompact","session_id":"journey:test","journey_aggregate":"Milestone 123456789/123456789"}'
 assert_contains "Measured title retains checkpoint at an intermediate width" "11/12 PROOF" "$(cat "$TTY_LOG")"
 assert_not_contains "Measured title drops aggregate metadata that does not fit" "Milestone 123456789/123456789" "$(cat "$TTY_LOG")"
@@ -281,6 +329,7 @@ assert_contains "Narrow HITL overlay retains checkpoint position" "11/12 PROOF" 
 assert_contains "Narrow HITL overlay retains its semantic label" "HITL" "$(cat "$TTY_LOG")"
 assert_not_contains "Narrow HITL overlay drops redundant state prose" "Approval required — visualhud" "$(cat "$TTY_LOG")"
 unset VISUALHUD_TEST_TITLE_WIDTH
+unset VISUALHUD_TEST_REAPPLY_DELAYS
 echo ""
 
 echo "--- Test 7: An active release journey keeps its persisted profile ---"

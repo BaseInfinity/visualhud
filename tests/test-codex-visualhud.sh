@@ -34,8 +34,9 @@ printf '%s' "$INPUT" | jq -c \
   --arg theme "${VISUALHUD_THEME:-}" \
   --arg default_theme "${VISUALHUD_DEFAULT_THEME:-}" \
   --arg reapply_delay "${VISUALHUD_REAPPLY_DELAY:-}" \
+  --arg reapply_delays "${VISUALHUD_REAPPLY_DELAYS:-}" \
   --arg journey_profile "${VISUALHUD_JOURNEY_PROFILE:-}" \
-  '. + {visualhud_theme: $theme, visualhud_default_theme: $default_theme, visualhud_reapply_delay: $reapply_delay, visualhud_journey_profile: $journey_profile}' >> "$VISUALHUD_TEST_LOG"
+  '. + {visualhud_theme: $theme, visualhud_default_theme: $default_theme, visualhud_reapply_delay: $reapply_delay, visualhud_reapply_delays: $reapply_delays, visualhud_journey_profile: $journey_profile}' >> "$VISUALHUD_TEST_LOG"
 printf 'engine stdout should not leak to Codex hook stdout\n'
 EOF
 chmod +x "$ENGINE"
@@ -80,6 +81,7 @@ assert_eq "Engine receives session id" "codex-session" "$(last_event_field '.ses
 assert_eq "Adapter leaves VISUALHUD_THEME open for repo-local theme file" "" "$(last_event_field '.visualhud_theme')"
 assert_eq "Adapter defaults TMNT theme for Codex" "tmnt" "$(last_event_field '.visualhud_default_theme')"
 assert_eq "Adapter enables delayed title/color reapply for Codex TUI" "0.12" "$(last_event_field '.visualhud_reapply_delay')"
+assert_eq "Adapter spans Codex TUI redraws with a bounded repaint sequence" "0.12 0.50" "$(last_event_field '.visualhud_reapply_delays')"
 assert_eq "Adapter selects the SDLC journey when repo evidence exists" "sdlc" "$(last_event_field '.visualhud_journey_profile')"
 echo ""
 

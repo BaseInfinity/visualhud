@@ -23,6 +23,10 @@ Use this skill for implementation, bug-fix, refactor, testing, release, publish,
 7. Self-review the exact diff. Check for regressions, scope creep, stale docs, and dead code.
 8. For release or publish work, treat version bump, docs, tests, publish, and verification as one SDLC slice.
 9. Review is mandatory. The portable contract is review behavior, not a slash-command name.
+   Run one broad proof run total on the frozen candidate through `node .codex/hooks/git-guard.cjs prove --reviewed`; do not run the suite directly and then rerun it through the guard.
+   Use a prompt-only review when supplying custom proof-aware instructions. A custom prompt must not be combined with `--uncommitted`, `--base`, or `--commit`; those predefined targets are for reviews without a custom prompt.
+   Include the exact base identity, frozen candidate tree identity, fresh proof command, and result, and say `Do not rerun tests`. Targeted verification is allowed only for a concrete suspected defect; never rerun the broad suite. Missing or stale proof is a blocker to report, not permission to launch another broad suite.
+   Reviewer role: inspect the frozen diff and return prioritized code-review findings only; do not edit, implement, run tests, re-plan, or perform follow-up work. The builder owns every correction through the normal SDLC loop.
    If the work is in a product repo, keep that session focused on the product repo. File a direct GitHub issue for proven reusable wizard findings and only switch to live wizard work if the product repo is actually blocked.
 10. Present a final summary with what changed, what was verified, and any residual risk.
 

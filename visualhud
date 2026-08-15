@@ -290,6 +290,17 @@ install_codex_skills() {
     shopt -u nullglob
 }
 
+is_visualhud_source_checkout() {
+    local target_root="$1"
+    [ -f "$target_root/package.json" ] || return 1
+    git -C "$target_root" ls-files --error-unmatch .codex/hooks/visualhud-codex.sh >/dev/null 2>&1 || return 1
+    node -e '
+const fs = require("node:fs");
+const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+process.exit(manifest.name === "visualhud" ? 0 : 1);
+' "$target_root/package.json" >/dev/null 2>&1
+}
+
 write_codex_hook_wrapper() {
     local target_root="$1"
     local renderer="${2:-}"
@@ -896,7 +907,7 @@ install_claude() {
 
 install_codex() {
     local target="" theme="pokemon" platform="" target_root runtime_dir renderer
-    local registration_before registration_after restart_marker
+    local registration_before registration_after restart_marker source_root target_physical
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -963,7 +974,13 @@ install_codex() {
     copy_codex_runtime "$target_root"
     printf '%s\n' "$theme" > "$runtime_dir/theme"
     install_codex_skills "$target_root"
-    write_codex_hook_wrapper "$target_root" "$renderer"
+    source_root=$(cd "$ROOT_DIR" && pwd -P)
+    target_physical=$(cd "$target_root" && pwd -P)
+    if [ "$source_root" = "$target_physical" ] || is_visualhud_source_checkout "$target_root"; then
+        printf '%s\n' "$theme" > "$target_root/theme"
+    else
+        write_codex_hook_wrapper "$target_root" "$renderer"
+    fi
     install_codex_hooks_json "$target_root"
     registration_after=$(codex_registration_fingerprint "$target_root")
     restart_marker="$runtime_dir/codex-restart-required"

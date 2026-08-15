@@ -311,6 +311,31 @@ printf '%s\n' '---' 'name: visualhud-extra' '---' '# Extra VisualHUD skill' > "$
 dynamic_output="$("$dynamic_source/visualhud" install codex --target "$dynamic_target" --platform windows 2>&1)"
 assert_file_exists "A newly added VisualHUD skill is installed" "$dynamic_target/.agents/skills/visualhud-extra/SKILL.md"
 assert_contains "A newly added VisualHUD skill requires Codex discovery" "[restart required] Reopen Codex to load hooks and skills" "$dynamic_output"
+
+self_source="$TMP_ROOT/self-install-source"
+mkdir -p "$self_source/.codex"
+cp "$ROOT_DIR/visualhud" "$ROOT_DIR/engine.sh" "$ROOT_DIR/set_bg.py" \
+    "$ROOT_DIR/setup-iterm2.sh" "$ROOT_DIR/setup-wezterm.ps1" "$ROOT_DIR/package.json" "$self_source/"
+cp -R "$ROOT_DIR/.codex/hooks" "$self_source/.codex/hooks"
+cp -R "$ROOT_DIR/themes" "$ROOT_DIR/scripts" "$ROOT_DIR/wezterm" "$ROOT_DIR/skills" "$self_source/"
+git -C "$self_source" init -q
+git -C "$self_source" add .codex/hooks/visualhud-codex.sh
+cp "$self_source/.codex/hooks/visualhud-codex.sh" "$TMP_ROOT/source-adapter.before"
+"$self_source/visualhud" install codex --target "$self_source" --platform windows --theme tmnt >/dev/null
+assert_eq "Installing from a source checkout preserves its development adapter" \
+    "$(shasum -a 256 "$TMP_ROOT/source-adapter.before" | awk '{print $1}')" \
+    "$(shasum -a 256 "$self_source/.codex/hooks/visualhud-codex.sh" | awk '{print $1}')"
+assert_file_exists "A source self-install still refreshes its repo-local runtime" "$self_source/.visualhud/engine.sh"
+assert_eq "A source self-install applies the selected theme to its preserved development adapter" \
+    "tmnt" \
+    "$("$self_source/visualhud" theme current)"
+"$self_source/.visualhud/visualhud" install codex --target "$self_source" --platform windows --theme pokemon >/dev/null
+assert_eq "Installed-runtime repair preserves a tracked development adapter" \
+    "$(shasum -a 256 "$TMP_ROOT/source-adapter.before" | awk '{print $1}')" \
+    "$(shasum -a 256 "$self_source/.codex/hooks/visualhud-codex.sh" | awk '{print $1}')"
+assert_eq "Installed-runtime repair applies its selected source theme" \
+    "pokemon" \
+    "$("$self_source/visualhud" theme current)"
 echo ""
 
 echo "--- Test 3: Codex install preserves existing hooks and is idempotent ---"

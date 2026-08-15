@@ -58,6 +58,7 @@
 | `visualhud-codex.sh` | `.codex/hooks/` | Codex adapter — maps Codex hook events into `engine.sh` and selects the TMNT theme |
 | `visualhud-claude.sh` | `.claude/hooks/` | Claude adapter — maps Claude hook events into `engine.sh` and selects the Pokemon theme |
 | `set_bg.py` | repo root | Python bridge to iTerm2 API for per-session background images |
+| `scripts/visualhud-iterm-canary.py` | repo root | Supervised semantic probe/comparator for the effective iTerm2 session profile |
 | `themes/<theme>/theme.json` | repo theme dirs | Theme stages, colors, badges, and sprite names |
 | `themes/<theme>/sprites/` | repo theme dirs | Theme-local PNG sprite packs, preferred by `engine.sh` when present |
 | `sprites/` | repo root or `~/.claude/hooks/sprites/` | Legacy global PNG sprite fallback |
@@ -126,6 +127,12 @@ The tab title is task-first and width-aware. It prioritizes checkpoint blocks,
 added only when the pane has room. Character, host, model, effort, token, and
 context branding do not displace task state. The engine detects the controlling
 TTY width when possible; `VISUALHUD_TITLE_WIDTH` is an explicit override.
+The iTerm2 background helper pins the exact session profile's custom title to
+`user.hudProgress` and the containing tab title to
+`currentSession.user.hudProgress`. The tab-scoped binding keeps a later
+host-written `session.name` spinner from replacing the task-first title. These
+are session/tab-local changes, not mutations of an unrelated pane or the
+user's underlying profile.
 
 The Codex wrapper selects `sdlc` when it finds repo-local SDLC evidence and
 `codex-default` otherwise. `VISUALHUD_JOURNEY_PROFILE=release` selects the
@@ -237,7 +244,7 @@ Joy/Blissey, while TMNT maps critical context to Casey Jones.
 - **Semantic default**: Codex uses an evidence-driven task journey when its wrapper selects a profile. Ordinary work without a journey is stable and indeterminate. Logarithmic stages are retained for calibration and explicit legacy mode only.
 - **File-based state**: Simple, no dependencies, naturally per-session via env var.
 - **SetUserVar**: "Claude-proof" title that Claude Code can't overwrite with its own title.
-- **Delayed reapply**: Adapters set `VISUALHUD_REAPPLY_DELAY=0.12` by default so the engine re-emits title/color variables and the selected iTerm background shortly after hook exit. This prevents Codex/Claude TUI repaints from leaving stale prompt-box, tab chrome, or character state.
+- **Delayed reapply**: Adapters can set `VISUALHUD_REAPPLY_DELAY` for one compatibility retry or `VISUALHUD_REAPPLY_DELAYS` for a bounded retry sequence. Codex uses `0.12 0.50`, so title/color variables paint immediately and twice more across its redraw window; background restoration still runs only on the first retry to avoid image churn. Claude retains the single `0.12` retry.
 
 ### Compatibility And Test Isolation
 

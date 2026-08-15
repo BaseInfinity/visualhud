@@ -91,7 +91,8 @@ CONTEXT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-context_${SESSION_KEY}"
 REVIEW_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-review_${SESSION_KEY}"
 MODEL_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-model_${SESSION_KEY}"
 EFFORT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-effort_${SESSION_KEY}"
-BG_CLEAR_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
+LEGACY_BG_CLEAR_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
+BG_CLEAR_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-bg-clear-v2_${SESSION_KEY}"
 BG_TARGET_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-bg-target_${SESSION_KEY}"
 BG_APPLY_LOCK="$VISUALHUD_STATE_ROOT/claude-cooking-bg-apply_${SESSION_KEY}.lock"
 COMPACT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-compacting_${SESSION_KEY}"
@@ -114,6 +115,7 @@ JOURNEY_HISTORY_FILE="$VISUALHUD_STATE_ROOT/visualhud-journey-history_${JOURNEY_
 JOURNEY_LOCK="$VISUALHUD_STATE_ROOT/visualhud-journey_${JOURNEY_KEY}.lock"
 JOURNEY_OPERATION_DIR="$VISUALHUD_STATE_ROOT/visualhud-journey-operations_${JOURNEY_KEY}.d"
 AGGREGATE_FILE="$VISUALHUD_STATE_ROOT/visualhud-aggregate_${JOURNEY_KEY}"
+REPAINT_TOKEN_FILE="$VISUALHUD_STATE_ROOT/visualhud-repaint_${JOURNEY_KEY}"
 TURN_FAILURE_FILE="$VISUALHUD_STATE_ROOT/visualhud-turn-failure_${JOURNEY_KEY}"
 SPRITES_DIR="${VISUALHUD_SPRITES_DIR:-$SCRIPT_DIR/sprites}"
 SET_BG="${VISUALHUD_SET_BG:-$SCRIPT_DIR/set_bg.py}"
@@ -547,7 +549,8 @@ emit_terminal_status() {
 set_status_from_json() {
     local state_json="$1" fallback_stage_num="${2:-}" state_kind="${3:-progress}"
     local r g b sprite badge_emoji stage_name stage_num rh gh bh tr tg tb badge_text title sprite_path
-    local context_alert context_level context_percent context_badge context_name context_title reapply_delay
+    local context_alert context_level context_percent context_badge context_name context_title reapply_delay reapply_delays
+    local repaint_token repaint_token_tmp
     local state_fields state_progress_bar state_journey_total background_should_apply last_background_path
     local journey_overlay=false overlay_label journey_state_json journey_fields
     local journey_name journey_num journey_progress journey_total
@@ -629,19 +632,30 @@ set_status_from_json() {
             PreCompact|PostCompact|Stop) background_should_apply=true ;;
         esac
     fi
+    repaint_token="$$:${RANDOM:-0}"
+    repaint_token_tmp="${REPAINT_TOKEN_FILE}.$$"
+    printf '%s' "$repaint_token" > "$repaint_token_tmp" 2>/dev/null || true
+    mv "$repaint_token_tmp" "$REPAINT_TOKEN_FILE" 2>/dev/null || true
     emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total"
     if [ "$background_should_apply" = "true" ] && [ "$BACKGROUND_API_ENABLED" = "true" ] && [ "${VISUALHUD_BG:-off}" = "on" ] && [ -f "$SET_BG" ]; then
         printf '%s' "$sprite_path" > "$BG_TARGET_FILE" 2>/dev/null || true
         apply_background_path "$sprite_path"
     fi
     reapply_delay="${VISUALHUD_REAPPLY_DELAY:-0}"
-    if [ -n "$reapply_delay" ] && [ "$reapply_delay" != "0" ]; then
+    reapply_delays="${VISUALHUD_REAPPLY_DELAYS:-$reapply_delay}"
+    if [ -n "$reapply_delays" ] && [ "$reapply_delays" != "0" ]; then
         (
-            sleep "$reapply_delay"
-            emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total"
-            if [ "$BACKGROUND_API_ENABLED" = "true" ] && [ "${VISUALHUD_BG:-off}" = "on" ] && [ -f "$SET_BG" ]; then
-                apply_background_path "$sprite_path"
-            fi
+            local_reapply_index=0
+            for reapply_delay in $reapply_delays; do
+                [ -n "$reapply_delay" ] && [ "$reapply_delay" != "0" ] || continue
+                sleep "$reapply_delay"
+                [ "$(cat "$REPAINT_TOKEN_FILE" 2>/dev/null || true)" = "$repaint_token" ] || exit 0
+                emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total"
+                if [ "$local_reapply_index" -eq 0 ] && [ "$BACKGROUND_API_ENABLED" = "true" ] && [ "${VISUALHUD_BG:-off}" = "on" ] && [ -f "$SET_BG" ]; then
+                    apply_background_path "$sprite_path"
+                fi
+                local_reapply_index=$((local_reapply_index + 1))
+            done
         ) >/dev/null 2>&1 &
     fi
 }
@@ -739,11 +753,12 @@ elif [ "${VISUALHUD_BG:-off}" = "on" ]; then
     if [ -f "$BG_CLEAR_FILE" ]; then
         BACKGROUND_RESTORE_REQUESTED=true
     fi
-    rm -f "$BG_CLEAR_FILE" 2>/dev/null
+    rm -f "$LEGACY_BG_CLEAR_FILE" "$BG_CLEAR_FILE" 2>/dev/null
 elif [ ! -f "$BG_CLEAR_FILE" ] && [ -f "$SET_BG" ]; then
     printf '' > "$BG_TARGET_FILE" 2>/dev/null || true
     apply_background_path ""
     touch "$BG_CLEAR_FILE" 2>/dev/null
+    rm -f "$LEGACY_BG_CLEAR_FILE" 2>/dev/null
 fi
 PERMISSION_MODE=$(printf '%s' "$INPUT" | json_helper field permission_mode 2>/dev/null || true)
 EFFORT_LEVEL=$(printf '%s' "$INPUT" | json_helper field effort.level 2>/dev/null || true)

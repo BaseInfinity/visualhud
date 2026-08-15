@@ -396,6 +396,25 @@ specific step numbers:
 ./visualhud theme calibrate tmnt --live --pause
 ```
 
+The supervised release canary checks the real iTerm2 renderer without relying
+on a brittle full-window screenshot. In a dedicated disposable pane, capture
+two semantic samples after the latest event:
+
+```bash
+python3 scripts/visualhud-iterm-canary.py probe > sample-1.json
+sleep 0.5
+python3 scripts/visualhud-iterm-canary.py probe > sample-2.json
+jq -s . sample-1.json sample-2.json > samples.json
+python3 scripts/visualhud-iterm-canary.py compare \
+  --expected expected.json --samples samples.json
+```
+
+The expected fixture names the checkpoint text, aggregate, sprite filename,
+and tab RGB value. Generate it from the same versioned journey/theme fixture
+that drove the event; do not infer expected values from the observed pane.
+Release evidence adds one cropped screenshot for title and character pixels;
+accepted PNG frames may then produce a documentation GIF.
+
 ### Windows Status
 
 Windows Terminal/PowerShell is supported for Codex hook install, title updates,
@@ -528,7 +547,7 @@ VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
 **Working:**
 - Tab color changes via iTerm2 escape sequences (`OSC 6;1;bg` and `SetColors=tab`) with per-session isolation.
 - Background, selection, cursor, and muted UI surface colors update through `OSC 1337;SetColors`.
-- Window/tab title, badge text, and `hudProgress`/`hudContext` user vars update from hook lifecycle state.
+- Window/tab title, badge text, and `hudProgress`/`hudContext` user vars update from hook lifecycle state. iTerm2 binds the containing tab to `currentSession.user.hudProgress`, so Codex spinner updates can change `session.name` without hiding the task journey.
 - Background images update through the iTerm2 Python API (`LocalWriteOnlyProfile`) for the active terminal session.
 - Windows Terminal/PowerShell installs for Codex and updates the tab title plus `OSC 9;4` progress status.
 - WezTerm installs for Codex and updates title, right status, colors, and live background sprites through `OSC 1337;SetUserVar` plus the bundled Lua module.
@@ -541,7 +560,7 @@ VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
 **Current hooks:**
 - `.codex/hooks/visualhud-codex.sh` maps Codex events into `engine.sh` and falls back to TMNT when no active theme file exists. Clean installs into other Codex repos write Pokemon as the active theme by default.
 - `.claude/hooks/visualhud-claude.sh` maps Claude Code events into `engine.sh` and defaults to Pokemon.
-- Both adapters set `VISUALHUD_REAPPLY_DELAY=0.12` by default to reapply title/color after TUI repaint.
+- Both adapters retain `VISUALHUD_REAPPLY_DELAY=0.12` compatibility. Codex also uses the bounded `VISUALHUD_REAPPLY_DELAYS="0.12 0.50"` sequence for terminal color and user-variable convergence. iTerm2 title persistence comes from the tab-scoped interpolation binding, not from racing host redraws with more timers.
 
 **Known limitations:**
 - iTerm2 and WezTerm are the complete live-background renderers today; Windows Terminal/PowerShell has title/progress support but not dynamic background images.

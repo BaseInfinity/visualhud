@@ -45,6 +45,7 @@ run_isolated bash tests/test-visualhud-install-global.sh
 run_isolated bash tests/test-windows-runtime-no-jq.sh
 run_isolated bash tests/test-wezterm-renderer.sh
 run_isolated bash tests/test-host-renderer-matrix.sh
+run_isolated bash tests/test-iterm-canary.sh
 run_isolated bash tests/test-visualhud-skills.sh
 run_isolated bash tests/test-npm-package.sh
 run_isolated bash tests/test-npm-release.sh
@@ -60,7 +61,9 @@ run_isolated bash tests/test-codex-git-guard.sh
 shellcheck_normalized visualhud ./*.sh scripts/*.sh tests/*.sh .codex/hooks/*.sh .claude/hooks/*.sh engine.sh
 jq empty .codex/hooks.json .claude/settings.json themes/pokemon/theme.json themes/tmnt/theme.json themes/tmnt/sprites/manifest.json package.json
 PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-/tmp/visualhud-pycache}" \
-    python3 -m py_compile scripts/import-tmnt-sprites.py scripts/render-theme-contact-sheet.py scripts/theme-calibration-steps.py
+    python3 -m py_compile set_bg.py scripts/import-tmnt-sprites.py \
+        scripts/render-theme-contact-sheet.py scripts/theme-calibration-steps.py \
+        scripts/visualhud-iterm-canary.py
 git diff --check
 
 if find scripts -path '*/__pycache__/*' -type f | grep -q .; then

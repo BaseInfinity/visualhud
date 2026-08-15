@@ -39,7 +39,8 @@ CONTEXT_FILE="$STATE_ROOT/claude-cooking-context_${SESSION_KEY}"
 REVIEW_FILE="$STATE_ROOT/claude-cooking-review_${SESSION_KEY}"
 MODEL_FILE="$STATE_ROOT/claude-cooking-model_${SESSION_KEY}"
 EFFORT_FILE="$STATE_ROOT/claude-cooking-effort_${SESSION_KEY}"
-BG_CLEAR_FILE="$STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
+LEGACY_BG_CLEAR_FILE="$STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
+BG_CLEAR_FILE="$STATE_ROOT/claude-cooking-bg-clear-v2_${SESSION_KEY}"
 COMPACT_FILE="$STATE_ROOT/claude-cooking-compacting_${SESSION_KEY}"
 SUBAGENT_FILE="$STATE_ROOT/claude-cooking-subagent_${SESSION_KEY}"
 SUBAGENT_DIR="${SUBAGENT_FILE}.d"
@@ -50,7 +51,7 @@ TOKENS_FILE="$STATE_ROOT/claude-cooking-tokens_${SESSION_KEY}"
 
 cleanup() {
     rm -f "$COUNTER_FILE" "$STAGE_FILE" "$ATTENTION_FILE" "$CONTEXT_FILE" "$REVIEW_FILE" 2>/dev/null
-    rm -f "$MODEL_FILE" "$EFFORT_FILE" "$BG_CLEAR_FILE" "$COMPACT_FILE" "$SUBAGENT_FILE" "$TOKENS_FILE" "$PERMISSION_FILE" 2>/dev/null
+    rm -f "$MODEL_FILE" "$EFFORT_FILE" "$LEGACY_BG_CLEAR_FILE" "$BG_CLEAR_FILE" "$COMPACT_FILE" "$SUBAGENT_FILE" "$TOKENS_FILE" "$PERMISSION_FILE" 2>/dev/null
     rm -rf "$SUBAGENT_DIR" "${SUBAGENT_DIR}.lock" "$PERMISSION_DIR" "$PERMISSION_ACTIVE_DIR" "${PERMISSION_DIR}.lock" 2>/dev/null
     unset VISUALHUD_THEME VISUALHUD_SET_BG VISUALHUD_SET_BG_LOG VISUALHUD_SPRITES_DIR
     unset VISUALHUD_RENDERER VISUALHUD_BG
@@ -1262,6 +1263,7 @@ echo ""
 echo "--- Test 22b: Compact default (VISUALHUD_BG unset) self-heals stale BG once ---"
 cleanup
 rm -f "$BG_CLEAR_FILE" 2>/dev/null
+: > "$LEGACY_BG_CLEAR_FILE"
 TMP_THEME_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/visualhud-theme-test.XXXXXX")
 mkdir -p "$TMP_THEME_ROOT/tmnt/sprites"
 cp "$ROOT_DIR/themes/tmnt/theme.json" "$TMP_THEME_ROOT/tmnt/theme.json"
@@ -1292,6 +1294,7 @@ done
 assert_file_exists "First BG=off engine call invokes set_bg to self-heal stale cache" "$SET_BG_LOG"
 assert_eq "Self-heal calls set_bg with EMPTY path (clears, not sets sprite)" "" "$(head -n 1 "$SET_BG_LOG" 2>/dev/null)"
 assert_file_exists "Self-heal marker created so we don't re-fire" "$BG_CLEAR_FILE"
+assert_file_not_exists "Versioned self-heal retires the legacy marker" "$LEGACY_BG_CLEAR_FILE"
 
 # Second event in same session: should NOT re-call set_bg (only one line in log)
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'

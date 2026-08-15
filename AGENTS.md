@@ -34,8 +34,13 @@ Use skills for the visible workflow contract, let hooks enforce silently, and ke
    - Always state confidence on meaningful work, and keep slices small enough that confidence stays high in practice
 2. **TDD Red:** Write a failing test FIRST that proves the feature/fix is needed
 3. **TDD Green:** Implement the minimum code to make the test pass
-4. **Run ALL tests** — not just the new one. No exceptions
+4. **Verify once:** Run focused tests during RED/GREEN; after self-review, run all tests exactly once through the guarded proof in step 6.
 5. **Active goals:** When `GOALS.md` exists, complete that active scope before claiming the run is done; do not confuse active goal completion with roadmap completion.
+6. **Review one frozen proof:** Run one broad proof run total on the frozen candidate through `node .codex/hooks/git-guard.cjs prove --reviewed`; do not run the suite directly and then rerun it through the guard.
+   - Use a prompt-only review when supplying custom proof-aware instructions. A custom prompt must not be combined with `--uncommitted`, `--base`, or `--commit`.
+   - Include the exact base identity, candidate tree identity, fresh proof command, and result, and say `Do not rerun tests`.
+   - Targeted verification is allowed only for a concrete suspected defect. Missing or stale proof is a blocker to report, not permission to launch another broad suite.
+   - Reviewer role: inspect the frozen diff and return prioritized findings only; do not edit, implement, re-plan, or perform follow-up work.
 
 ## Commands
 
@@ -100,7 +105,7 @@ Flaky tests are bugs. Investigate and fix them — never skip or retry blindly.
 After implementation, BEFORE presenting to the user:
 
 1. Re-read every file you changed — look for bugs, dead code, leftover debug statements
-2. Run the full test suite
+2. Run the single full guarded proof from Before Every Task step 6 after this review
 3. Check: did you only change what was asked? No scope creep
 4. Check: any security issues? (injection, secrets, permissions)
 

@@ -160,6 +160,7 @@ if [ "$pack_status" -eq 0 ]; then
     tar_contents="$(tar -tzf "$tarball")"
     assert_contains "Tarball includes CLI" "package/visualhud" "$tar_contents"
     assert_contains "Tarball includes engine" "package/engine.sh" "$tar_contents"
+    assert_contains "Tarball includes the supervised iTerm2 canary" "package/scripts/visualhud-iterm-canary.py" "$tar_contents"
     assert_contains "Tarball includes iTerm2 setup helper" "package/setup-iterm2.sh" "$tar_contents"
     assert_contains "Tarball includes Codex adapter" "package/.codex/hooks/visualhud-codex.sh" "$tar_contents"
     assert_contains "Tarball includes Pokemon sprites" "package/themes/pokemon/sprites/charmander.png" "$tar_contents"

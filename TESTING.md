@@ -51,6 +51,25 @@ Computer Use screenshot review belong to supervised issue #16. They require
 explicit cost, credential, timeout, and cleanup boundaries and never run in
 default CI.
 
+The supervised iTerm2 canary uses a layered oracle instead of a full-window
+golden screenshot:
+
+1. Normal CI proves journey state, renderer output, theme mapping, generation
+   ordering, and the pure semantic comparator.
+2. `scripts/visualhud-iterm-canary.py probe` reads the exact disposable
+   session's effective `hudProgress`, custom tab-title binding, resolved tab
+   title, tab color, and background image path through the iTerm2 Python API.
+   The resolved title must equal `hudProgress` while the host changes
+   `session.name`. Two consecutive samples must match the same expected
+   checkpoint fixture. Expectations come from the versioned journey/theme
+   input, never from the observed pane.
+3. A small screenshot crop proves only what the API cannot: that iTerm2 composed
+   the expected title chrome and character pixels. Scrolling transcript,
+   timestamps, cursor, and token counters are excluded.
+
+Lossless PNG/state artifacts are the regression evidence. A GIF may be derived
+from accepted frames for documentation, but is not itself the test oracle.
+
 ## Testing Diamond
 
 ```

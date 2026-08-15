@@ -37,12 +37,14 @@ acceptance criteria remain materially ambiguous.
 
 These slices begin only after the unattended release candidate is green:
 
-1. [#20 - Preserve the iTerm2 top tab bar during VisualHUD setup](https://github.com/BaseInfinity/visualhud/issues/20)
-2. [#19 - Prevent expected iTerm2 process probes from emitting false setup blockers](https://github.com/BaseInfinity/visualhud/issues/19)
-3. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
-4. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
+1. [#22 - Fix Linux CI WezTerm journey-stage regression](https://github.com/BaseInfinity/visualhud/issues/22)
+2. [#20 - Preserve the iTerm2 top tab bar during VisualHUD setup](https://github.com/BaseInfinity/visualhud/issues/20)
+3. [#19 - Prevent expected iTerm2 process probes from emitting false setup blockers](https://github.com/BaseInfinity/visualhud/issues/19)
+4. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
+5. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
 
-Issue #20 invalidates the candidate with SHA-256
+Issue #22 blocks all candidate work until Linux CI is green. Issue #20
+invalidates the candidate with SHA-256
 `01b039ca675e9d1cf58135d70ced18a853eafda521b9c3cbb230779a6043fb5f`;
 it must never be published. Issues #20 and #19 must both be verified in a new
 candidate before issue #16 resumes. Issue #16 requires the maintainer to inspect
@@ -71,13 +73,16 @@ both expose the verified release version.
 [View milestone](https://github.com/BaseInfinity/visualhud/milestone/1)
 [Release documentation gate](RELEASE_CHECKLIST.md)
 
-1. [#12 - Add a guided theme-pack picker with visual and sound lanes](https://github.com/BaseInfinity/visualhud/issues/12)
+1. [#23 - Show active GitHub issue and milestone progress in the HUD](https://github.com/BaseInfinity/visualhud/issues/23)
 2. [#4 - Use Slowpoke or Psyduck for reconnect states](https://github.com/BaseInfinity/visualhud/issues/4)
-3. [#14 - Add a Stardew Valley-inspired farm journey theme pack](https://github.com/BaseInfinity/visualhud/issues/14)
-4. [#13 - Add stable theme demos after theme-pack UX is complete](https://github.com/BaseInfinity/visualhud/issues/13)
+3. [#12 - Add a guided theme-pack picker with visual and sound lanes](https://github.com/BaseInfinity/visualhud/issues/12)
+4. [#14 - Add a Stardew Valley-inspired farm journey theme pack](https://github.com/BaseInfinity/visualhud/issues/14)
+5. [#13 - Add stable theme demos after theme-pack UX is complete](https://github.com/BaseInfinity/visualhud/issues/13)
 
-Demos remain last so they capture stable picker, sound, lifecycle, and theme-pack
-behavior rather than immediately becoming stale.
+Authoritative issue and milestone context comes first, followed by reconnect
+semantics, because delivery and status clarity are core Codex UX. Demos remain
+last so they capture stable picker, sound, lifecycle, and theme-pack behavior
+rather than immediately becoming stale.
 
 ## Priority 3 - Expand v1.4.0
 
@@ -86,12 +91,14 @@ behavior rather than immediately becoming stale.
 [View milestone](https://github.com/BaseInfinity/visualhud/milestone/3)
 [Release documentation gate](RELEASE_CHECKLIST.md)
 
-1. [#3 - Detect missing WezTerm and explain Windows renderer support](https://github.com/BaseInfinity/visualhud/issues/3)
+1. [#21 - Audit VisualHUD against Codex SDLC Wizard/Harness v1.0](https://github.com/BaseInfinity/visualhud/issues/21)
 2. [#18 - Add Claude Code task-journey parity after Codex stabilization](https://github.com/BaseInfinity/visualhud/issues/18)
+3. [#3 - Detect missing WezTerm and explain Windows renderer support](https://github.com/BaseInfinity/visualhud/issues/3)
 
 Existing Windows Terminal and WezTerm behavior remains regression-covered, but
 new Windows feature work is intentionally behind the macOS/iTerm2 release and
-theme UX milestones. Claude keeps its current adapter until the Codex journey
+theme UX milestones. Issue #21 starts only after the requested stable upstream
+v1.0 boundary. Claude keeps its current adapter until that Codex journey
 contract is proven and the host-specific mapping in #18 is implemented.
 
 Ideas are not release commitments until they become GitHub issues and are

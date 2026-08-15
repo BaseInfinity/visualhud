@@ -217,11 +217,51 @@ sprite_path_for() {
     fi
 }
 
+release_background_lock() {
+    local expected_owner="$1"
+    [ "$(cat "$BG_APPLY_LOCK" 2>/dev/null || true)" = "$expected_owner" ] || return 0
+    rm -f "$BG_APPLY_LOCK" 2>/dev/null || true
+}
+
 apply_background_path() {
     (
-        local expected_path current_path
-        mkdir "$BG_APPLY_LOCK" 2>/dev/null || exit 0
-        trap 'rmdir "$BG_APPLY_LOCK" 2>/dev/null || true' EXIT
+        local expected_path current_path lock_owner lock_pid lock_started lock_now
+        local lock_value lock_attempt=0
+        lock_pid="${BASHPID:-$$}"
+        lock_started=$(date +%s)
+        lock_value="${lock_pid}:${lock_started}"
+
+        while ! (set -C; umask 077; printf '%s' "$lock_value" > "$BG_APPLY_LOCK") 2>/dev/null; do
+            lock_attempt=$((lock_attempt + 1))
+            if [ -d "$BG_APPLY_LOCK" ]; then
+                rmdir "$BG_APPLY_LOCK" 2>/dev/null || exit 0
+            else
+                lock_owner=$(cat "$BG_APPLY_LOCK" 2>/dev/null || true)
+                lock_pid=${lock_owner%%:*}
+                lock_started=${lock_owner#*:}
+                case "$lock_owner" in
+                    *:*) ;;
+                    *) lock_pid=""; lock_started="" ;;
+                esac
+                case "$lock_pid" in
+                    ''|*[!0-9]*) rm -f "$BG_APPLY_LOCK" 2>/dev/null || exit 0 ;;
+                    *)
+                        case "$lock_started" in
+                            ''|*[!0-9]*) rm -f "$BG_APPLY_LOCK" 2>/dev/null || exit 0 ;;
+                            *)
+                                lock_now=$(date +%s)
+                                if kill -0 "$lock_pid" 2>/dev/null && [ $((lock_now - lock_started)) -lt 30 ]; then
+                                    exit 0
+                                fi
+                                rm -f "$BG_APPLY_LOCK" 2>/dev/null || exit 0
+                                ;;
+                        esac
+                        ;;
+                esac
+            fi
+            [ "$lock_attempt" -lt 3 ] || exit 0
+        done
+        trap 'release_background_lock "$lock_value"' EXIT
 
         while :; do
             expected_path=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
@@ -231,7 +271,7 @@ apply_background_path() {
         done
 
         trap - EXIT
-        rmdir "$BG_APPLY_LOCK" 2>/dev/null || true
+        release_background_lock "$lock_value"
         current_path=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
         if [ "$current_path" != "$expected_path" ]; then
             apply_background_path "$current_path"

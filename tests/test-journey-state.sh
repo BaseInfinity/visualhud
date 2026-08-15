@@ -254,6 +254,28 @@ for _ in 1 2 3 4 5; do [ -s "$SET_BG_LOG" ] && break; sleep 0.1; done
 VISUALHUD_TEST_REAPPLY_DELAY=0.05 VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","tool_name":"read"}'
 for _ in 1 2 3 4 5; do [ -s "$SET_BG_LOG" ] && break; sleep 0.1; done
 assert_contains "Delayed ordinary hook restores an unchanged journey sprite" "/pokemon/sprites/" "$(cat "$SET_BG_LOG" 2>/dev/null)"
+: > "$SET_BG_LOG"
+mkdir "$STATE_ROOT/claude-cooking-bg-apply_${SESSION_KEY}.lock"
+VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"proof","journey_outcome":"started"}'
+for _ in 1 2 3 4 5; do
+    grep -q '/pokemon/sprites/blastoise.png' "$SET_BG_LOG" 2>/dev/null && break
+    sleep 0.1
+done
+assert_contains "Orphaned background lock cannot suppress the current journey sprite" \
+    "/pokemon/sprites/blastoise.png" "$(cat "$SET_BG_LOG" 2>/dev/null)"
+assert_eq "Orphaned background lock is removed after recovery" "absent" \
+    "$([ -e "$STATE_ROOT/claude-cooking-bg-apply_${SESSION_KEY}.lock" ] && printf present || printf absent)"
+: > "$SET_BG_LOG"
+printf '999999:1' > "$STATE_ROOT/claude-cooking-bg-apply_${SESSION_KEY}.lock"
+VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"tdd_red","journey_outcome":"started"}'
+for _ in 1 2 3 4 5; do
+    grep -q '/pokemon/sprites/pikachu.png' "$SET_BG_LOG" 2>/dev/null && break
+    sleep 0.1
+done
+assert_contains "Dead background worker lock cannot suppress rollback sprite" \
+    "/pokemon/sprites/pikachu.png" "$(cat "$SET_BG_LOG" 2>/dev/null)"
+assert_eq "Dead background worker lock is removed after recovery" "absent" \
+    "$([ -e "$STATE_ROOT/claude-cooking-bg-apply_${SESSION_KEY}.lock" ] && printf present || printf absent)"
 unset VISUALHUD_SET_BG VISUALHUD_SET_BG_LOG VISUALHUD_BG
 echo ""
 

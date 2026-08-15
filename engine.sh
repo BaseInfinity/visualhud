@@ -687,7 +687,9 @@ set_status_from_json() {
         (
             local_reapply_index=0
             for reapply_delay in $reapply_delays; do
-                [ -n "$reapply_delay" ] && [ "$reapply_delay" != "0" ] || continue
+                if [ -z "$reapply_delay" ] || [ "$reapply_delay" = "0" ]; then
+                    continue
+                fi
                 sleep "$reapply_delay"
                 [ "$(cat "$REPAINT_TOKEN_FILE" 2>/dev/null || true)" = "$repaint_token" ] || exit 0
                 emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total"

@@ -185,6 +185,12 @@ mkdir -p "$RUN_STATE_DIR"
 RUN_SESSION="w0t0p0:RUN_TEST_1"
 RUN_STAGE_FILE="$RUN_STATE_DIR/claude-cooking-stage_$(printf '%s' "$RUN_SESSION" | tr ':/' '__')"
 
+# The iTerm2 Python API is optional and unavailable on Linux CI. A failed
+# background update must not abort title, color, or stage processing.
+cat > "$GLOBAL_ROOT3/.visualhud/set_bg.py" <<'PY'
+raise SystemExit(1)
+PY
+
 echo '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}' | \
     CLAUDE_PROJECT_DIR="$NO_PROJECT_DIR" \
     ITERM_SESSION_ID="$RUN_SESSION" \

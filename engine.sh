@@ -570,7 +570,9 @@ apply_background_path() {
 
         while :; do
             expected_path=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
-            python3 "$SET_BG" "$expected_path" "$SESSION_ID" 2>/dev/null
+            # The iTerm2 API is optional and unavailable on Linux CI. A
+            # background failure must not abort the rest of the owned frame.
+            python3 "$SET_BG" "$expected_path" "$SESSION_ID" 2>/dev/null || break
             current_path=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
             [ "$current_path" != "$expected_path" ] || break
         done

@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # writes silently drop — title/badge/colors disappear. Walk the parent process
 # tree for a real controlling tty as a fallback.
 resolve_parent_tty() {
-    local pid="${1:-$PPID}" tty
+    local pid="$PPID" tty
     while [ -n "$pid" ] && [ "$pid" != "0" ] && [ "$pid" != "1" ]; do
         tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' \t\n' || true)
         case "$tty" in

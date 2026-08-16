@@ -31,7 +31,22 @@ if [ -z "${VISUALHUD_JOURNEY_PROFILE:-}" ]; then
   fi
 fi
 
+# Claim the terminal target before any external JSON parsing so an older hook
+# cannot resume from classification and supersede a newer pane frame.
+REPAINT_CLAIM=$(env -u VISUALHUD_REPAINT_EVENT_TOKEN -u VISUALHUD_REPAINT_CLAIM_MODE \
+  -u VISUALHUD_REPAINT_FALLBACK_RECORD_TOKEN bash "$ENGINE" --register-repaint 2>/dev/null || true)
+REPAINT_CLAIM_MODE=${REPAINT_CLAIM%%$'\t'*}
+REPAINT_CLAIM_FIELDS=${REPAINT_CLAIM#*$'\t'}
+REPAINT_EVENT_TOKEN=${REPAINT_CLAIM_FIELDS%%$'\t'*}
+REPAINT_FALLBACK_RECORD_TOKEN=${REPAINT_CLAIM_FIELDS#*$'\t'}
+export VISUALHUD_REPAINT_CLAIM_MODE="${REPAINT_CLAIM_MODE:-unguarded}"
+export VISUALHUD_REPAINT_FALLBACK_RECORD_TOKEN="${REPAINT_FALLBACK_RECORD_TOKEN:-}"
 RAW_EVENT_NAME=$(printf '%s' "$INPUT" | node "$JSON_HELPER" event-name 2>/dev/null || true)
+if [ -n "$REPAINT_EVENT_TOKEN" ]; then
+  export VISUALHUD_REPAINT_EVENT_TOKEN="$REPAINT_EVENT_TOKEN"
+fi
+export VISUALHUD_REPAINT_EVENT_CLASS="$RAW_EVENT_NAME"
+
 RAW_START_SOURCE=$(printf '%s' "$INPUT" | node "$JSON_HELPER" field source 2>/dev/null || true)
 PAYLOAD=$(printf '%s' "$INPUT" | node "$JSON_HELPER" codex-payload 2>/dev/null || true)
 

@@ -80,6 +80,45 @@
 - Current task journey: `visualhud-journey_${SESSION_KEY}_${PROJECT_KEY}.json`
 - Journey transition history: `visualhud-journey-history_${SESSION_KEY}_${PROJECT_KEY}.jsonl`
 - Secondary plan/milestone status: `visualhud-aggregate_${SESSION_KEY}_${PROJECT_KEY}`
+- Delayed renderer retries are superseded per stable terminal pane identity,
+  not per logical hook session. Native pane identifiers are preferred;
+  otherwise the engine resolves the actual terminal device behind aliases such
+  as `/dev/tty` before falling back to the render-target path. A literal
+  `/dev/tty` alias is resolved through the parent process tree so distinct
+  fallback panes do not collapse onto one ownership key. Journey and aggregate
+  state remain isolated by session and project. The Codex adapter claims that
+  pane before any external JSON parsing and passes an explicit `guarded`,
+  `unguarded`, or `suppressed` result into the engine, so an older
+  classification or translation cannot silently register again and reclaim a
+  newer pane frame. Claim records include the originating event class and the
+  payload session, even when multiple Codex sessions share one native pane. An
+  atomically published per-pane owner record locks the ownership check plus the
+  complete terminal and background frame. The iTerm2 background helper must
+  finish before that frame ownership is released, so title, colors, and
+  character art cannot come from different generations. Meanwhile,
+  delayed work that lost ownership continues nonvisual lifecycle bookkeeping
+  but cannot repaint the pane. Loop warnings use the same ownership gate.
+  Dead or malformed file-lock records are reclaimed after a short observation
+  cycle. Empty legacy lock directories are reclaimed, while unknown nonempty
+  directories are preserved and trigger one unguarded best-effort frame. An
+  unguarded event never schedules delayed repaint retries; if claim storage
+  recovers, it serializes its one frame against the recovered lock and is
+  suppressed when that lock records a newer owner. Live lock
+  contention is different from unavailable storage: the contending event is
+  suppressed rather than emitting an overlapping frame.
+
+  Lock-serialized aggregate lifecycles, such as overlapping subagent starts and
+  stops, make a fresh reconciliation claim after mutating their marker set.
+  Stale subagent reconciliation may supersede only another subagent-class claim
+  from the same logical session; a different session or unrelated newer
+  lifecycle event remains authoritative. The visible
+  frame therefore follows serialized aggregate state rather than the order in
+  which the original hook processes happened to start.
+
+Renderer state payloads use a stable cross-runtime schema. `stage` is a JSON
+string because theme and host adapters treat checkpoint identifiers as labels;
+`progress_percent` is a JSON number. iTerm2, WezTerm, and Windows Terminal must
+preserve those types across supported Node versions.
 
 ## Codex Task Journey
 

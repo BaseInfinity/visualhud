@@ -9,6 +9,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # In a hook (non-interactive) context, /dev/tty is "device not configured" and
 # writes silently drop — title/badge/colors disappear. Walk the parent process
 # tree for a real controlling tty as a fallback.
+resolve_parent_tty() {
+    local pid="${1:-$PPID}" tty
+    while [ -n "$pid" ] && [ "$pid" != "0" ] && [ "$pid" != "1" ]; do
+        tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' \t\n' || true)
+        case "$tty" in
+            ''|'?'|'??') ;;
+            /*) printf '%s' "$tty"; return 0 ;;
+            *)  printf '/dev/%s' "$tty"; return 0 ;;
+        esac
+        pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' \t\n' || true)
+    done
+    return 1
+}
+
 resolve_tty_target() {
     if [ -n "${VISUALHUD_TTY:-}" ]; then
         printf '%s' "$VISUALHUD_TTY"
@@ -23,18 +37,325 @@ resolve_tty_target() {
         printf '/dev/tty'
         return
     fi
-    local pid="$PPID" tty
-    while [ -n "$pid" ] && [ "$pid" != "0" ] && [ "$pid" != "1" ]; do
-        tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' \t\n' || true)
-        case "$tty" in
-            ''|'?'|'??') ;;
-            /*) printf '%s' "$tty"; return ;;
-            *)  printf '/dev/%s' "$tty"; return ;;
-        esac
-        pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' \t\n' || true)
-    done
+    resolve_parent_tty && return
     printf '/dev/null'
 }
+
+resolve_repaint_target_id() {
+    local tty_target="$1" renderer="$2" actual_tty
+    case "$renderer" in
+        iterm2)
+            [ -z "${ITERM_SESSION_ID:-}" ] || { printf 'iterm2:%s' "$ITERM_SESSION_ID"; return; }
+            ;;
+        wezterm)
+            [ -z "${WEZTERM_PANE:-}" ] || { printf 'wezterm:%s' "$WEZTERM_PANE"; return; }
+            ;;
+        windows|win32|powershell|windows-terminal)
+            [ -z "${WT_SESSION:-}" ] || { printf 'windows:%s' "$WT_SESSION"; return; }
+            ;;
+    esac
+    if [ -c "$tty_target" ]; then
+        if [ "$tty_target" = "/dev/tty" ]; then
+            actual_tty=$(resolve_parent_tty || true)
+        else
+            actual_tty=$(tty < "$tty_target" 2>/dev/null || true)
+        fi
+        case "$actual_tty" in
+            /dev/*) printf 'tty:%s' "$actual_tty" ;;
+            *) printf 'target:%s' "$tty_target" ;;
+        esac
+    else
+        printf 'target:%s' "$tty_target"
+    fi
+}
+
+resolve_renderer() {
+    if [ -n "${VISUALHUD_RENDERER:-}" ]; then
+        printf '%s' "$VISUALHUD_RENDERER"
+    elif [ -n "${WEZTERM_PANE:-}" ]; then
+        printf 'wezterm'
+    elif [ -n "${ITERM_SESSION_ID:-}" ]; then
+        printf 'iterm2'
+    elif [ -n "${WT_SESSION:-}" ]; then
+        printf 'windows'
+    else
+        case "$(uname -s 2>/dev/null || printf unknown)" in
+            MINGW*|MSYS*|CYGWIN*) printf 'windows' ;;
+            *) printf 'iterm2' ;;
+        esac
+    fi
+}
+
+acquire_repaint_lock() {
+    local lock_path="$1" attempt=0 owner owner_pid candidate current_owner previous_owner=""
+    owner="${BASHPID:-$$}:${RANDOM:-0}"
+    candidate="${lock_path}.${BASHPID:-$$}_${RANDOM:-0}.candidate"
+    REPAINT_LOCK_OWNER="$owner"
+    REPAINT_LOCK_FAILURE=""
+    if ! (umask 077; printf '%s' "$owner" > "$candidate") 2>/dev/null; then
+        REPAINT_LOCK_FAILURE="unavailable"
+        return 1
+    fi
+    while ! ln "$candidate" "$lock_path" 2>/dev/null; do
+        attempt=$((attempt + 1))
+        if [ -n "${VISUALHUD_TEST_REPAINT_LOCK_CONTENDED:-}" ]; then
+            printf 'contended\n' > "$VISUALHUD_TEST_REPAINT_LOCK_CONTENDED"
+        fi
+        if [ -d "$lock_path" ]; then
+            if rmdir "$lock_path" 2>/dev/null; then
+                previous_owner=""
+                continue
+            fi
+            # Current locks are files. Preserve any unknown legacy directory
+            # contents and fall back instead of deleting or waiting on them.
+            rm -f "$candidate" 2>/dev/null || true
+            REPAINT_LOCK_FAILURE="unavailable"
+            return 1
+        else
+            current_owner=$(cat "$lock_path" 2>/dev/null || true)
+            owner_pid=${current_owner%%:*}
+            case "$current_owner" in
+                *:*)
+                    case "$owner_pid" in
+                        ''|*[!0-9]*)
+                            if [ "$current_owner" = "$previous_owner" ] \
+                                && [ "$(cat "$lock_path" 2>/dev/null || true)" = "$current_owner" ]; then
+                                if rm -f "$lock_path" 2>/dev/null; then
+                                    previous_owner=""
+                                    continue
+                                fi
+                            fi
+                            ;;
+                        *)
+                            if ! kill -0 "$owner_pid" 2>/dev/null \
+                                && [ "$(cat "$lock_path" 2>/dev/null || true)" = "$current_owner" ]; then
+                                if rm -f "$lock_path" 2>/dev/null; then
+                                    previous_owner=""
+                                    continue
+                                fi
+                            fi
+                            ;;
+                    esac
+                    ;;
+                *)
+                    if [ "$current_owner" = "$previous_owner" ] \
+                        && [ "$(cat "$lock_path" 2>/dev/null || true)" = "$current_owner" ]; then
+                        if rm -f "$lock_path" 2>/dev/null; then
+                            previous_owner=""
+                            continue
+                        fi
+                    fi
+                    ;;
+            esac
+            previous_owner="$current_owner"
+        fi
+        if [ "$attempt" -ge 500 ]; then
+            rm -f "$candidate" 2>/dev/null || true
+            REPAINT_LOCK_FAILURE="contended"
+            return 1
+        fi
+        sleep 0.01
+    done
+    rm -f "$candidate" 2>/dev/null || true
+}
+
+release_repaint_lock() {
+    local lock_path="$1" current_owner
+    current_owner=$(cat "$lock_path" 2>/dev/null || true)
+    if [ -n "${REPAINT_LOCK_OWNER:-}" ] && [ "$current_owner" = "$REPAINT_LOCK_OWNER" ]; then
+        rm -f "$lock_path" 2>/dev/null || true
+    fi
+    REPAINT_LOCK_OWNER=""
+}
+
+register_repaint_event() {
+    local state_root="${VISUALHUD_STATE_DIR:-${TMPDIR:-/tmp}}"
+    local claim_class="${1:-${VISUALHUD_REPAINT_EVENT_CLASS:-}}"
+    local inherited_mode="${VISUALHUD_REPAINT_CLAIM_MODE:-}"
+    local renderer tty_target target_id target_checksum target_key token_file token_tmp token current_record current_token lock_path
+    renderer=$(resolve_renderer)
+    tty_target=$(resolve_tty_target)
+    REPAINT_GUARD_ENABLED=false
+    REPAINT_CLAIM_MODE="unguarded"
+    RENDERER="$renderer"
+    TTY_TARGET="$tty_target"
+    REPAINT_TOKEN_FILE=""
+    REPAINT_LOCK_PATH=""
+    REPAINT_EVENT_TOKEN=""
+    REPAINT_FRAME_LOCKED=false
+    REPAINT_FALLBACK_RECORD_TOKEN="${VISUALHUD_REPAINT_FALLBACK_RECORD_TOKEN:-}"
+    if ! mkdir -p "$state_root" 2>/dev/null || [ ! -d "$state_root" ]; then
+        return 0
+    fi
+    target_id=$(resolve_repaint_target_id "$tty_target" "$renderer")
+    target_checksum=$(printf '%s' "$target_id" | cksum)
+    target_key=${target_checksum%% *}
+    token_file="$state_root/visualhud-repaint-target_${target_key}"
+    lock_path="${token_file}.lock"
+    REPAINT_TOKEN_FILE="$token_file"
+    REPAINT_LOCK_PATH="$lock_path"
+    if [ -n "$inherited_mode" ]; then
+        REPAINT_CLAIM_MODE="$inherited_mode"
+        REPAINT_EVENT_TOKEN="${VISUALHUD_REPAINT_EVENT_TOKEN:-}"
+        [ "$inherited_mode" = "guarded" ] && REPAINT_GUARD_ENABLED=true
+        return 0
+    fi
+    if ! acquire_repaint_lock "$lock_path"; then
+        current_record=$(cat "$token_file" 2>/dev/null || true)
+        REPAINT_FALLBACK_RECORD_TOKEN=${current_record%%$'\t'*}
+        if [ "${REPAINT_LOCK_FAILURE:-}" = "contended" ]; then
+            REPAINT_CLAIM_MODE="suppressed"
+        fi
+        return 0
+    fi
+    token="${VISUALHUD_REPAINT_EVENT_TOKEN:-}"
+    if [ -n "$token" ]; then
+        current_record=$(cat "$token_file" 2>/dev/null || true)
+        current_token=${current_record%%$'\t'*}
+        if [ "$current_token" != "$token" ]; then
+            release_repaint_lock "$lock_path"
+            REPAINT_GUARD_ENABLED=true
+            REPAINT_CLAIM_MODE="guarded"
+            REPAINT_EVENT_TOKEN="$token"
+            return 0
+        fi
+    else
+        token="$$:${RANDOM:-0}"
+        token_tmp="${token_file}.$$"
+        if ! printf '%s\t%s' "$token" "$claim_class" > "$token_tmp" 2>/dev/null || ! mv "$token_tmp" "$token_file" 2>/dev/null; then
+            rm -f "$token_tmp" 2>/dev/null || true
+            release_repaint_lock "$lock_path"
+            current_record=$(cat "$token_file" 2>/dev/null || true)
+            REPAINT_FALLBACK_RECORD_TOKEN=${current_record%%$'\t'*}
+            return 0
+        fi
+        current_record=$(cat "$token_file" 2>/dev/null || true)
+        current_token=${current_record%%$'\t'*}
+        if [ ! -f "$token_file" ] || [ "$current_token" != "$token" ]; then
+            release_repaint_lock "$lock_path"
+            current_record=$(cat "$token_file" 2>/dev/null || true)
+            REPAINT_FALLBACK_RECORD_TOKEN=${current_record%%$'\t'*}
+            return 0
+        fi
+    fi
+    release_repaint_lock "$lock_path"
+
+    REPAINT_GUARD_ENABLED=true
+    REPAINT_CLAIM_MODE="guarded"
+    REPAINT_EVENT_TOKEN="$token"
+}
+
+repaint_event_is_current() {
+    local current_record current_token
+    [ "${REPAINT_GUARD_ENABLED:-false}" != "true" ] && return 0
+    current_record=$(cat "$REPAINT_TOKEN_FILE" 2>/dev/null || true)
+    current_token=${current_record%%$'\t'*}
+    [ "$current_token" = "$REPAINT_EVENT_TOKEN" ]
+}
+
+label_repaint_event() {
+    local claim_class="$1" claim_scope="${2:-}" current_record current_token token_tmp
+    [ "${REPAINT_GUARD_ENABLED:-false}" = "true" ] || return 0
+    acquire_repaint_lock "$REPAINT_LOCK_PATH" || return 1
+    current_record=$(cat "$REPAINT_TOKEN_FILE" 2>/dev/null || true)
+    current_token=${current_record%%$'\t'*}
+    if [ "$current_token" != "$REPAINT_EVENT_TOKEN" ]; then
+        release_repaint_lock "$REPAINT_LOCK_PATH"
+        return 1
+    fi
+    token_tmp="${REPAINT_TOKEN_FILE}.$$"
+    if printf '%s\t%s\t%s' "$REPAINT_EVENT_TOKEN" "$claim_class" "$claim_scope" > "$token_tmp" 2>/dev/null \
+        && mv "$token_tmp" "$REPAINT_TOKEN_FILE" 2>/dev/null; then
+        :
+    else
+        rm -f "$token_tmp" 2>/dev/null || true
+    fi
+    release_repaint_lock "$REPAINT_LOCK_PATH"
+}
+
+acquire_current_repaint() {
+    local current_record current_token
+    REPAINT_FRAME_LOCKED=false
+    case "${REPAINT_CLAIM_MODE:-unguarded}" in
+        suppressed) return 1 ;;
+        unguarded)
+            [ -n "${REPAINT_LOCK_PATH:-}" ] || return 0
+            acquire_repaint_lock "$REPAINT_LOCK_PATH" || return 1
+            current_record=$(cat "$REPAINT_TOKEN_FILE" 2>/dev/null || true)
+            current_token=${current_record%%$'\t'*}
+            if [ "$current_token" != "${REPAINT_FALLBACK_RECORD_TOKEN:-}" ]; then
+                release_repaint_lock "$REPAINT_LOCK_PATH"
+                return 1
+            fi
+            REPAINT_FRAME_LOCKED=true
+            if [ -n "${VISUALHUD_TEST_UNGUARDED_EMIT_STARTED:-}" ]; then
+                printf 'started\n' > "$VISUALHUD_TEST_UNGUARDED_EMIT_STARTED"
+                while [ ! -f "${VISUALHUD_TEST_UNGUARDED_EMIT_RELEASE:-}" ]; do
+                    sleep 0.01
+                done
+            fi
+            return 0
+            ;;
+    esac
+    acquire_repaint_lock "$REPAINT_LOCK_PATH" || return 1
+    if ! repaint_event_is_current; then
+        release_repaint_lock "$REPAINT_LOCK_PATH"
+        return 1
+    fi
+    REPAINT_FRAME_LOCKED=true
+    if [ -n "${VISUALHUD_TEST_REPAINT_EMIT_STARTED:-}" ]; then
+        printf 'started\n' > "$VISUALHUD_TEST_REPAINT_EMIT_STARTED"
+        while [ ! -f "${VISUALHUD_TEST_REPAINT_EMIT_RELEASE:-}" ]; do
+            sleep 0.01
+        done
+    fi
+}
+
+release_current_repaint() {
+    [ "${REPAINT_FRAME_LOCKED:-false}" = "true" ] || return 0
+    release_repaint_lock "$REPAINT_LOCK_PATH"
+    REPAINT_FRAME_LOCKED=false
+}
+
+reclaim_repaint_event() {
+    local current_record current_token current_class current_scope token token_tmp
+    [ "${REPAINT_GUARD_ENABLED:-false}" = "true" ] || return 0
+    acquire_repaint_lock "$REPAINT_LOCK_PATH" || return 1
+    current_record=$(cat "$REPAINT_TOKEN_FILE" 2>/dev/null || true)
+    current_token=${current_record%%$'\t'*}
+    IFS=$'\t' read -r current_token current_class current_scope <<< "$current_record"
+    if [ "$current_token" = "$REPAINT_EVENT_TOKEN" ]; then
+        release_repaint_lock "$REPAINT_LOCK_PATH"
+        return 0
+    fi
+    case "$current_class" in
+        SubagentStart|SubagentStop) ;;
+        *)
+            release_repaint_lock "$REPAINT_LOCK_PATH"
+            return 1
+            ;;
+    esac
+    if [ "$current_scope" != "$REPAINT_SCOPE_KEY" ]; then
+        release_repaint_lock "$REPAINT_LOCK_PATH"
+        return 1
+    fi
+    token="$$:${RANDOM:-0}"
+    token_tmp="${REPAINT_TOKEN_FILE}.$$"
+    if ! printf '%s\t%s\t%s' "$token" "$EVENT" "$REPAINT_SCOPE_KEY" > "$token_tmp" 2>/dev/null \
+        || ! mv "$token_tmp" "$REPAINT_TOKEN_FILE" 2>/dev/null; then
+        rm -f "$token_tmp" 2>/dev/null || true
+        release_repaint_lock "$REPAINT_LOCK_PATH"
+        return 1
+    fi
+    REPAINT_EVENT_TOKEN="$token"
+    release_repaint_lock "$REPAINT_LOCK_PATH"
+}
+
+if [ "${1:-}" = "--register-repaint" ]; then
+    register_repaint_event "${2:-}"
+    printf '%s\t%s\t%s' "$REPAINT_CLAIM_MODE" "$REPAINT_EVENT_TOKEN" "$REPAINT_FALLBACK_RECORD_TOKEN"
+    exit 0
+fi
 
 # Test-mode flag: print resolved TTY target and exit without consuming stdin.
 if [ "${1:-}" = "--resolve-tty" ]; then
@@ -43,6 +364,7 @@ if [ "${1:-}" = "--resolve-tty" ]; then
 fi
 
 INPUT=$(cat)
+register_repaint_event "${VISUALHUD_REPAINT_EVENT_CLASS:-}" || exit 0
 JSON_HELPER="${VISUALHUD_JSON_HELPER:-$SCRIPT_DIR/scripts/visualhud-json.js}"
 
 json_helper() {
@@ -60,7 +382,6 @@ if [ -z "$EVENT" ]; then
         *) EVENT="PreToolUse" ;;
     esac
 fi
-
 THEMES_DIR="${VISUALHUD_THEMES_DIR:-$SCRIPT_DIR/themes}"
 ACTIVE_THEME_FILE="${VISUALHUD_THEME_FILE:-$SCRIPT_DIR/theme}"
 THEME="${VISUALHUD_THEME:-}"
@@ -82,6 +403,8 @@ INPUT_SESSION_ID=$(printf '%s' "$INPUT" | json_helper field session_id 2>/dev/nu
 SESSION_ID="${ITERM_SESSION_ID:-${WT_SESSION:-${WEZTERM_PANE:-${INPUT_SESSION_ID:-visualhud}}}}"
 PROJECT_NAME=$(basename "$PWD")
 SESSION_KEY=$(printf '%s' "$SESSION_ID" | tr ':/' '__')
+REPAINT_SCOPE_KEY=$(printf '%s' "${INPUT_SESSION_ID:-$SESSION_ID}" | tr '\t\r\n' '___')
+label_repaint_event "$EVENT" "$REPAINT_SCOPE_KEY" || true
 VISUALHUD_STATE_ROOT="${VISUALHUD_STATE_DIR:-${TMPDIR:-/tmp}}"
 mkdir -p "$VISUALHUD_STATE_ROOT" 2>/dev/null || true
 COUNTER_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-counter_${SESSION_KEY}"
@@ -115,12 +438,9 @@ JOURNEY_HISTORY_FILE="$VISUALHUD_STATE_ROOT/visualhud-journey-history_${JOURNEY_
 JOURNEY_LOCK="$VISUALHUD_STATE_ROOT/visualhud-journey_${JOURNEY_KEY}.lock"
 JOURNEY_OPERATION_DIR="$VISUALHUD_STATE_ROOT/visualhud-journey-operations_${JOURNEY_KEY}.d"
 AGGREGATE_FILE="$VISUALHUD_STATE_ROOT/visualhud-aggregate_${JOURNEY_KEY}"
-REPAINT_TOKEN_FILE="$VISUALHUD_STATE_ROOT/visualhud-repaint_${JOURNEY_KEY}"
 TURN_FAILURE_FILE="$VISUALHUD_STATE_ROOT/visualhud-turn-failure_${JOURNEY_KEY}"
 SPRITES_DIR="${VISUALHUD_SPRITES_DIR:-$SCRIPT_DIR/sprites}"
 SET_BG="${VISUALHUD_SET_BG:-$SCRIPT_DIR/set_bg.py}"
-TTY_TARGET=$(resolve_tty_target)
-RENDERER="${VISUALHUD_RENDERER:-}"
 VISUALHUD_LOOP_WINDOW_SEC="${VISUALHUD_LOOP_WINDOW_SEC:-30}"
 VISUALHUD_LOOP_THRESHOLD="${VISUALHUD_LOOP_THRESHOLD:-8}"
 REQUESTED_JOURNEY_PROFILE="${VISUALHUD_JOURNEY_PROFILE:-}"
@@ -154,21 +474,6 @@ if [ -n "$AGGREGATE_STATUS" ]; then
     printf '%s' "$AGGREGATE_STATUS" > "$AGGREGATE_FILE" 2>/dev/null || true
 elif [ -f "$AGGREGATE_FILE" ]; then
     AGGREGATE_STATUS=$(cat "$AGGREGATE_FILE" 2>/dev/null || true)
-fi
-
-if [ -z "$RENDERER" ]; then
-    if [ -n "${WEZTERM_PANE:-}" ]; then
-        RENDERER="wezterm"
-    elif [ -n "${ITERM_SESSION_ID:-}" ]; then
-        RENDERER="iterm2"
-    elif [ -n "${WT_SESSION:-}" ]; then
-        RENDERER="windows"
-    else
-        case "$(uname -s 2>/dev/null || printf unknown)" in
-            MINGW*|MSYS*|CYGWIN*) RENDERER="windows" ;;
-            *) RENDERER="iterm2" ;;
-        esac
-    fi
 fi
 
 BACKGROUND_API_ENABLED=false
@@ -276,7 +581,7 @@ apply_background_path() {
         if [ "$current_path" != "$expected_path" ]; then
             apply_background_path "$current_path"
         fi
-    ) >/dev/null 2>&1 &
+    ) >/dev/null 2>&1
 }
 
 badge_text_for() {
@@ -437,11 +742,19 @@ detect_stop_loop() {
 
 emit_loop_status() {
     local count="$1" title badge r=255 g=40 b=40 rh gh bh tr tg tb
+    if [ -n "${VISUALHUD_TEST_LOOP_STATUS_STARTED:-}" ]; then
+        printf 'started\n' > "$VISUALHUD_TEST_LOOP_STATUS_STARTED"
+        while [ ! -f "${VISUALHUD_TEST_LOOP_STATUS_RELEASE:-}" ]; do
+            sleep 0.01
+        done
+    fi
+    acquire_current_repaint || return 0
     title="LOOP DETECTED (${count} stops/${VISUALHUD_LOOP_WINDOW_SEC}s) — run /goal clear"
     badge="LOOP"
     rh=$(to_hex "$r"); gh=$(to_hex "$g"); bh=$(to_hex "$b")
     tr=$(to_tint "$r"); tg=$(to_tint "$g"); tb=$(to_tint "$b")
     emit_iterm_status "$TTY_TARGET" "$badge" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" ""
+    release_current_repaint
 }
 
 emit_iterm_status() {
@@ -590,7 +903,6 @@ set_status_from_json() {
     local state_json="$1" fallback_stage_num="${2:-}" state_kind="${3:-progress}"
     local r g b sprite badge_emoji stage_name stage_num rh gh bh tr tg tb badge_text title sprite_path
     local context_alert context_level context_percent context_badge context_name context_title reapply_delay reapply_delays
-    local repaint_token repaint_token_tmp
     local state_fields state_progress_bar state_journey_total background_should_apply last_background_path
     local journey_overlay=false overlay_label journey_state_json journey_fields
     local journey_name journey_num journey_progress journey_total
@@ -662,6 +974,7 @@ set_status_from_json() {
     fi
 
     sprite_path=$(sprite_path_for "$sprite")
+    acquire_current_repaint || return 0
     printf '%s' "$sprite" > "$STAGE_FILE" 2>/dev/null || true
     background_should_apply=false
     last_background_path=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
@@ -672,15 +985,13 @@ set_status_from_json() {
             PreCompact|PostCompact|Stop) background_should_apply=true ;;
         esac
     fi
-    repaint_token="$$:${RANDOM:-0}"
-    repaint_token_tmp="${REPAINT_TOKEN_FILE}.$$"
-    printf '%s' "$repaint_token" > "$repaint_token_tmp" 2>/dev/null || true
-    mv "$repaint_token_tmp" "$REPAINT_TOKEN_FILE" 2>/dev/null || true
     emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total"
     if [ "$background_should_apply" = "true" ] && [ "$BACKGROUND_API_ENABLED" = "true" ] && [ "${VISUALHUD_BG:-off}" = "on" ] && [ -f "$SET_BG" ]; then
         printf '%s' "$sprite_path" > "$BG_TARGET_FILE" 2>/dev/null || true
         apply_background_path "$sprite_path"
     fi
+    release_current_repaint
+    [ "${REPAINT_CLAIM_MODE:-unguarded}" = "guarded" ] || return 0
     reapply_delay="${VISUALHUD_REAPPLY_DELAY:-0}"
     reapply_delays="${VISUALHUD_REAPPLY_DELAYS:-$reapply_delay}"
     if [ -n "$reapply_delays" ] && [ "$reapply_delays" != "0" ]; then
@@ -691,10 +1002,25 @@ set_status_from_json() {
                     continue
                 fi
                 sleep "$reapply_delay"
-                [ "$(cat "$REPAINT_TOKEN_FILE" 2>/dev/null || true)" = "$repaint_token" ] || exit 0
+                if [ -n "${VISUALHUD_TEST_REPAINT_RETRY_STARTED:-}" ]; then
+                    printf 'started\n' > "$VISUALHUD_TEST_REPAINT_RETRY_STARTED"
+                    while [ ! -f "${VISUALHUD_TEST_REPAINT_RETRY_RELEASE:-}" ]; do
+                        sleep 0.01
+                    done
+                fi
+                if ! acquire_current_repaint; then
+                    if [ -n "${VISUALHUD_TEST_REPAINT_ATTEMPT_FILE:-}" ]; then
+                        printf 'superseded\n' >> "$VISUALHUD_TEST_REPAINT_ATTEMPT_FILE" 2>/dev/null || true
+                    fi
+                    exit 0
+                fi
                 emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total"
                 if [ "$local_reapply_index" -eq 0 ] && [ "$BACKGROUND_API_ENABLED" = "true" ] && [ "${VISUALHUD_BG:-off}" = "on" ] && [ -f "$SET_BG" ]; then
                     apply_background_path "$sprite_path"
+                fi
+                release_current_repaint
+                if [ -n "${VISUALHUD_TEST_REPAINT_ATTEMPT_FILE:-}" ]; then
+                    printf 'emitted\n' >> "$VISUALHUD_TEST_REPAINT_ATTEMPT_FILE" 2>/dev/null || true
                 fi
                 local_reapply_index=$((local_reapply_index + 1))
             done
@@ -797,10 +1123,13 @@ elif [ "${VISUALHUD_BG:-off}" = "on" ]; then
     fi
     rm -f "$LEGACY_BG_CLEAR_FILE" "$BG_CLEAR_FILE" 2>/dev/null
 elif [ ! -f "$BG_CLEAR_FILE" ] && [ -f "$SET_BG" ]; then
-    printf '' > "$BG_TARGET_FILE" 2>/dev/null || true
-    apply_background_path ""
-    touch "$BG_CLEAR_FILE" 2>/dev/null
-    rm -f "$LEGACY_BG_CLEAR_FILE" 2>/dev/null
+    if acquire_current_repaint; then
+        printf '' > "$BG_TARGET_FILE" 2>/dev/null || true
+        apply_background_path ""
+        touch "$BG_CLEAR_FILE" 2>/dev/null
+        rm -f "$LEGACY_BG_CLEAR_FILE" 2>/dev/null
+        release_current_repaint
+    fi
 fi
 PERMISSION_MODE=$(printf '%s' "$INPUT" | json_helper field permission_mode 2>/dev/null || true)
 EFFORT_LEVEL=$(printf '%s' "$INPUT" | json_helper field effort.level 2>/dev/null || true)
@@ -1093,6 +1422,7 @@ case "$EVENT" in
             trap release_subagent_lock EXIT
             mkdir -p "$SUBAGENT_DIR" 2>/dev/null
             printf '%s\t%s\n' "$SUBAGENT_ID" "$SUBAGENT_TYPE" > "$(subagent_marker_path "$SUBAGENT_ID")" 2>/dev/null
+            reclaim_repaint_event || exit 0
             set_named_state "subagent"
             release_subagent_lock
             trap - EXIT
@@ -1109,6 +1439,7 @@ case "$EVENT" in
         else
             rm -rf "$SUBAGENT_DIR" 2>/dev/null
         fi
+        reclaim_repaint_event || exit 0
         if subagent_active; then
             set_named_state "subagent"
             release_subagent_lock

@@ -38,6 +38,30 @@
 - The versioned compatibility matrix validates every registered VisualHUD host
   event from sanitized Codex and Claude fixtures, then checks semantic output
   through iTerm2, WezTerm, and Windows Terminal renderer encodings.
+- The WezTerm integration test exercises delayed-repaint collisions with
+  changing logical session identifiers, older event-name parsing or adapter
+  translation that finishes after a newer event, and older engine work that
+  resumes after its pane claim was superseded. It also verifies atomically
+  published full-frame lock ownership, same-pane payload-session identity,
+  failed early claim handoff, one-frame fallback when claim storage is
+  unavailable, recovered-storage serialization, suppression during live lock
+  contention, concrete parent-TTY identity behind `/dev/tty`, safe legacy lock
+  recovery without deleting unknown data, and a stale loop warning. A
+  superseded lifecycle event must still persist its nonvisual state without
+  repainting the newer frame. Delayed retries require guarded ownership and
+  subagent reconciliation may reclaim only within the same payload session.
+  Explicit file handshakes order each overlap; the
+  regressions do not depend on scheduler timing. For Linux/Node compatibility work, run that test
+  in a read-only `node:24-bookworm` container as a local stress check; the
+  deterministic single run remains part of normal CI.
+- The lifecycle integration test forces overlapping subagent stops to process
+  in the opposite order from their initial pane claims. The final frame must
+  reflect the lock-serialized marker set, so clearing the final marker restores
+  `WORKING` instead of leaving a stale subagent frame visible. A stale subagent
+  stop may not reclaim the pane from an unrelated newer lifecycle event.
+- The iTerm2 lifecycle integration test blocks a background helper while a
+  newer event attempts to render. The newer event must wait, then its matching
+  title, colors, and character background must be the final owned frame.
 
 ## Live And Isolated Tests
 
@@ -45,6 +69,11 @@
 The suite clears inherited terminal session identifiers, routes fallback output
 through `VISUALHUD_TEST_CAPTURE_DIR`, and suppresses the real iTerm2 background
 helper unless a test explicitly provides a deterministic double.
+
+Direct lifecycle tests must restore a regular-file `VISUALHUD_TTY` after every
+case cleanup. Tests that exercise a mocked background helper may use
+`/dev/null`, but an unset terminal target can resolve the maintainer's live TTY
+and is a test-isolation failure.
 
 Authenticated Sol medium/high smoke sessions, real iTerm2 API assertions, and
 Computer Use screenshot review belong to supervised issue #16. They require

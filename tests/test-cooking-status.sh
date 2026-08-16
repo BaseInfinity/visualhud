@@ -31,7 +31,10 @@ SESSION_KEY=$(echo "$TEST_SESSION" | tr ':/' '__')
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/visualhud-cooking-state.XXXXXX")"
 STATE_ROOT="$TEST_ROOT/state"
 mkdir -p "$STATE_ROOT"
+DEFAULT_TTY="$TEST_ROOT/terminal.log"
 export VISUALHUD_STATE_DIR="$STATE_ROOT"
+export VISUALHUD_TTY="$DEFAULT_TTY"
+: > "$DEFAULT_TTY"
 COUNTER_FILE="$STATE_ROOT/claude-cooking-counter_${SESSION_KEY}"
 STAGE_FILE="$STATE_ROOT/claude-cooking-stage_${SESSION_KEY}"
 ATTENTION_FILE="$STATE_ROOT/claude-cooking-attention_${SESSION_KEY}"
@@ -57,6 +60,8 @@ cleanup() {
     unset VISUALHUD_RENDERER VISUALHUD_BG
     unset VISUALHUD_TTY VISUALHUD_CONTEXT_USED_PERCENT VISUALHUD_CODEX_SESSION_FILE CODEX_HOME
     unset VISUALHUD_REAPPLY_DELAY
+    export VISUALHUD_TTY="$DEFAULT_TTY"
+    : > "$DEFAULT_TTY"
     export VISUALHUD_THEMES_DIR="$ROOT_DIR/themes"
     export VISUALHUD_THEME="pokemon"
     export VISUALHUD_ACTIVITY_MODE="legacy"
@@ -125,6 +130,18 @@ subagent_marker_count() {
     find "$SUBAGENT_DIR" -type f 2>/dev/null | wc -l | tr -d ' '
 }
 
+wait_for_file_content() {
+    local filepath="$1" label="$2" attempt=0
+    while [ ! -s "$filepath" ]; do
+        attempt=$((attempt + 1))
+        if [ "$attempt" -ge 500 ]; then
+            printf "FAIL: Timed out waiting for %s\n" "$label" >&2
+            return 1
+        fi
+        sleep 0.01
+    done
+}
+
 assert_contains() {
     local label="$1" needle="$2" haystack="$3"
     TOTAL=$((TOTAL + 1))
@@ -152,6 +169,10 @@ assert_not_contains() {
 # ============================================================
 echo "=== Test Suite: cooking-status.sh ==="
 echo ""
+
+assert_eq "Direct lifecycle suite starts in terminal capture mode" \
+    "$DEFAULT_TTY" \
+    "${VISUALHUD_TTY:-}"
 
 # --- TEST 2b: Default activity is semantic, stable, and indeterminate ---
 echo "--- Test 2b: Default activity remains stable WORKING regardless of tool count ---"
@@ -769,6 +790,7 @@ echo ""
 # --- TEST 21: Theme-local sprite assets drive background swaps ---
 echo "--- Test 21: Theme-local sprite assets drive background swaps ---"
 cleanup
+export VISUALHUD_TTY=/dev/null
 TMP_THEME_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/visualhud-theme-test.XXXXXX")
 mkdir -p "$TMP_THEME_ROOT/tmnt/sprites"
 cp "$ROOT_DIR/themes/tmnt/theme.json" "$TMP_THEME_ROOT/tmnt/theme.json"
@@ -803,9 +825,62 @@ rm -rf "$TMP_THEME_ROOT"
 cleanup
 echo ""
 
+# --- TEST 21a: Background application stays inside pane-frame ownership ---
+echo "--- Test 21a: iTerm2 title, colors, and background commit as one owned frame ---"
+cleanup
+export VISUALHUD_TTY=/dev/null
+FRAME_SET_BG="$TEST_ROOT/frame-set-bg.py"
+FRAME_SET_BG_LOG="$TEST_ROOT/frame-set-bg.log"
+FRAME_OLD_STARTED="$TEST_ROOT/frame-old-started"
+FRAME_OLD_RELEASE="$TEST_ROOT/frame-old-release"
+FRAME_NEW_DONE="$TEST_ROOT/frame-new-done"
+cat > "$FRAME_SET_BG" <<'PY'
+import os
+import pathlib
+import sys
+import time
+
+sprite = pathlib.Path(sys.argv[1]).name if len(sys.argv) > 1 else ""
+with open(os.environ["VISUALHUD_SET_BG_LOG"], "a", encoding="utf-8") as handle:
+    handle.write(f"start:{sprite}\n")
+if sprite == "snorlax.png":
+    pathlib.Path(os.environ["VISUALHUD_TEST_BG_STARTED"]).write_text("started\n", encoding="utf-8")
+    deadline = time.monotonic() + 5
+    while not pathlib.Path(os.environ["VISUALHUD_TEST_BG_RELEASE"]).exists():
+        if time.monotonic() >= deadline:
+            raise SystemExit(3)
+        time.sleep(0.01)
+with open(os.environ["VISUALHUD_SET_BG_LOG"], "a", encoding="utf-8") as handle:
+    handle.write(f"done:{sprite}\n")
+PY
+export VISUALHUD_SET_BG="$FRAME_SET_BG"
+export VISUALHUD_SET_BG_LOG="$FRAME_SET_BG_LOG"
+export VISUALHUD_TEST_BG_STARTED="$FRAME_OLD_STARTED"
+export VISUALHUD_TEST_BG_RELEASE="$FRAME_OLD_RELEASE"
+export VISUALHUD_BG=on
+echo '{"hook_event_name":"Notification","notification_type":"permission_prompt","session_id":"test"}' \
+    | bash "$SCRIPT_UNDER_TEST" 2>/dev/null &
+frame_old_pid=$!
+wait_for_file_content "$FRAME_OLD_STARTED" "owned background application"
+(
+    echo '{"hook_event_name":"StopFailure","session_id":"test"}' | bash "$SCRIPT_UNDER_TEST" 2>/dev/null
+    touch "$FRAME_NEW_DONE"
+) &
+frame_new_pid=$!
+sleep 0.1
+assert_file_not_exists "Newer frame waits while the prior background is applying" "$FRAME_NEW_DONE"
+touch "$FRAME_OLD_RELEASE"
+wait "$frame_old_pid" "$frame_new_pid"
+assert_contains "Newer owned frame applies its matching background last" \
+    "done:psyduck.png" "$(tail -n 1 "$FRAME_SET_BG_LOG" 2>/dev/null)"
+unset VISUALHUD_BG VISUALHUD_TEST_BG_STARTED VISUALHUD_TEST_BG_RELEASE
+cleanup
+echo ""
+
 # --- TEST 22: Missing theme sprites clear stale background art ---
 echo "--- Test 22: Missing theme sprites clear stale background art ---"
 cleanup
+export VISUALHUD_TTY=/dev/null
 TMP_THEME_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/visualhud-theme-test.XXXXXX")
 mkdir -p "$TMP_THEME_ROOT/tmnt"
 cp "$ROOT_DIR/themes/tmnt/theme.json" "$TMP_THEME_ROOT/tmnt/theme.json"
@@ -996,13 +1071,69 @@ run_hook '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_id": 
 run_hook '{"hook_event_name": "SubagentStart", "session_id": "test", "agent_id": "agt_c", "agent_type": "Review"}'
 run_hook '{"hook_event_name": "SubagentStart", "session_id": "test", "agent_id": "agt_d", "agent_type": "Worker"}'
 : > "$SUBAGENT_TTY"
-run_hook '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_id": "agt_c", "agent_type": "Review"}' &
+SUBAGENT_DELAYED_HELPER="$TEST_ROOT/delayed-subagent-json.js"
+SUBAGENT_STOP_STARTED="$TEST_ROOT/delayed-subagent-stop-started"
+SUBAGENT_STOP_RELEASE="$TEST_ROOT/release-delayed-subagent-stop"
+cat > "$SUBAGENT_DELAYED_HELPER" <<'JS'
+const fs = require("fs");
+const { spawnSync } = require("child_process");
+
+const input = fs.readFileSync(0, "utf8");
+const delayedAgentId = process.env.VISUALHUD_TEST_SUBAGENT_ID;
+if (
+  process.argv[2] === "field"
+  && process.argv[3] === "agent_id"
+  && delayedAgentId
+  && input.includes(`"agent_id": "${delayedAgentId}"`)
+) {
+  fs.writeFileSync(process.env.VISUALHUD_TEST_SUBAGENT_STOP_STARTED, "started\n");
+  const deadline = Date.now() + 5000;
+  while (!fs.existsSync(process.env.VISUALHUD_TEST_SUBAGENT_STOP_RELEASE)) {
+    if (Date.now() >= deadline) process.exit(3);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+  }
+}
+const result = spawnSync(process.execPath, [process.env.VISUALHUD_REAL_JSON_HELPER, ...process.argv.slice(2)], {
+  input,
+  encoding: "utf8",
+});
+process.stdout.write(result.stdout || "");
+process.stderr.write(result.stderr || "");
+process.exit(result.status == null ? 1 : result.status);
+JS
+echo '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_id": "agt_c", "agent_type": "Review"}' \
+    | VISUALHUD_JSON_HELPER="$SUBAGENT_DELAYED_HELPER" VISUALHUD_REAL_JSON_HELPER="$JSON_HELPER" \
+        VISUALHUD_TEST_SUBAGENT_STOP_STARTED="$SUBAGENT_STOP_STARTED" \
+        VISUALHUD_TEST_SUBAGENT_STOP_RELEASE="$SUBAGENT_STOP_RELEASE" \
+        VISUALHUD_TEST_SUBAGENT_ID="agt_c" \
+        bash "$SCRIPT_UNDER_TEST" 2>/dev/null &
 stop_c_pid=$!
-run_hook '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_id": "agt_d", "agent_type": "Worker"}' &
-stop_d_pid=$!
-wait "$stop_c_pid" "$stop_d_pid"
+wait_for_file_content "$SUBAGENT_STOP_STARTED" "delayed subagent stop"
+run_hook '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_id": "agt_d", "agent_type": "Worker"}'
+touch "$SUBAGENT_STOP_RELEASE"
+wait "$stop_c_pid"
 assert_eq "Concurrent subagent stops clear every marker" "0" "$(subagent_marker_count)"
 assert_contains "Concurrent subagent stops finish in working state" "WORKING" "$(tail -c 1200 "$SUBAGENT_TTY" 2>/dev/null)"
+
+run_hook '{"hook_event_name": "SubagentStart", "session_id": "test", "agent_id": "agt_e", "agent_type": "Review"}'
+: > "$SUBAGENT_TTY"
+STALE_SUBAGENT_STARTED="$TEST_ROOT/stale-subagent-stop-started"
+STALE_SUBAGENT_RELEASE="$TEST_ROOT/release-stale-subagent-stop"
+echo '{"hook_event_name": "SubagentStop", "session_id": "test", "agent_id": "agt_e", "agent_type": "Review"}' \
+    | VISUALHUD_JSON_HELPER="$SUBAGENT_DELAYED_HELPER" VISUALHUD_REAL_JSON_HELPER="$JSON_HELPER" \
+        VISUALHUD_TEST_SUBAGENT_STOP_STARTED="$STALE_SUBAGENT_STARTED" \
+        VISUALHUD_TEST_SUBAGENT_STOP_RELEASE="$STALE_SUBAGENT_RELEASE" \
+        VISUALHUD_TEST_SUBAGENT_ID="agt_e" \
+        bash "$SCRIPT_UNDER_TEST" 2>/dev/null &
+stale_subagent_pid=$!
+wait_for_file_content "$STALE_SUBAGENT_STARTED" "stale subagent stop"
+mkdir -p "$TEST_ROOT/new-cwd"
+run_hook "$(jq -nc --arg cwd "$TEST_ROOT/new-cwd" '{hook_event_name: "CwdChanged", session_id: "test", cwd: $cwd}')"
+touch "$STALE_SUBAGENT_RELEASE"
+wait "$stale_subagent_pid"
+assert_eq "Stale subagent stop still clears its marker" "0" "$(subagent_marker_count)"
+assert_contains "Unrelated newer lifecycle frame remains authoritative" "Idle" "$(cat "$SUBAGENT_TTY" 2>/dev/null)"
+assert_not_contains "Stale subagent reconciliation cannot restore working" "WORKING" "$(cat "$SUBAGENT_TTY" 2>/dev/null)"
 
 # Theme without .subagent: SubagentStart still tracks marker but doesn't crash on missing state
 cleanup
@@ -1262,6 +1393,7 @@ echo ""
 # --- TEST 22b: VISUALHUD_BG=off self-heals stale iTerm2 cache once per pane ---
 echo "--- Test 22b: Compact default (VISUALHUD_BG unset) self-heals stale BG once ---"
 cleanup
+export VISUALHUD_TTY=/dev/null
 rm -f "$BG_CLEAR_FILE" 2>/dev/null
 : > "$LEGACY_BG_CLEAR_FILE"
 TMP_THEME_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/visualhud-theme-test.XXXXXX")

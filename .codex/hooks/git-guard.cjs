@@ -12,6 +12,10 @@ if (process.argv[2] === "prove") {
   process.exit(runProofCli(process.argv.slice(3)));
 }
 
+if (process.argv[2] === "verify-proof") {
+  process.exit(runVerifyProofCli(process.argv.slice(3)));
+}
+
 const input = fs.readFileSync(0, "utf8");
 let payload = {};
 
@@ -440,6 +444,21 @@ function sdlcProofStatus(cwd = process.cwd()) {
   }
 
   return { ok: true, reason: "fresh proof is present", hint: "" };
+}
+
+function runVerifyProofCli(args) {
+  if (args.length > 1 || (args.length === 1 && args[0] !== "--json")) {
+    process.stderr.write("Usage: node .codex/hooks/git-guard.cjs verify-proof [--json]\n");
+    return 2;
+  }
+
+  const status = sdlcProofStatus();
+  if (args[0] === "--json") {
+    process.stdout.write(`${JSON.stringify(status)}\n`);
+  } else {
+    process.stdout.write(`${status.ok ? "PASS" : "FAIL"}: ${status.reason}\n`);
+  }
+  return status.ok ? 0 : 2;
 }
 
 function isRedirectionOperatorPrefix(value) {
@@ -4001,7 +4020,48 @@ function commandChangesDirectory(commandText, depth = 0) {
   return false;
 }
 
-function commandTargetsAnotherRepoContext(commandText) {
+function isStandaloneSameRepositoryGitC(commandText, cwd, expectedSubcommand) {
+  const normalizedCommandText = stripHeredocBodies(commandText);
+  if (executableSubstitutionTexts(normalizedCommandText).length > 0) {
+    return false;
+  }
+
+  const segments = commandSegments(shellTokens(normalizedCommandText));
+  if (segments.length !== 1) {
+    return false;
+  }
+
+  const words = segments[0];
+  const executableIndex = firstExecutableIndex(words);
+  if (executableIndex !== 0 || executableName(words[executableIndex]) !== "git") {
+    return false;
+  }
+
+  const details = gitSubcommandDetails(words, executableIndex + 1);
+  if (details.subcommand !== expectedSubcommand
+    || details.index !== executableIndex + 3
+    || words[executableIndex + 1] !== "-C"
+    || !path.isAbsolute(words[executableIndex + 2])) {
+    return false;
+  }
+
+  const currentRoot = repositoryRoot(cwd);
+  const targetRoot = repositoryRoot(words[executableIndex + 2]);
+  if (currentRoot === "" || targetRoot === "") {
+    return false;
+  }
+
+  try {
+    return fs.realpathSync(currentRoot) === fs.realpathSync(targetRoot);
+  } catch {
+    return false;
+  }
+}
+
+function commandTargetsAnotherRepoContext(commandText, cwd, subcommand) {
+  if (isStandaloneSameRepositoryGitC(commandText, cwd, subcommand)) {
+    return false;
+  }
   return commandHasGitRepositoryOverride(commandText) || commandChangesDirectory(commandText);
 }
 
@@ -5217,7 +5277,7 @@ if (/^\s*(?:(?:\/usr\/bin|\/bin)\/)?(?:bash|zsh|sh|dash|ksh|fish)(?:\s+-[\w-]+)*
 const subcommand = guardedGitSubcommand(command);
 
 if (subcommand === "commit") {
-  if (commandTargetsAnotherRepoContext(command)) {
+  if (commandTargetsAnotherRepoContext(command, commandCwd, subcommand)) {
     block("SDLC CHECKPOINT: git commit targets another repo context. Run from the target repo root and stamp fresh SDLC proof there.");
     process.exit(0);
   }
@@ -5230,7 +5290,7 @@ if (subcommand === "commit") {
 }
 
 if (subcommand === "push") {
-  if (commandTargetsAnotherRepoContext(command)) {
+  if (commandTargetsAnotherRepoContext(command, commandCwd, subcommand)) {
     block("SDLC CHECKPOINT: git push targets another repo context. Run from the target repo root and stamp fresh SDLC proof there.");
     process.exit(0);
   }

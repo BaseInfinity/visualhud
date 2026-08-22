@@ -54,15 +54,49 @@ Do not commit until you can answer:
 - The proof is recent
 - The diff matches the proof
 
-Codex commit/push hooks enforce this with an ignored repo-local proof record at
-`.codex-sdlc/proof.json`. After staging the intended changes and completing
-self-review, run:
+After focused checks and self-review, run required broad verification through
+the proof-stamping command for the git gate:
 
 ```bash
 node .codex/hooks/git-guard.cjs prove --reviewed
 ```
 
-The proof command runs the checks configured in `.codex-sdlc/manifest.json` and
-binds the result to the current Git index and workspace fingerprint. It refuses
-to stamp staged tracked content that differs from the tested worktree, and any
-subsequent index or workspace change makes the proof stale.
+If cross-model review is required, wait for a clean Sol review and then run the bounded Fable High reviewer over the same frozen candidate:
+
+```bash
+node .codex/hooks/fable-review.cjs --base <ref> --consent-subscription-quota
+```
+
+This consumes Claude subscription quota and refuses API-key or alternate-provider authentication.
+
+When policy requires Sol High and Fable High to reconcile their independent
+reviews, run the single bounded gate over the same frozen candidate:
+
+```bash
+node .codex/hooks/dual-review.cjs --base <ref> --consent-subscription-quota
+```
+
+Clean agreement stops immediately. A verdict split receives exactly one
+verbatim structured cross-feed round; the gate then emits one joint receipt and
+stops. It never permits a third reviewer exchange.
+
+For this repository, the manifest resolves the complete maintainer suite to
+`npm test`. Run and stamp that suite once with:
+
+```bash
+node .codex/hooks/git-guard.cjs prove --reviewed
+```
+
+Do not run `npm test` immediately before this command; the proof-stamping
+invocation already runs it.
+
+If setup has not detected proof commands yet, pass them explicitly:
+
+```bash
+node .codex/hooks/git-guard.cjs prove --reviewed --check "npm test"
+```
+
+The stamp is stored at `.codex-sdlc/proof.json`, expires after four hours, and is
+tied to the current worktree content. The file is ignored by Git. Guarded commit
+and push commands reject unrelated repository contexts and require a fresh proof
+from the target worktree.

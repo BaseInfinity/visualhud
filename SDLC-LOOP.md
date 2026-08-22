@@ -5,22 +5,32 @@ Codex does not have a native `/sdlc` command. This file is the honest replacemen
 ## The Loop
 
 1. Frame the slice
-   Restate the task, set a scope guard, state confidence (`HIGH` / `MEDIUM` / `LOW`), and say what will prove the work is done.
+   Restate one issue, freeze a closed behavior allowlist, one risk lane, and explicit exclusions, state confidence (`HIGH` / `MEDIUM` / `LOW`), and say what will prove the work is done. Feature creep becomes a separate follow-up issue unless omitting it would make the active change unsafe or nonfunctional.
 2. Pick the reasoning level
-   Default to `high` for meaningful agentic coding. Escalate the difficult slice to `xhigh` for security review, migrations, destructive operations, long-running research, or challenging coding where `high` leaves unresolved risk. Repo-local instructions may define a measured exception.
+   Start at this repo's selected `medium` baseline. Escalate hook lifecycle, terminal renderer, installer, release, CI, or difficult regression slices to `high`, then use `xhigh` only when high leaves material risk unresolved.
    Use Max as a single-task escalation only when `xhigh` is not enough. Use Ultra only for subagent-backed parallel work that divides cleanly. Most tasks do not need Max or Ultra.
 3. Red first
    Write the failing test first when the task is code-shaped.
    If the task is setup, auth, or environment repair, define the failing observable first instead of pretending it is unit-testable.
+   Harness-repair lane: when broken SDLC enforcement or test bootstrap prevents RED for its own repair, declare the failing observable and exact file allowlist, make the smallest repair, then write and run the missing regression test immediately after. This never waives final proof or review.
 4. Green with the smallest change
    Make the narrowest change that can satisfy the red check.
 5. Prove it
    Run the targeted checks, capture the evidence, and make sure the result matches the original success condition.
 6. Review the diff
-   Read the diff back, note risks, and remove junk before thinking about a commit.
+   Author-review the exact incremental diff, note risks, and remove junk before each coherent green commit.
 7. Commit only after proof
-   Commits happen after tests and proof, not before.
-8. Escalate honestly
+   Keep cumulative green work staged when the active git guard requires a current broad proof for commits. Freeze that completion candidate, run one fresh broad proof, and commit only after the final review accepts the proof-bound candidate; relevant changes invalidate it and require a fresh final proof.
+   Incremental checkpoint: use affected proof, exact-diff author review, and at most one risk-based reviewer before each coherent green commit. At the completion boundary, use the Sol High gate and add the bounded Sol High plus Fable High joint gate only when repo policy or the issue's risk explicitly requires cross-model review. Fix a blocker as one bounded corrective delta with targeted proof. A third same-plan correction means stop; human approval may authorize a replan with newly scoped work, not silently extend the exhausted plan.
+8. Review to a decision
+   Review the full base-to-candidate diff once after it is stable. Severity ladder: P0 stops the line; P1 blocks completion; P2 is a bounded fix now or a follow-up issue; P3 never blocks and is recorded only when worthwhile.
+   Run one broad proof run total on the frozen candidate through `node .codex/hooks/git-guard.cjs prove --reviewed`; do not run the suite directly and then rerun it through the guard.
+   Use a prompt-only review when supplying custom proof-aware instructions. A custom prompt must not be combined with `--uncommitted`, `--base`, or `--commit`; those predefined target flags are for reviews without a custom prompt. Include the exact base identity, frozen candidate tree identity, proof command, and result and say `Do not rerun tests`. Targeted verification is allowed only for a concrete suspected defect; never rerun the broad suite. Missing or stale proof is a blocker to report, not permission to launch another broad suite.
+   Reviewer role: inspect the frozen diff and return prioritized code-review findings only; do not edit, implement, run tests, re-plan, or perform follow-up work. The builder owns every correction through the normal SDLC loop.
+   When two reviewers are required, run `node .codex/hooks/dual-review.cjs --base <ref> --consent-subscription-quota`. Sol High and Fable High assess the same frozen candidate independently. Clean agreement stops immediately; a verdict split gets one verbatim cross-feed of findings before one conservative joint receipt. Consent acknowledges Claude subscription-quota use. Do not add another reconciliation exchange. Allow at most two corrective rounds. If P0/P1 remains, decompose, abandon, or escalate; never waive it or continue an unbounded review loop.
+   Check every corrective finding against the base. If the blocker is candidate-born and outside the allowlist, remove that accretion instead of repairing it.
+   For a commit or push from a linked worktree, use a standalone `git -C <absolute-worktree> commit ...` or `git -C <absolute-worktree> push ...`; never rely only on the execution tool's `workdir`, because some Codex surfaces omit it from PreToolUse payloads.
+9. Escalate honestly
    If blocked, name the blocker, show the evidence, and propose the next move.
 
 ## Task routing gate

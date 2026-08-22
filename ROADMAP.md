@@ -21,6 +21,44 @@ Produce a verified VisualHUD `1.2.0` release candidate before distributing it.
 Implementation and deterministic proof can run unattended. Real-terminal
 acceptance and immutable publication remain separate supervised slices.
 
+### Current Corrective SDLC Checkpoint
+
+Resume the staged review-workflow candidate from base commit
+`7400f7c24b91ffb8fc348e2ff1a2a2d08b02eebb`; it is not committed or published.
+The original three final-review blockers now have focused regressions and fixes:
+review receipts hash the exact patch bytes sent to reviewers, forced termination
+still reaches reviewer descendants after the direct child exits, and managed-file
+hashes are refreshed. The 2026-08-16 guarded `npm test` proof passed but has
+expired and must not be reused.
+
+The interrupted Sol High review was recovered from its local session record. It
+reported one P1 (the neutral-directory Sol subprocess needs
+`--skip-git-repo-check`) and one P2 (Fable certification must reject model
+substitution). RED/GREEN coverage for both findings passes, and the managed
+hashes are refreshed. This candidate is eligible to commit only after one fresh
+replacement guarded proof and one clean, bounded Sol High review of that exact
+frozen tree; use the proof receipt and Git history as the completion record. Do
+not publish npm. If Fable is genuinely unavailable, the single fallback reviewer
+is Opus 4.8 at `xhigh`; reconcile that adapter policy in a later wizard slice
+rather than expanding this candidate.
+
+The first clean acceptance attempt exposed one final guard-contract defect: the
+documented standalone same-worktree `git -C <absolute-worktree> commit` form was
+classified as a foreign repository. A focused regression and fail-closed fix now
+allow one absolute `-C` only when it resolves to the same physical proven
+repository; foreign targets and compound repository switches remain blocked. The
+completion commit is valid only when Git history follows a fresh guarded proof
+and clean Sol High review that include this final delta.
+
+The bounded Sol High review of that candidate then found a P1 in the narrow
+`git -C` exception: an executable command substitution could switch to a foreign
+repository before the same-worktree command ran. RED regressions now cover both
+command and process substitutions, the exception declines every executable
+substitution before the recursive foreign-context checks run, and the focused
+guard suite passes 21/21. The previous proof is superseded. Freeze this corrected
+tree, refresh its managed hash, run one replacement guarded proof, and obtain a
+clean corrective Sol High verdict before committing or pushing.
+
 ### Unattended Overnight Scope
 
 The unattended implementation and documentation slices are complete. Their
@@ -74,10 +112,11 @@ both expose the verified release version.
 [Release documentation gate](RELEASE_CHECKLIST.md)
 
 1. [#23 - Show active GitHub issue and milestone progress in the HUD](https://github.com/BaseInfinity/visualhud/issues/23)
-2. [#4 - Use Slowpoke or Psyduck for reconnect states](https://github.com/BaseInfinity/visualhud/issues/4)
-3. [#12 - Add a guided theme-pack picker with visual and sound lanes](https://github.com/BaseInfinity/visualhud/issues/12)
-4. [#14 - Add a Stardew Valley-inspired farm journey theme pack](https://github.com/BaseInfinity/visualhud/issues/14)
-5. [#13 - Add stable theme demos after theme-pack UX is complete](https://github.com/BaseInfinity/visualhud/issues/13)
+2. [#24 - Learn per-repository checkpoint ETA ranges](https://github.com/BaseInfinity/visualhud/issues/24)
+3. [#4 - Use Slowpoke or Psyduck for reconnect states](https://github.com/BaseInfinity/visualhud/issues/4)
+4. [#12 - Add a guided theme-pack picker with visual and sound lanes](https://github.com/BaseInfinity/visualhud/issues/12)
+5. [#14 - Add a Stardew Valley-inspired farm journey theme pack](https://github.com/BaseInfinity/visualhud/issues/14)
+6. [#13 - Add stable theme demos after theme-pack UX is complete](https://github.com/BaseInfinity/visualhud/issues/13)
 
 Authoritative issue and milestone context comes first, followed by reconnect
 semantics, because delivery and status clarity are core Codex UX. Demos remain

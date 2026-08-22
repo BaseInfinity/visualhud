@@ -117,7 +117,7 @@ assert_no_repo_match() {
     local label="$1" pattern="$2"
     shift 2
     TOTAL=$((TOTAL + 1))
-    if rg -n "$pattern" "$@" >/dev/null 2>&1; then
+    if grep -E -n -- "$pattern" "$@" >/dev/null 2>&1; then
         fail "$label (matched forbidden pattern: $pattern)"
     else
         pass "$label"
@@ -245,13 +245,14 @@ assert_not_contains "Completed documentation issue #15 leaves the open roadmap" 
 assert_contains "Roadmap links canary-discovered installer blocker #19" "issues/19" "$SUPERVISED_ROADMAP"
 assert_contains "Roadmap links canary-discovered tab-placement blocker #20" "issues/20" "$SUPERVISED_ROADMAP"
 assert_contains "Roadmap links current Linux CI blocker #22" "issues/22" "$SUPERVISED_ROADMAP"
+assert_contains "Roadmap links critical-context overlay blocker #25" "issues/25" "$SUPERVISED_ROADMAP"
 assert_contains "Roadmap links supervised canary issue #16" "issues/16" "$SUPERVISED_ROADMAP"
 assert_contains "Roadmap links final publication issue #17" "issues/17" "$SUPERVISED_ROADMAP"
 assert_not_contains "Overnight scope excludes the supervised canary" "issues/16" "$OVERNIGHT_ROADMAP"
 assert_not_contains "Overnight scope excludes npm publication" "issues/17" "$OVERNIGHT_ROADMAP"
 assert_contains "Roadmap explicitly excludes npm publication from overnight work" "Never publish npm" "$OVERNIGHT_ROADMAP"
 assert_contains "Roadmap marks unattended v1.2 work complete" "unattended implementation and documentation slices are complete" "$OVERNIGHT_ROADMAP"
-assert_in_order "Roadmap restores CI before candidate verification, canary, and publication" "$SUPERVISED_ROADMAP" "issues/22" "issues/20" "issues/19" "issues/16" "issues/17"
+assert_in_order "Roadmap restores CI and critical context before candidate verification, canary, and publication" "$SUPERVISED_ROADMAP" "issues/22" "issues/25" "issues/20" "issues/19" "issues/16" "issues/17"
 assert_not_contains "Closed Claude conflict #7 leaves the open roadmap" "issues/7" "$ROADMAP_DOC"
 assert_contains "Roadmap links next theme issue #4" "issues/4" "$ROADMAP_DOC"
 assert_contains "Roadmap links next guided theme-pack issue #12" "issues/12" "$ROADMAP_DOC"
@@ -275,6 +276,7 @@ assert_contains "Roadmap defines active completion criteria" "## Completion Crit
 assert_contains "Roadmap requires npm release verification" "npm view visualhud version" "$ROADMAP_DOC"
 assert_contains "Roadmap requires non-publishing candidate CI before release completion" "Configured non-publishing candidate CI passes" "$ROADMAP_DOC"
 assert_contains "Roadmap requires a release documentation audit" "release documentation audit passes" "$ROADMAP_DOC"
+assert_contains "Roadmap requires a contributor-ready issue audit before milestone closure" "Every remaining open GitHub issue has current status, milestone, dependencies, and a contributor-ready next action" "$ROADMAP_DOC"
 assert_contains "Roadmap keeps npm milestones open until publication" "A release milestone is not complete until the npm registry" "$ROADMAP_DOC"
 assert_contains "Roadmap publishes release artifacts before milestone closure" "Release artifacts are published and verified before the milestone closes" "$ROADMAP_DOC"
 assert_not_contains "Roadmap does not delegate active scope to GOALS.md" "GOALS.md" "$ROADMAP_DOC"

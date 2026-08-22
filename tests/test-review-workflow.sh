@@ -14,8 +14,10 @@ TOTAL=0
 
 assert_contains() {
     local label="$1" needle="$2" file="$3"
+    local content
     TOTAL=$((TOTAL + 1))
-    if rg -F -U -- "$needle" "$file" >/dev/null; then
+    content=$(cat "$file")
+    if [[ "$content" == *"$needle"* ]]; then
         PASS=$((PASS + 1))
         printf '  PASS: %s\n' "$label"
     else
@@ -26,8 +28,10 @@ assert_contains() {
 
 assert_not_contains() {
     local label="$1" needle="$2" file="$3"
+    local content
     TOTAL=$((TOTAL + 1))
-    if rg -F -U -- "$needle" "$file" >/dev/null; then
+    content=$(cat "$file")
+    if [[ "$content" == *"$needle"* ]]; then
         FAIL=$((FAIL + 1))
         printf '  FAIL: %s (found forbidden %s)\n' "$label" "$needle"
     else

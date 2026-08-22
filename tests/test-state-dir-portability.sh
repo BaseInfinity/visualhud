@@ -48,6 +48,30 @@ matches=$(
 )
 assert_eq "Shell tests avoid hard-coded home checkout paths" "" "$matches"
 
+RG_COMMAND_PATTERN='(^|[[:space:]();|&])rg([[:space:]();|&]|$)'
+
+matches=$(
+    grep -R -n -E "$RG_COMMAND_PATTERN" "$ROOT_DIR/tests" \
+        --include='*.sh' \
+        --exclude='test-state-dir-portability.sh' \
+        || true
+)
+assert_eq "Shell tests avoid undeclared ripgrep runtime dependencies" "" "$matches"
+
+matches=$(
+    # The command-substitution text below is an intentionally literal fixture.
+    # shellcheck disable=SC2016
+    printf '%s\n' \
+        'rg -n needle file' \
+        '$(rg -n needle file)' \
+        '(rg -n needle file)' \
+        'true;rg -n needle file' \
+        'true|rg -n needle file' \
+        'true&&rg -n needle file' |
+        grep -c -E "$RG_COMMAND_PATTERN" || true
+)
+assert_eq "Ripgrep dependency detector covers shell command boundaries" "6" "$matches"
+
 echo ""
 echo "=== Results: $PASS/$TOTAL passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then

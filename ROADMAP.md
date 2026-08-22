@@ -23,41 +23,30 @@ acceptance and immutable publication remain separate supervised slices.
 
 ### Current Corrective SDLC Checkpoint
 
-Resume the staged review-workflow candidate from base commit
-`7400f7c24b91ffb8fc348e2ff1a2a2d08b02eebb`; it is not committed or published.
-The original three final-review blockers now have focused regressions and fixes:
-review receipts hash the exact patch bytes sent to reviewers, forced termination
-still reaches reviewer descendants after the direct child exits, and managed-file
-hashes are refreshed. The 2026-08-16 guarded `npm test` proof passed but has
-expired and must not be reused.
+The proof-aware review hardening slice is committed and pushed as
+`b1ba40ca641aa92248eca80f0a406fe8cac955c8`. Its replacement guarded proof passed
+on the frozen candidate and the bounded Sol High review returned no findings. No
+npm package was published.
 
-The interrupted Sol High review was recovered from its local session record. It
-reported one P1 (the neutral-directory Sol subprocess needs
-`--skip-git-repo-check`) and one P2 (Fable certification must reject model
-substitution). RED/GREEN coverage for both findings passes, and the managed
-hashes are refreshed. This candidate is eligible to commit only after one fresh
-replacement guarded proof and one clean, bounded Sol High review of that exact
-frozen tree; use the proof receipt and Git history as the completion record. Do
-not publish npm. If Fable is genuinely unavailable, the single fallback reviewer
-is Opus 4.8 at `xhigh`; reconcile that adapter policy in a later wizard slice
-rather than expanding this candidate.
+The first Linux CI run for that commit, [run 32592386861](https://github.com/BaseInfinity/visualhud/actions/runs/32592386861),
+proved the issue #22 WezTerm journey-stage assertions but then exposed an
+undeclared `rg` dependency in two shell tests on `ubuntu-latest`. The active
+corrective candidate adds a RED portability regression and replaces those test
+helpers with Bash/grep equivalents. Focused GREEN evidence is 4/4 portability,
+26/26 review workflow, and 255/255 theme system before the ROADMAP assertions in
+this checkpoint were added. Freeze this candidate, run its one guarded proof and
+one bounded Sol High review, then commit, push, and require Linux CI green before
+closing issue #22. Do not pack a release candidate or publish npm yet.
 
-The first clean acceptance attempt exposed one final guard-contract defect: the
-documented standalone same-worktree `git -C <absolute-worktree> commit` form was
-classified as a foreign repository. A focused regression and fail-closed fix now
-allow one absolute `-C` only when it resolves to the same physical proven
-repository; foreign targets and compound repository switches remain blocked. The
-completion commit is valid only when Git history follows a fresh guarded proof
-and clean Sol High review that include this final delta.
-
-The bounded Sol High review of that candidate then found a P1 in the narrow
-`git -C` exception: an executable command substitution could switch to a foreign
-repository before the same-worktree command ran. RED regressions now cover both
-command and process substitutions, the exception declines every executable
-substitution before the recursive foreign-context checks run, and the focused
-guard suite passes 21/21. The previous proof is superseded. Freeze this corrected
-tree, refresh its managed hash, run one replacement guarded proof, and obtain a
-clean corrective Sol High verdict before committing or pushing.
+The Pokemon critical-context investigation also confirmed that the active stage
+colors can change while Nurse Joy/Blissey is never rendered in the live HUD.
+Issue #25 records the accepted product contract: preserve the journey character
+as the primary visual and render Nurse Joy/Blissey as a distinct critical-context
+overlay, removing it cleanly on de-escalation. A bounded Fable review recommends
+fixing this before the replacement candidate is packed. If Fable is genuinely
+unavailable for a future required review, the single fallback reviewer is Opus
+4.8 at `xhigh`; reconcile that adapter policy in a later wizard slice rather than
+expanding this release candidate.
 
 ### Unattended Overnight Scope
 
@@ -76,12 +65,15 @@ acceptance criteria remain materially ambiguous.
 These slices begin only after the unattended release candidate is green:
 
 1. [#22 - Fix Linux CI WezTerm journey-stage regression](https://github.com/BaseInfinity/visualhud/issues/22)
-2. [#20 - Preserve the iTerm2 top tab bar during VisualHUD setup](https://github.com/BaseInfinity/visualhud/issues/20)
-3. [#19 - Prevent expected iTerm2 process probes from emitting false setup blockers](https://github.com/BaseInfinity/visualhud/issues/19)
-4. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
-5. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
+2. [#25 - Render Nurse Joy/Blissey as an honest critical-context overlay](https://github.com/BaseInfinity/visualhud/issues/25)
+3. [#20 - Preserve the iTerm2 top tab bar during VisualHUD setup](https://github.com/BaseInfinity/visualhud/issues/20)
+4. [#19 - Prevent expected iTerm2 process probes from emitting false setup blockers](https://github.com/BaseInfinity/visualhud/issues/19)
+5. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
+6. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
 
-Issue #22 blocks all candidate work until Linux CI is green. Issue #20
+Issue #22 blocks all candidate work until Linux CI is green. Issue #25 then
+blocks replacement candidate packing so its visual contract is exercised once,
+not discovered after another supervised canary. Issue #20
 invalidates the candidate with SHA-256
 `01b039ca675e9d1cf58135d70ced18a853eafda521b9c3cbb230779a6043fb5f`;
 it must never be published. Issues #20 and #19 must both be verified in a new
@@ -100,6 +92,7 @@ distribution actions.
 6. The supervised Codex/iTerm2 canary passes and the maintainer accepts its visual evidence.
 7. The `v1.2.0` tag points at the intended release commit and GitHub has release notes for `v1.2.0`.
 8. `npm view visualhud version` reports `1.2.0` after a fresh consumer install is verified.
+9. Every remaining open GitHub issue has current status, milestone, dependencies, and a contributor-ready next action before the release milestone closes.
 
 A release milestone is not complete until the npm registry and GitHub release
 both expose the verified release version.

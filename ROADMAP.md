@@ -62,10 +62,19 @@ dimension rejection and bounded decompression. The focused GREEN now covers both
 limits. A bounded Fable
 consultation was attempted for that narrow design choice but returned no advice
 because it exhausted its single allowed turn. The release audit's
-90-file/45,057,392-byte package metadata and finalized managed-file hashes are
-current. The next step is to freeze the self-reviewed corrected candidate for
-its final replacement guarded proof and bounded Sol High review;
-no npm package was published. If Fable is genuinely unavailable for a future required review,
+90-file/45,057,392-byte package metadata and finalized managed-file hashes were
+current for commit `4edc9c3168be23d29c12e8c846a91b7782180a9b`. Its guarded
+proof passed and the bounded Sol High review returned no P0-P3 findings, so it
+was pushed without an npm publish. Ubuntu CI run
+[`32600695248`](https://github.com/BaseInfinity/visualhud/actions/runs/32600695248)
+then exposed a Linux timing regression in the WezTerm test: the pane-token count
+also included an asynchronous repaint lock file. That failed run is the
+corrective RED. The current replacement test counts only canonical numeric
+token-record filenames, preserving coverage of pane isolation without treating
+transient lock/candidate files as panes. The focused WezTerm GREEN passed; the
+next steps are self-review, a managed-hash check, one replacement guarded proof,
+one bounded Sol High review, then a corrective commit/push and CI watch. No npm
+package was published. If Fable is genuinely unavailable for a future required review,
 the single fallback reviewer is Opus 4.8 at `xhigh`; reconcile that adapter policy
 in a later wizard slice rather than expanding this release candidate.
 

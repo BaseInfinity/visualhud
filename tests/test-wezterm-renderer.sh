@@ -159,7 +159,10 @@ for pane_id in pane-a pane-b; do
                 VISUALHUD_STATE_DIR="$pane_state" VISUALHUD_TTY="$alias_target" bash .codex/hooks/visualhud-codex.sh
     )
 done
-pane_token_count="$(find "$pane_state" -type f -name 'visualhud-repaint-target_*' | wc -l | tr -d ' ')"
+pane_token_count="$(
+    find "$pane_state" -type f -name 'visualhud-repaint-target_*' -print \
+        | awk -F/ '$NF ~ /^visualhud-repaint-target_[0-9]+$/ { count += 1 } END { print count + 0 }'
+)"
 assert_contains "Stable pane identifiers isolate repaint cancellation" "2" "$pane_token_count"
 
 DELAYED_JSON_HELPER="$TMP_ROOT/delayed-visualhud-json.js"

@@ -20,6 +20,7 @@
 | npm/npx package install test | `bash tests/test-npm-package.sh` |
 | npm release automation test | `bash tests/test-npm-release.sh` |
 | Theme calibration test | `bash tests/test-theme-calibration.sh` |
+| Context character overlay | `bash tests/test-context-overlay.sh` |
 | Host/renderer matrix | `npm run test:matrix` |
 | Compatibility report | `npm run coverage:matrix` |
 | Lint | `shellcheck *.sh` |
@@ -62,6 +63,15 @@
 - The iTerm2 lifecycle integration test blocks a background helper while a
   newer event attempts to render. The newer event must wait, then its matching
   title, colors, and character background must be the final owned frame.
+- The context-overlay regression decodes real theme PNGs without Pillow and
+  exercises grayscale, RGB, indexed/transparency, grayscale-alpha, RGBA,
+  1/4/8/16-bit samples, and Adam7 input. It proves the iTerm2 composite
+  preserves every decoded primary pixel, renders the source-backed context
+  character on its scoped color, rejects oversized files and dimensions before
+  hashing/decompression, bounds decompressed and combined-canvas allocation,
+  stays byte deterministic, and restores the original primary path on
+  de-escalation. It also proves WezTerm receives a distinct context image/color
+  layer.
 
 ## Live And Isolated Tests
 

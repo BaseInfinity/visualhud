@@ -28,25 +28,46 @@ The proof-aware review hardening slice is committed and pushed as
 on the frozen candidate and the bounded Sol High review returned no findings. No
 npm package was published.
 
-The first Linux CI run for that commit, [run 32592386861](https://github.com/BaseInfinity/visualhud/actions/runs/32592386861),
-proved the issue #22 WezTerm journey-stage assertions but then exposed an
-undeclared `rg` dependency in two shell tests on `ubuntu-latest`. The active
-corrective candidate adds a RED portability regression and replaces those test
-helpers with Bash/grep equivalents. Focused GREEN evidence is 4/4 portability,
-26/26 review workflow, and 255/255 theme system before the ROADMAP assertions in
-this checkpoint were added. Freeze this candidate, run its one guarded proof and
-one bounded Sol High review, then commit, push, and require Linux CI green before
-closing issue #22. Do not pack a release candidate or publish npm yet.
+The Linux CI correction is committed and pushed as
+`f52ae10bd96bf5706df4922c6dd0bc0c33ecf0bf`. Its frozen guarded proof passed,
+the corrective Sol High review returned no P0-P3 findings, and
+[Ubuntu/Node 24 run 32595505328](https://github.com/BaseInfinity/visualhud/actions/runs/32595505328)
+passed in 5m19s. Issue #22 is closed with the schema, current-generation review
+frame, local proof, and CI evidence. No replacement release tarball was packed
+and npm was not published.
 
 The Pokemon critical-context investigation also confirmed that the active stage
 colors can change while Nurse Joy/Blissey is never rendered in the live HUD.
-Issue #25 records the accepted product contract: preserve the journey character
-as the primary visual and render Nurse Joy/Blissey as a distinct critical-context
-overlay, removing it cleanly on de-escalation. A bounded Fable review recommends
-fixing this before the replacement candidate is packed. If Fable is genuinely
-unavailable for a future required review, the single fallback reviewer is Opus
-4.8 at `xhigh`; reconcile that adapter policy in a later wizard slice rather than
-expanding this release candidate.
+Issue #25 is now the active blocker. It records the accepted product contract:
+preserve the journey character as the primary visual and render Nurse
+Joy/Blissey as a distinct critical-context overlay, removing it cleanly on
+de-escalation. Renderer inspection confirmed that iTerm2 exposes one background
+image slot while WezTerm supports layered backgrounds. A bounded Fable
+consultation rejected replacing the primary sprite and confirmed that runtime
+PNG dependencies are unacceptable. The RED regression first failed on the
+missing compositor. The current GREEN candidate now renders actual source-backed
+alert art: iTerm2 receives a deterministic side-by-side PNG whose primary region
+preserves every decoded journey pixel, while WezTerm receives a distinct scoped
+color and character layer. De-escalation restores the original primary path.
+Focused evidence is green for the new overlay contract, iTerm bridge, lifecycle,
+WezTerm, theme docs, installed runtime, package consumer, review workflow,
+ShellCheck, and Python compilation. The first frozen proof passed. Its bounded
+Sol High review found one P2 portability gap: valid third-party grayscale, RGB,
+indexed, alpha, or Adam7 PNG assets could silently lose their iTerm context
+overlay. A targeted RED reproduced the failure, and the dependency-free decoder
+now accepts the standard PNG color types, valid bit depths, transparency, and
+Adam7 input. The replacement review then found a P2 memory-exhaustion path for
+extreme third-party dimensions/compression; its targeted RED now requires early
+dimension rejection and bounded decompression. The focused GREEN now covers both
+limits. A bounded Fable
+consultation was attempted for that narrow design choice but returned no advice
+because it exhausted its single allowed turn. The release audit's
+90-file/45,057,392-byte package metadata and finalized managed-file hashes are
+current. The next step is to freeze the self-reviewed corrected candidate for
+its final replacement guarded proof and bounded Sol High review;
+no npm package was published. If Fable is genuinely unavailable for a future required review,
+the single fallback reviewer is Opus 4.8 at `xhigh`; reconcile that adapter policy
+in a later wizard slice rather than expanding this release candidate.
 
 ### Unattended Overnight Scope
 
@@ -64,16 +85,14 @@ acceptance criteria remain materially ambiguous.
 
 These slices begin only after the unattended release candidate is green:
 
-1. [#22 - Fix Linux CI WezTerm journey-stage regression](https://github.com/BaseInfinity/visualhud/issues/22)
-2. [#25 - Render Nurse Joy/Blissey as an honest critical-context overlay](https://github.com/BaseInfinity/visualhud/issues/25)
-3. [#20 - Preserve the iTerm2 top tab bar during VisualHUD setup](https://github.com/BaseInfinity/visualhud/issues/20)
-4. [#19 - Prevent expected iTerm2 process probes from emitting false setup blockers](https://github.com/BaseInfinity/visualhud/issues/19)
-5. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
-6. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
+1. [#25 - Render Nurse Joy/Blissey as an honest critical-context overlay](https://github.com/BaseInfinity/visualhud/issues/25)
+2. [#20 - Preserve the iTerm2 top tab bar during VisualHUD setup](https://github.com/BaseInfinity/visualhud/issues/20)
+3. [#19 - Prevent expected iTerm2 process probes from emitting false setup blockers](https://github.com/BaseInfinity/visualhud/issues/19)
+4. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
+5. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
 
-Issue #22 blocks all candidate work until Linux CI is green. Issue #25 then
-blocks replacement candidate packing so its visual contract is exercised once,
-not discovered after another supervised canary. Issue #20
+Issue #25 blocks replacement candidate packing so its visual contract is
+exercised once, not discovered after another supervised canary. Issue #20
 invalidates the candidate with SHA-256
 `01b039ca675e9d1cf58135d70ced18a853eafda521b9c3cbb230779a6043fb5f`;
 it must never be published. Issues #20 and #19 must both be verified in a new

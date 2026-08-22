@@ -225,11 +225,18 @@ assert_executable "Target Codex hook wrapper is executable" "$target/.codex/hook
 assert_file_exists "Target Codex hooks.json exists" "$target/.codex/hooks.json"
 assert_file_exists "Runtime engine is copied" "$target/.visualhud/engine.sh"
 assert_file_exists "Runtime background helper is copied" "$target/.visualhud/set_bg.py"
+assert_file_exists "Runtime context compositor is copied" "$target/.visualhud/scripts/visualhud_context_overlay.py"
 assert_file_exists "Runtime CLI is copied" "$target/.visualhud/visualhud"
 assert_file_exists "Runtime iTerm2 setup helper is copied" "$target/.visualhud/setup-iterm2.sh"
 assert_file_exists "Pokemon ships in installed runtime" "$target/.visualhud/themes/pokemon/theme.json"
 assert_file_exists "Pokemon Charmander sprite ships in installed runtime" "$target/.visualhud/themes/pokemon/sprites/charmander.png"
 assert_file_exists "Pokemon Blastoise sprite ships in installed runtime" "$target/.visualhud/themes/pokemon/sprites/blastoise.png"
+assert_eq "Installed Pokemon theme is byte-identical to source" \
+    "$(shasum -a 256 "$ROOT_DIR/themes/pokemon/theme.json" | awk '{print $1}')" \
+    "$(shasum -a 256 "$target/.visualhud/themes/pokemon/theme.json" | awk '{print $1}')"
+assert_eq "Installed Blissey art is byte-identical to source" \
+    "$(shasum -a 256 "$ROOT_DIR/themes/pokemon/sprites/blissey.png" | awk '{print $1}')" \
+    "$(shasum -a 256 "$target/.visualhud/themes/pokemon/sprites/blissey.png" | awk '{print $1}')"
 assert_file_exists "TMNT ships in installed runtime" "$target/.visualhud/themes/tmnt/theme.json"
 assert_file_exists "TMNT sprite pack ships in installed runtime" "$target/.visualhud/themes/tmnt/sprites/tmnt-leonardo.png"
 assert_eq "Installed active theme defaults to Pokemon" "pokemon" "$(cat "$target/.visualhud/theme")"

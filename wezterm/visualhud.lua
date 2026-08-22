@@ -58,11 +58,35 @@ local function visualhud_background(state)
       height = 'Contain',
       repeat_x = 'NoRepeat',
       repeat_y = 'NoRepeat',
-      horizontal_align = 'Right',
+      horizontal_align = non_empty(state.context_sprite_path) and 'Left' or 'Right',
       vertical_align = 'Middle',
       opacity = 0.58,
       hsb = {
         brightness = 0.62,
+        saturation = 0.95,
+      },
+    })
+  end
+
+  if non_empty(state.context_sprite_path) then
+    table.insert(layers, {
+      source = { Color = state.context_color or '#ffe1eb' },
+      width = '34%',
+      height = '100%',
+      horizontal_align = 'Right',
+      opacity = 0.72,
+    })
+    table.insert(layers, {
+      source = { File = state.context_sprite_path },
+      width = '34%',
+      height = 'Contain',
+      repeat_x = 'NoRepeat',
+      repeat_y = 'NoRepeat',
+      horizontal_align = 'Right',
+      vertical_align = 'Middle',
+      opacity = 0.78,
+      hsb = {
+        brightness = 0.82,
         saturation = 0.95,
       },
     })

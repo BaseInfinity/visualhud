@@ -530,7 +530,8 @@ release_background_lock() {
 
 apply_background_path() {
     (
-        local expected_path current_path lock_owner lock_pid lock_started lock_now
+        local expected_spec current_spec expected_path expected_context_path expected_context_color
+        local lock_owner lock_pid lock_started lock_now
         local lock_value lock_attempt=0
         lock_pid="${BASHPID:-$$}"
         lock_started=$(date +%s)
@@ -569,19 +570,21 @@ apply_background_path() {
         trap 'release_background_lock "$lock_value"' EXIT
 
         while :; do
-            expected_path=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
+            expected_spec=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
+            IFS=$'\037' read -r expected_path expected_context_path expected_context_color <<< "$expected_spec"
             # The iTerm2 API is optional and unavailable on Linux CI. A
             # background failure must not abort the rest of the owned frame.
-            python3 "$SET_BG" "$expected_path" "$SESSION_ID" 2>/dev/null || break
-            current_path=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
-            [ "$current_path" != "$expected_path" ] || break
+            python3 "$SET_BG" "$expected_path" "$SESSION_ID" \
+                "$expected_context_path" "$expected_context_color" "$VISUALHUD_STATE_ROOT" 2>/dev/null || break
+            current_spec=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
+            [ "$current_spec" != "$expected_spec" ] || break
         done
 
         trap - EXIT
         release_background_lock "$lock_value"
-        current_path=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
-        if [ "$current_path" != "$expected_path" ]; then
-            apply_background_path "$current_path"
+        current_spec=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
+        if [ "$current_spec" != "$expected_spec" ]; then
+            apply_background_path "$current_spec"
         fi
     ) >/dev/null 2>&1
 }
@@ -857,7 +860,8 @@ emit_windows_status() {
 
 emit_wezterm_status() {
     local tty_target="$1" badge_text="$2" title="$3" context_title="$4" stage_num="$5" state_kind="$6"
-    local sprite_path="$7" color_hex="$8" tint_hex="$9" stage_name="${10}" journey_total="${11:-}" progress_percent state_b64 render_stage
+    local sprite_path="$7" color_hex="$8" tint_hex="$9" stage_name="${10}" journey_total="${11:-}"
+    local context_sprite_path="${12:-}" context_color="${13:-}" progress_percent state_b64 render_stage
 
     progress_percent=$(windows_progress_percent "$stage_num" "$state_kind" "$journey_total")
     render_stage="$stage_num"
@@ -875,7 +879,9 @@ emit_wezterm_status() {
         "$progress_percent" \
         "$badge_text" \
         "$stage_name" \
-        "$PROJECT_NAME")
+        "$PROJECT_NAME" \
+        "$context_sprite_path" \
+        "$context_color")
 
     {
         printf '\033]0;%s\a' "$title"
@@ -887,10 +893,11 @@ emit_terminal_status() {
     local tty_target="$1" badge_text="$2" tr="$3" tg="$4" tb="$5" rh="$6" gh="$7" bh="$8" r="$9"
     shift 9
     local g="$1" b="$2" title="$3" context_title="$4" stage_num="${5:-}" state_kind="${6:-progress}" context_alert="${7:-}" sprite_path="${8:-}" stage_name="${9:-}" journey_total="${10:-}"
+    local context_sprite_path="${11:-}" context_color="${12:-}"
 
     case "$RENDERER" in
         wezterm)
-            emit_wezterm_status "$tty_target" "$badge_text" "$title" "$context_title" "$stage_num" "$state_kind" "$sprite_path" "#${rh}${gh}${bh}" "#${tr}${tg}${tb}" "$stage_name" "$journey_total"
+            emit_wezterm_status "$tty_target" "$badge_text" "$title" "$context_title" "$stage_num" "$state_kind" "$sprite_path" "#${rh}${gh}${bh}" "#${tr}${tg}${tb}" "$stage_name" "$journey_total" "$context_sprite_path" "$context_color"
             ;;
         windows|win32|powershell|windows-terminal)
             emit_windows_status "$tty_target" "$title" "$stage_num" "$state_kind" "$context_alert" "$journey_total"
@@ -904,8 +911,8 @@ emit_terminal_status() {
 set_status_from_json() {
     local state_json="$1" fallback_stage_num="${2:-}" state_kind="${3:-progress}"
     local r g b sprite badge_emoji stage_name stage_num rh gh bh tr tg tb badge_text title sprite_path
-    local context_alert context_level context_percent context_badge context_name context_title reapply_delay reapply_delays
-    local state_fields state_progress_bar state_journey_total background_should_apply last_background_path
+    local context_alert context_level context_percent context_badge context_name context_title context_sprite context_sprite_path context_color reapply_delay reapply_delays
+    local state_fields state_progress_bar state_journey_total background_should_apply last_background_spec background_spec
     local journey_overlay=false overlay_label journey_state_json journey_fields
     local journey_name journey_num journey_progress journey_total
 
@@ -958,7 +965,8 @@ set_status_from_json() {
     if [ -n "$context_alert" ]; then
         local alert_fields
         alert_fields=$(printf '%s' "$context_alert" | json_helper alert-fields)
-        IFS=$'\037' read -r context_level context_percent context_badge context_name <<< "$alert_fields"
+        IFS=$'\037' read -r context_level context_percent context_badge context_name context_sprite context_color <<< "$alert_fields"
+        context_sprite_path=$(sprite_path_for "$context_sprite")
 
         badge_text="${badge_text} ${context_badge}${context_percent}"
         context_title="${context_name} CTX ${context_percent}%"
@@ -972,25 +980,31 @@ set_status_from_json() {
         printf '%s:%s' "$context_level" "$context_percent" > "$CONTEXT_FILE" 2>/dev/null || true
     else
         context_title=""
+        context_sprite_path=""
+        context_color=""
         rm -f "$CONTEXT_FILE" 2>/dev/null
     fi
 
     sprite_path=$(sprite_path_for "$sprite")
+    background_spec="$sprite_path"
+    if [ -n "$context_sprite_path" ]; then
+        background_spec="${sprite_path}"$'\037'"${context_sprite_path}"$'\037'"${context_color}"
+    fi
     acquire_current_repaint || return 0
     printf '%s' "$sprite" > "$STAGE_FILE" 2>/dev/null || true
     background_should_apply=false
-    last_background_path=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
-    if [ ! -f "$BG_TARGET_FILE" ] || [ "$last_background_path" != "$sprite_path" ] || [ "${BACKGROUND_RESTORE_REQUESTED:-false}" = "true" ]; then
+    last_background_spec=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
+    if [ ! -f "$BG_TARGET_FILE" ] || [ "$last_background_spec" != "$background_spec" ] || [ "${BACKGROUND_RESTORE_REQUESTED:-false}" = "true" ]; then
         background_should_apply=true
     else
         case "$EVENT" in
             PreCompact|PostCompact|Stop) background_should_apply=true ;;
         esac
     fi
-    emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total"
+    emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total" "$context_sprite_path" "$context_color"
     if [ "$background_should_apply" = "true" ] && [ "$BACKGROUND_API_ENABLED" = "true" ] && [ "${VISUALHUD_BG:-off}" = "on" ] && [ -f "$SET_BG" ]; then
-        printf '%s' "$sprite_path" > "$BG_TARGET_FILE" 2>/dev/null || true
-        apply_background_path "$sprite_path"
+        printf '%s' "$background_spec" > "$BG_TARGET_FILE" 2>/dev/null || true
+        apply_background_path "$background_spec"
     fi
     release_current_repaint
     [ "${REPAINT_CLAIM_MODE:-unguarded}" = "guarded" ] || return 0
@@ -1016,7 +1030,7 @@ set_status_from_json() {
                     fi
                     exit 0
                 fi
-                emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total"
+                emit_terminal_status "$TTY_TARGET" "$badge_text" "$tr" "$tg" "$tb" "$rh" "$gh" "$bh" "$r" "$g" "$b" "$title" "$context_title" "$stage_num" "$state_kind" "$context_alert" "$sprite_path" "$stage_name" "$state_journey_total" "$context_sprite_path" "$context_color"
                 if [ "$local_reapply_index" -eq 0 ] && [ "$BACKGROUND_API_ENABLED" = "true" ] && [ "${VISUALHUD_BG:-off}" = "on" ] && [ -f "$SET_BG" ]; then
                     apply_background_path "$sprite_path"
                 fi

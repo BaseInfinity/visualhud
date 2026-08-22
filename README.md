@@ -555,7 +555,7 @@ VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
 - Codex verification evidence requires an actual foreground test invocation. Correlated journey generations prevent a test or review started before a later edit from advancing the changed task.
 - Theme stages use `color_family` plus `shades`, so a character can keep the same sprite while the terminal chrome advances through multiple color steps.
 - Pokemon, TMNT, Power Rangers, Otter Pop, and Minimal all ship as theme packs. Pokemon and TMNT include source-backed sprite art; Power Rangers, Otter Pop, and Minimal are colors-only.
-- Context/token pressure is an ambient overlay: warning and critical label the state while preserving the active stage color/sprite.
+- Context/token pressure is an ambient overlay: warning and critical label the state while preserving the active stage color and primary sprite. Source-backed alert art is visible beside it in iTerm2 and as a separate WezTerm layer.
 
 **Current hooks:**
 - `.codex/hooks/visualhud-codex.sh` maps Codex events into `engine.sh` and falls back to TMNT when no active theme file exists. Clean installs into other Codex repos write Pokemon as the active theme by default.
@@ -664,7 +664,8 @@ background, tab color, title, and images advance or roll back together.
 
 Token/context usage is a **separate ambient indicator** that doesn't interfere with the main visual:
 - Badge/title suffix surfaces only when it matters (`CTX 70%+` warning, `CTX 85%+` critical)
-- The task stage color, cursor, and sprite stay intact; context labels must not gray-wash or emergency-wash the pane
+- The task stage color, cursor, and primary sprite stay intact; context alerts must not gray-wash or emergency-wash the pane
+- iTerm2 uses one deterministic side-by-side PNG in its single background slot; WezTerm adds a separate right-side color and character layer. Falling below 70% restores the original primary image path
 - Themes can name those alerts: Pokemon uses Pokemon Center/Chansey and Nurse Joy/Blissey, TMNT uses Casey Jones for critical context
 - Codex can derive context percent from hook payload token data or a matching session JSONL token-count event
 

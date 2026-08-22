@@ -99,6 +99,36 @@ assert_eq "Background helper binds the tab title to hudProgress" '\(user.hudProg
     "$(jq -r '.["Custom Tab Title"]' "$PROFILE_LOG")"
 assert_eq "Background helper pins the containing tab to hudProgress" '\(currentSession.user.hudProgress)' \
     "$(cat "$TITLE_LOG" 2>/dev/null || true)"
+
+mkdir -p "$TMP_ROOT/context-cache"
+PYTHONPATH="$TMP_ROOT/fake-sdk" VISUALHUD_ITERM_TEST_LOG="$PROFILE_LOG" \
+    VISUALHUD_ITERM_TITLE_LOG="$TITLE_LOG" \
+    python3 "$ROOT_DIR/set_bg.py" \
+        "$ROOT_DIR/themes/pokemon/sprites/raichu.png" "w0t0p0:CANARY" \
+        "$ROOT_DIR/themes/pokemon/sprites/blissey.png" '#ffe1eb' "$TMP_ROOT/context-cache"
+context_background=$(jq -r '.["Background Image Location"]' "$PROFILE_LOG")
+assert_eq "Background helper gives iTerm2 a generated context composite" "true" \
+    "$([[ "$(basename "$context_background")" == visualhud-context-overlay-*.png ]] && printf true || printf false)"
+assert_eq "Generated context composite exists before profile application" "true" \
+    "$([ -f "$context_background" ] && printf true || printf false)"
+
+oversized_context="$TMP_ROOT/oversized-context.png"
+python3 - "$oversized_context" <<'PY'
+from pathlib import Path
+import sys
+
+with Path(sys.argv[1]).open("wb") as handle:
+    handle.seek(67_108_864)
+    handle.write(b"\0")
+PY
+PYTHONPATH="$TMP_ROOT/fake-sdk" VISUALHUD_ITERM_TEST_LOG="$PROFILE_LOG" \
+    VISUALHUD_ITERM_TITLE_LOG="$TITLE_LOG" \
+    python3 "$ROOT_DIR/set_bg.py" \
+        "$ROOT_DIR/themes/pokemon/sprites/raichu.png" "w0t0p0:CANARY" \
+        "$oversized_context" '#ffe1eb' "$TMP_ROOT/context-cache"
+assert_eq "Oversized context art falls back before hashing or decoding" \
+    "$ROOT_DIR/themes/pokemon/sprites/raichu.png" \
+    "$(jq -r '.["Background Image Location"]' "$PROFILE_LOG")"
 echo ""
 
 echo "--- Test 2: Two converged semantic samples form the non-pixel oracle ---"

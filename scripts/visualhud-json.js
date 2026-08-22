@@ -1428,6 +1428,8 @@ function weztermState(args) {
     badge,
     name,
     project,
+    contextSpritePath,
+    contextColor,
   ] = args;
   return Buffer.from(
     JSON.stringify({
@@ -1442,6 +1444,8 @@ function weztermState(args) {
       badge: badge || "",
       name: name || "",
       project: project || "",
+      context_sprite_path: normalizeWindowsPath(contextSpritePath || ""),
+      context_color: contextColor || "",
     }),
     "utf8",
   ).toString("base64");
@@ -1594,7 +1598,17 @@ try {
     }
     case "alert-fields": {
       const alert = parseJson(readStdin(), {});
-      line([alert.level || "", alert.percent ?? "", alert.badge || "", alert.name || ""].join("\x1f"));
+      const color = Array.isArray(alert.color)
+        ? `#${alert.color.map((channel) => Number(channel).toString(16).padStart(2, "0")).join("")}`
+        : "";
+      line([
+        alert.level || "",
+        alert.percent ?? "",
+        alert.badge || "",
+        alert.name || "",
+        alert.sprite || "",
+        color,
+      ].join("\x1f"));
       break;
     }
     case "merge-codex-hooks": {

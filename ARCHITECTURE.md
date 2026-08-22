@@ -24,7 +24,7 @@
 │  ├── Keeps tool count as internal telemetry              │
 │  ├── Reads selected theme JSON                           │
 │  ├── Sets iTerm2 visuals (escape sequences)              │
-│  └── Calls set_bg.py for background images               │
+│  └── Calls set_bg.py for primary + context artwork       │
 └──────────────┬──────────────────────────────────────────┘
                │
     ┌──────────┼──────────┐
@@ -57,7 +57,8 @@
 | `engine.sh` | repo root | Theme-driven hook engine — receives normalized events and drives all visuals |
 | `visualhud-codex.sh` | `.codex/hooks/` | Codex adapter — maps Codex hook events into `engine.sh` and selects the TMNT theme |
 | `visualhud-claude.sh` | `.claude/hooks/` | Claude adapter — maps Claude hook events into `engine.sh` and selects the Pokemon theme |
-| `set_bg.py` | repo root | Python bridge to iTerm2 API for per-session background images |
+| `set_bg.py` | repo root | Python bridge to iTerm2 API for per-session primary images and cached context composites |
+| `scripts/visualhud_context_overlay.py` | repo root | Dependency-free deterministic, memory-bounded PNG decoder/RGBA compositor that accepts standard PNG color types and Adam7 input, preserves the primary sprite pixels, and adds a context character panel |
 | `scripts/visualhud-iterm-canary.py` | repo root | Supervised semantic probe/comparator for the effective iTerm2 session profile |
 | `themes/<theme>/theme.json` | repo theme dirs | Theme stages, colors, badges, and sprite names |
 | `themes/<theme>/sprites/` | repo theme dirs | Theme-local PNG sprite packs, preferred by `engine.sh` when present |
@@ -270,12 +271,18 @@ to Pizza Party, REVIEW maps to Splinter Review, and idle maps to Splinter.
 Context usage is an ambient overlay, not a task-progress stage. When the engine
 can read token/context data from the hook payload or a matching Codex session
 JSONL file, it shows `CTX nn%` at 70%+ and switches to critical at 85%+.
-Warning and critical overlays update badge/title/user-var text while preserving the selected theme stage color and sprite.
-Theme configs can provide their own alert identity and colors through
-`context_alerts`; those colors are metadata for reports/future non-destructive
-indicators, not a replacement for the active stage surface palette. Pokemon
-maps high context to Pokemon Center/Chansey and critical context to Nurse
-Joy/Blissey, while TMNT maps critical context to Casey Jones.
+Warning and critical overlays update badge/title/user-var text while preserving
+the selected theme stage color and primary sprite. When an alert declares a
+source-backed sprite, iTerm2 receives a deterministic side-by-side composite:
+the left region contains byte-identical decoded primary pixels and the right
+region scopes the alert color behind the context character. WezTerm keeps the
+same primary sprite and surface color in its base layers and adds a right-side
+context color plus character layer. Dropping below the warning threshold
+removes those context inputs and restores the original primary image path.
+Theme configs provide alert identity, sprite, and scoped panel color through
+`context_alerts`; the alert color never replaces the active stage surface
+palette. Pokemon maps high context to Pokemon Center/Chansey and critical
+context to Nurse Joy/Blissey, while TMNT maps critical context to Casey Jones.
 
 ## Key Technical Decisions
 

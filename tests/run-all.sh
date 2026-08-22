@@ -51,6 +51,7 @@ run_isolated bash tests/test-npm-package.sh
 run_isolated bash tests/test-npm-release.sh
 run_isolated node tests/test-pokemon-theme-lifecycle.js
 run_isolated bash tests/test-theme-system.sh
+run_isolated bash tests/test-context-overlay.sh
 run_isolated bash tests/test-theme-calibration.sh
 run_isolated bash tests/test-codex-visualhud.sh
 run_isolated bash tests/test-journey-state.sh
@@ -64,7 +65,7 @@ jq empty .codex/hooks.json .claude/settings.json themes/pokemon/theme.json theme
 PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-/tmp/visualhud-pycache}" \
     python3 -m py_compile set_bg.py scripts/import-tmnt-sprites.py \
         scripts/render-theme-contact-sheet.py scripts/theme-calibration-steps.py \
-        scripts/visualhud-iterm-canary.py
+        scripts/visualhud-iterm-canary.py scripts/visualhud_context_overlay.py
 git diff --check
 
 if find scripts -path '*/__pycache__/*' -type f | grep -q .; then

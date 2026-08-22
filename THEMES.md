@@ -101,8 +101,9 @@ because the current background-image bridge uses the iTerm2 Python API.
   color instead of April/yellow.
 - RGB channel values must be integers from `0` through `255`.
 - `context_alerts.warning` starts at a lower `min_percent` than `critical`.
-- Context alerts are ambient: warning and critical both update badge/title/user-var text while preserving the selected theme stage color and sprite.
-- `context_alerts` colors describe alert identity for reports/future non-destructive indicators; they must not replace the active stage surface palette.
+- Context alerts are ambient: warning and critical update badge/title/user-var text while preserving the selected theme stage color and primary sprite.
+- When `context_alerts.<level>.sprite` resolves to source-backed PNG art, iTerm2 renders it in a deterministic side-by-side composite and WezTerm renders it as a separate right-side layer. The dependency-free iTerm compositor accepts the standard grayscale, RGB, indexed, grayscale-alpha, and RGBA PNG color types, including Adam7 interlacing. Each input is limited to 64 MiB, 4096 pixels per dimension, and 4,194,304 total pixels; the combined canvas is limited to 8,388,608 pixels so a theme asset cannot exhaust hook memory. De-escalation must restore the unmodified primary image path.
+- `context_alerts` colors are scoped behind the context character; they must not replace the active stage surface palette.
 - Sprite names resolve to `themes/<theme>/sprites/<sprite>.png` first, then legacy global sprites.
 - Missing sprite files clear stale background art instead of silently showing the last theme's image.
 - With full-pane backgrounds enabled, Codex journey checkpoints select matching theme sprites. Outside journey mode, ordinary work keeps the `working` sprite. Backgrounds change on checkpoint or lifecycle transitions, not as a tool-count animation.

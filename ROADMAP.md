@@ -36,47 +36,46 @@ passed in 5m19s. Issue #22 is closed with the schema, current-generation review
 frame, local proof, and CI evidence. No replacement release tarball was packed
 and npm was not published.
 
-The Pokemon critical-context investigation also confirmed that the active stage
-colors can change while Nurse Joy/Blissey is never rendered in the live HUD.
-Issue #25 is now the active blocker. It records the accepted product contract:
-preserve the journey character as the primary visual and render Nurse
-Joy/Blissey as a distinct critical-context overlay, removing it cleanly on
-de-escalation. Renderer inspection confirmed that iTerm2 exposes one background
-image slot while WezTerm supports layered backgrounds. A bounded Fable
-consultation rejected replacing the primary sprite and confirmed that runtime
-PNG dependencies are unacceptable. The RED regression first failed on the
-missing compositor. The current GREEN candidate now renders actual source-backed
-alert art: iTerm2 receives a deterministic side-by-side PNG whose primary region
-preserves every decoded journey pixel, while WezTerm receives a distinct scoped
-color and character layer. De-escalation restores the original primary path.
-Focused evidence is green for the new overlay contract, iTerm bridge, lifecycle,
-WezTerm, theme docs, installed runtime, package consumer, review workflow,
-ShellCheck, and Python compilation. The first frozen proof passed. Its bounded
-Sol High review found one P2 portability gap: valid third-party grayscale, RGB,
-indexed, alpha, or Adam7 PNG assets could silently lose their iTerm context
-overlay. A targeted RED reproduced the failure, and the dependency-free decoder
-now accepts the standard PNG color types, valid bit depths, transparency, and
-Adam7 input. The replacement review then found a P2 memory-exhaustion path for
-extreme third-party dimensions/compression; its targeted RED now requires early
-dimension rejection and bounded decompression. The focused GREEN now covers both
-limits. A bounded Fable
-consultation was attempted for that narrow design choice but returned no advice
-because it exhausted its single allowed turn. The release audit's
-90-file/45,057,392-byte package metadata and finalized managed-file hashes were
-current for commit `4edc9c3168be23d29c12e8c846a91b7782180a9b`. Its guarded
-proof passed and the bounded Sol High review returned no P0-P3 findings, so it
-was pushed without an npm publish. Ubuntu CI run
+Issue #25's actual Nurse Joy/Blissey overlay is implemented and pushed in
+`4edc9c3168be23d29c12e8c846a91b7782180a9b`. iTerm2 receives a deterministic
+side-by-side PNG that preserves the decoded journey pixels; WezTerm receives
+separate primary, context-panel, and context-character layers. De-escalation
+restores the original primary image. The dependency-free compositor accepts the
+standard PNG color types, valid bit depths, transparency, and Adam7 input while
+bounding file, dimension, decompression, and canvas memory.
+
+Ubuntu run
 [`32600695248`](https://github.com/BaseInfinity/visualhud/actions/runs/32600695248)
-then exposed a Linux timing regression in the WezTerm test: the pane-token count
-also included an asynchronous repaint lock file. That failed run is the
-corrective RED. The current replacement test counts only canonical numeric
-token-record filenames, preserving coverage of pane isolation without treating
-transient lock/candidate files as panes. The focused WezTerm GREEN passed; the
-next steps are self-review, a managed-hash check, one replacement guarded proof,
-one bounded Sol High review, then a corrective commit/push and CI watch. No npm
-package was published. If Fable is genuinely unavailable for a future required review,
-the single fallback reviewer is Opus 4.8 at `xhigh`; reconcile that adapter policy
-in a later wizard slice rather than expanding this release candidate.
+then exposed a timing-dependent test bug: the pane-token assertion counted an
+asynchronous repaint lock as a third pane. That CI failure is the corrective RED.
+Commit `cd2f0868ac4d34e3e9362815e6306e691a096640` counts only canonical numeric
+token records. Its focused GREEN, managed-hash check, guarded proof, and bounded
+Sol High review passed with no P0-P3 findings; replacement Ubuntu run
+[`32601734864`](https://github.com/BaseInfinity/visualhud/actions/runs/32601734864)
+passed in 6m37s.
+
+The only candidate eligible for #16 is now retained at
+`/Users/stefanayala/visualhud-release-candidates/v1.2.0/20260822-152000/visualhud-1.2.0.tgz`.
+It was packed from `cd2f0868ac4d34e3e9362815e6306e691a096640`, has SHA-256
+`691dab58a180b0e52b96566b3f1463f7d7678a92340b99e71e14ce8bed95ad18`,
+44,673,700 bytes, 90 entries, and 45,057,392 unpacked bytes. Exact-tarball
+inspection and its CLI smoke passed. Issue #20 is closed after confirming that
+the packaged helper writes top-tab `TabViewType=0` and reset deletes the explicit
+preference. Issues #25 and #19 remain open only for continuity through #16's real
+iTerm2 canary.
+
+A bounded Fable High consultation confirmed that pane identity and actual screen
+pixels are the two non-negotiable live gates. Computer Use could not attach, and
+the iTerm2 API disconnected while creating the disposable window; iTerm2 was not
+running and the canary repository remained empty, so no candidate install or pane
+mutation occurred. Resume by opening iTerm2 with its Python API enabled, record
+the maintainer session ID, create and verify a distinct disposable pane, install
+the exact retained tarball there, then capture two converged semantic samples and
+a real cropped screenshot containing the Nurse Joy/Blissey pixels. Stop on any
+identity or visual mismatch. No npm package was published. If Fable is genuinely
+unavailable for a future required review, the single fallback reviewer is Opus
+4.8 at `xhigh`; reconcile that adapter policy in a later wizard slice rather than
+expanding this release candidate.
 
 ### Unattended Overnight Scope
 
@@ -95,20 +94,17 @@ acceptance criteria remain materially ambiguous.
 These slices begin only after the unattended release candidate is green:
 
 1. [#25 - Render Nurse Joy/Blissey as an honest critical-context overlay](https://github.com/BaseInfinity/visualhud/issues/25)
-2. [#20 - Preserve the iTerm2 top tab bar during VisualHUD setup](https://github.com/BaseInfinity/visualhud/issues/20)
-3. [#19 - Prevent expected iTerm2 process probes from emitting false setup blockers](https://github.com/BaseInfinity/visualhud/issues/19)
-4. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
-5. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
+2. [#19 - Prevent expected iTerm2 process probes from emitting false setup blockers](https://github.com/BaseInfinity/visualhud/issues/19)
+3. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
+4. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
 
-Issue #25 blocks replacement candidate packing so its visual contract is
-exercised once, not discovered after another supervised canary. Issue #20
-invalidates the candidate with SHA-256
-`01b039ca675e9d1cf58135d70ced18a853eafda521b9c3cbb230779a6043fb5f`;
-it must never be published. Issues #20 and #19 must both be verified in a new
-candidate before issue #16 resumes. Issue #16 requires the maintainer to inspect
-the real installed Codex/iTerm2 experience. Issue #17 remains last and requires
-explicit approval because npm versions and release tags are immutable
-distribution actions.
+Issue #25's deterministic gates and replacement packing are complete. Issue #19
+must be verified through that exact artifact during #16. Issue #16 requires the
+maintainer to inspect the real installed Codex/iTerm2 pixels. Issue #17 remains
+last and requires explicit approval because npm versions and release tags are
+immutable distribution actions. The rejected candidate with SHA-256
+`01b039ca675e9d1cf58135d70ced18a853eafda521b9c3cbb230779a6043fb5f`
+must never be published.
 
 ## Completion Criteria
 

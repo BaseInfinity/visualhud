@@ -197,6 +197,14 @@ an in-flight journey so ordinary repo-default hooks cannot reinterpret
 release-only checkpoints. iTerm2, Windows Terminal, and WezTerm all derive CLI
 and hook state from the same pane-stable session identity.
 
+Release proof and publication are separate trust boundaries. Candidate CI and
+the guarded local proof validate a frozen source tree once. Publication accepts
+only an explicit retained tarball path plus its reviewed SHA-256, verifies the
+tarball's package identity, and sends that exact file to npm without rebuilding
+or rerunning the source suite. A version-tag push has no publication authority;
+the OIDC workflow requires a manual dispatch naming an existing GitHub Release
+tag and the accepted tarball checksum.
+
 Claude Code journey mapping is intentionally deferred. Claude has a different host
 lifecycle and may need a different adapter mapping while preserving the same
 journey semantics.

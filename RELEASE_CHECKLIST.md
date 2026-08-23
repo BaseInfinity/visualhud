@@ -18,6 +18,8 @@ already present without requiring new demos.
 - [ ] The README has no obsolete embedded roadmap or deprecated Codex command.
 - [ ] `npm pack --dry-run --json --ignore-scripts` contains no raw source or video assets.
 - [ ] `npm test` passes, which includes the documentation audit.
+- [ ] Retain the one accepted `visualhud-<version>.tgz` outside the worktree and record its absolute path, SHA-256, byte size, entry count, unpacked size, and source commit.
+- [ ] Run `scripts/release-npm.sh --dry-run --candidate <absolute-tarball> --sha256 <accepted-sha256>` against that exact retained file.
 
 ### Maintainer Review
 
@@ -27,6 +29,8 @@ already present without requiring new demos.
 - [ ] Document unresolved redistribution or attribution limitations and the issue that owns publication clearance.
 - [ ] Record exceptions, deferred demo work, package size, and the exact implementation commit.
 - [ ] Complete the supervised canary before publication when the release milestone requires it.
+- [ ] Confirm a tag push cannot publish; treat the manual `Publish` workflow dispatch (tag plus accepted SHA-256) as an explicit immutable-publication action.
+- [ ] Confirm exact-tarball dry-run and publication use `--ignore-scripts`, so `prepublishOnly` cannot rerun or mutate the frozen candidate.
 
 ## Release Record
 

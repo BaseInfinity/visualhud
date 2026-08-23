@@ -54,7 +54,7 @@ Sol High review passed with no P0-P3 findings; replacement Ubuntu run
 [`32601734864`](https://github.com/BaseInfinity/visualhud/actions/runs/32601734864)
 passed in 6m37s.
 
-The only candidate eligible for #16 is now retained at
+The previously retained candidate is stored at
 `/Users/stefanayala/visualhud-release-candidates/v1.2.0/20260822-152000/visualhud-1.2.0.tgz`.
 It was packed from `cd2f0868ac4d34e3e9362815e6306e691a096640`, has SHA-256
 `691dab58a180b0e52b96566b3f1463f7d7678a92340b99e71e14ce8bed95ad18`,
@@ -77,6 +77,43 @@ unavailable for a future required review, the single fallback reviewer is Opus
 4.8 at `xhigh`; reconcile that adapter policy in a later wizard slice rather than
 expanding this release candidate.
 
+The contributor-readiness audit is current across all open issues: every issue
+has a milestone and a concrete next action, and suitable v1.3/v1.4 tasks are
+labelled for outside help. While auditing final release issue #17, the local-only
+`v1.2.0` tag was found to point at divergent historical commit
+`9101d49516f63c75b89681f87642e506d5fd6c70`; no remote tag or GitHub Release
+exists, and npm still reports `0.1.4` as latest. Do not move or push that tag in
+this slice.
+
+A corrective release-automation slice is now in progress because the old
+`Publish` workflow let any `v*` tag push publish a fresh source repack. The RED
+regression is `bash tests/test-npm-release.sh`: it requires both local and OIDC
+paths to accept the retained tarball plus its reviewed SHA-256, forbids tag-push
+publication, disables npm lifecycle scripts, and forbids a second broad source
+proof inside publication. Focused GREEN is 59/59 and managed hashes are
+refreshed. The first guarded proof correctly stopped on the release audit's stale
+unpacked-size receipt after packaged documentation changed. Focused package
+inspection now records 90 entries and 45,061,423 unpacked bytes, and the audit is
+corrected. A later replacement proof passed every functional suite and stopped
+only at the final ShellCheck gate on SC2016 diagnostics for two intentional
+literal `"$candidate"` test assertions. Those assertions now use escaped-dollar
+double quotes; focused release automation and ShellCheck must be green before a
+fresh replacement proof. Neither failed broad proof was rerun in its session.
+The retained tarball contains
+the old `scripts/release-npm.sh`, README, TESTING, and ARCHITECTURE, so SHA-256
+`691dab58a180b0e52b96566b3f1463f7d7678a92340b99e71e14ce8bed95ad18` is now
+rejected and must never be published. Fable authenticated but returned no output
+on two bounded consultation attempts; no Fable conclusion is claimed. A fresh
+session must re-read this checkpoint, confirm the focused quoting fix,
+self-review, and freeze the staged diff from base
+`63db845fb1d01436703b66f4cce8484cda1b1e59`, run one replacement guarded proof,
+then one bounded Sol High findings-only review with `Do not rerun tests`.
+If both are clean, commit and push the correction and watch CI.
+After its CI is green, pack and inspect one replacement tarball, update #25/#19/
+#16 to that exact SHA, and run the still-pending real iTerm2 canary against it.
+This automation correction does not authorize npm publication, tag mutation, or
+GitHub Release creation.
+
 ### Unattended Overnight Scope
 
 The unattended implementation and documentation slices are complete. Their
@@ -98,8 +135,9 @@ These slices begin only after the unattended release candidate is green:
 3. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
 4. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
 
-Issue #25's deterministic gates and replacement packing are complete. Issue #19
-must be verified through that exact artifact during #16. Issue #16 requires the
+Issue #25's deterministic gates are complete; replacement packing is pending
+the current publication-automation correction and green CI. Issue #19 must be
+verified through that exact artifact during #16. Issue #16 requires the
 maintainer to inspect the real installed Codex/iTerm2 pixels. Issue #17 remains
 last and requires explicit approval because npm versions and release tags are
 immutable distribution actions. The rejected candidate with SHA-256

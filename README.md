@@ -272,21 +272,28 @@ Follow the standing [release documentation gate](https://github.com/BaseInfinity
 the supervised canary or any immutable publication action.
 
 ```bash
-scripts/release-npm.sh --dry-run
+scripts/release-npm.sh --dry-run \
+  --candidate /absolute/path/to/visualhud-1.2.0.tgz \
+  --sha256 <accepted-sha256>
 ```
 
-That command checks npm auth, runs the full test suite, and runs
-`npm publish --dry-run` without publishing.
+That command verifies the retained tarball's accepted SHA-256 and package
+identity, checks npm auth, and dry-runs that exact file. It does not repack the
+checkout or rerun the frozen candidate's already-recorded broad proof; npm
+lifecycle scripts are disabled for the retained artifact.
 
-Publish only after the dry-run is clean and npm auth is active:
+Publish only after the dry-run is clean, npm auth is active, and the maintainer
+has explicitly authorized the immutable npm action:
 
 ```bash
-scripts/release-npm.sh --publish
+scripts/release-npm.sh --publish \
+  --candidate /absolute/path/to/visualhud-1.2.0.tgz \
+  --sha256 <accepted-sha256>
 ```
 
-The publish path repeats the full test gate, repeats the npm dry-run, publishes,
-then verifies the exact package version on the registry. If `npm whoami` fails,
-run `npm login` in your shell and retry.
+The publish path repeats exact-file validation and the npm dry-run, publishes
+that file, then verifies the exact package version on the registry. If
+`npm whoami` fails, run `npm login` in your shell and retry.
 
 First publish bootstrap: npm requires account authentication for the initial
 package publish. If your npm account requires two-factor auth, the first
@@ -299,10 +306,12 @@ repo with:
 npm run release:trust
 ```
 
-That workflow publishes on version tags with GitHub OIDC (`id-token: write`) and
-does not use `NPM_TOKEN`. Normal future releases should be version-bump, test,
-commit, tag, and push the `v*` tag; the workflow runs `npm ci`, `npm test`, and
-`npm publish --access public`.
+The GitHub workflow uses OIDC (`id-token: write`) and does not use `NPM_TOKEN`.
+Pushing a version tag cannot publish. An authorized maintainer must first attach
+the one retained `visualhud-*.tgz` candidate to the matching GitHub Release,
+then manually dispatch `Publish` with `release_tag` and the accepted
+`candidate_sha256`. The workflow downloads, verifies, dry-runs, and publishes
+that exact release asset with npm lifecycle scripts disabled.
 
 ## Create A Theme
 

@@ -11,7 +11,8 @@
 
 | Action | Command |
 |--------|---------|
-| Full suite / publish gate | `npm test` |
+| Frozen candidate proof | `node .codex/hooks/git-guard.cjs prove --reviewed` |
+| Exact-artifact npm dry-run | `scripts/release-npm.sh --dry-run --candidate /absolute/path/to/visualhud-<version>.tgz --sha256 <accepted-sha256>` |
 | Specific test | `bash tests/<test_name>.sh` |
 | Codex adapter test | `bash tests/test-codex-visualhud.sh` |
 | Codex git guard test | `bash tests/test-codex-git-guard.sh` |
@@ -155,7 +156,7 @@ tests/
   test-host-renderer-matrix.sh <- Versioned host/renderer/lifecycle contract
   test-visualhud-skills.sh  <- Packaged skill docs + install discovery tests
   test-npm-package.sh       <- npm pack + npx tarball consumer install test
-  test-npm-release.sh       <- npm auth/test/dry-run/publish automation test
+  test-npm-release.sh       <- exact-tarball identity/dry-run/publish automation test
   test-theme-calibration.sh <- Ordered theme calibration and mocked live walk
   test-<feature>.sh         <- Per-feature test files
   fixtures/compatibility/   <- Sanitized versioned host payload shapes

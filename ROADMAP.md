@@ -407,6 +407,30 @@ De-escalation removed the overlay and restored packaged `mew.png`; the disposabl
 window was closed and the maintainer session was reprobed successfully. Issue
 #16 is complete. No npm package, tag, or GitHub Release was published.
 
+A subsequent publication-rights completion audit rejected that retained
+artifact as a distribution input. It contains 55 packaged branded PNGs:
+specifically, 53 theme sprites plus two contact sheets. The repository has no
+Pokémon asset manifest or written redistribution permission, and the TMNT
+manifest records
+crop provenance rather than a redistribution license. Official Pokémon and
+Paramount owner guidance does not clear those files for npm redistribution.
+Candidate SHA-256
+`319cc1472d8e7bd35d140b8b31038d05460eb8876c7079b5739dd4f4284ea174` is
+therefore QUARANTINED and must not be published. Its successful canary remains
+valid historical evidence about VisualHUD behavior, not publication authority.
+
+A bounded first-party Fable High consultation recommends preserving the generic
+theme system while producing a branded-asset-free replacement candidate. That
+implementation is gated on the maintainer choosing between safe current-tree
+and package removal for v1.2, or holding the release while seeking written
+licenses. Attribution or a disclaimer alone does not resolve redistribution
+rights.
+
+The local release helper and manual GitHub publish workflow now reject that
+quarantined SHA, along with the three earlier rejected candidates, before npm
+access or artifact download. The publication prohibition is therefore an
+executable gate rather than prose alone.
+
 ### Unattended Overnight Scope
 
 The unattended implementation and documentation slices are complete. Their
@@ -425,13 +449,22 @@ The supervised canary is complete. One open release slice remains:
 
 1. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
 
-Issue #17 first requires restored npm authentication and the exact retained-
-tarball helper dry-run. Publication, tag work, and GitHub Release creation remain
-behind explicit maintainer approval because those distribution actions are
-immutable. Rejected candidate SHA-256 values
+Issue #17 first requires a maintainer decision on the branded assets. The
+recommended path removes them from the current tree and package, preserves the
+generic theme engine, builds a new candidate, and repeats exact-artifact proof.
+The alternative is to hold v1.2 while seeking written redistribution licenses.
+No published Git history rewrite is inferred; that would be a separate
+destructive decision requiring explicit authorization. The immediate gate is
+not registry access: npm authentication is secondary. It becomes actionable
+only after a distributable replacement candidate exists. Publication, tag
+work, and GitHub Release
+creation remain behind explicit maintainer approval because those distribution
+actions are immutable. Rejected candidate SHA-256 values
 `01b039ca675e9d1cf58135d70ced18a853eafda521b9c3cbb230779a6043fb5f`,
 `691dab58a180b0e52b96566b3f1463f7d7678a92340b99e71e14ce8bed95ad18`, and
-`fa3c6c20270ad32880347082d4abe242e306e96605c7a94c09798aff7eede4f1`
+`fa3c6c20270ad32880347082d4abe242e306e96605c7a94c09798aff7eede4f1`, plus
+quarantined SHA-256
+`319cc1472d8e7bd35d140b8b31038d05460eb8876c7079b5739dd4f4284ea174`,
 must never be published.
 
 ## Completion Criteria

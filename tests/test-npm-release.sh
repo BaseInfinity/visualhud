@@ -235,6 +235,19 @@ assert_contains "Candidate checksum mismatch is explicit" "Candidate SHA-256 mis
 assert_not_contains "Checksum mismatch stops before npm auth" "npm|" "$mismatch_log"
 echo ""
 
+echo "--- Test 4c: quarantined candidates are rejected before npm access ---"
+write_fake_tools
+quarantined_sha="319cc1472d8e7bd35d140b8b31038d05460eb8876c7079b5739dd4f4284ea174"
+set +e
+quarantined_output="$(release_with_fakes --publish --candidate "$CANDIDATE_TARBALL" --sha256 "$quarantined_sha" 2>&1)"
+quarantined_status=$?
+set -e
+quarantined_log="$(cat "$CALL_LOG")"
+assert_eq "Quarantined candidate exits nonzero" "1" "$quarantined_status"
+assert_contains "Quarantined candidate explains immutable block" "Candidate SHA-256 is quarantined and must not be published" "$quarantined_output"
+assert_not_contains "Quarantine rejection happens before npm access" "npm|" "$quarantined_log"
+echo ""
+
 echo "--- Test 5: release workflow is documented ---"
 README_DOC="$(cat "$ROOT_DIR/README.md")"
 TESTING_DOC="$(cat "$ROOT_DIR/TESTING.md")"
@@ -261,6 +274,8 @@ if [ -f "$workflow" ]; then
     assert_contains "Workflow uses npm registry" "registry-url: 'https://registry.npmjs.org'" "$workflow_doc"
     assert_contains "Workflow downloads the retained release asset" "gh release download" "$workflow_doc"
     assert_contains "Workflow verifies the accepted SHA-256" "shasum -a 256" "$workflow_doc"
+    assert_contains "Workflow carries the quarantined candidate SHA" "319cc1472d8e7bd35d140b8b31038d05460eb8876c7079b5739dd4f4284ea174" "$workflow_doc"
+    assert_contains "Workflow rejects quarantined candidates" "Candidate SHA-256 is quarantined and must not be published" "$workflow_doc"
     assert_contains "Workflow dry-runs the retained tarball without lifecycle reruns" "npm publish \"\$candidate\" --access public --ignore-scripts --dry-run" "$workflow_doc"
     assert_contains "Workflow publishes the retained tarball without lifecycle reruns" "npm publish \"\$candidate\" --access public --ignore-scripts" "$workflow_doc"
     assert_not_contains "Workflow does not rerun source tests" "npm test" "$workflow_doc"

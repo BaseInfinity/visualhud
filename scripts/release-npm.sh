@@ -88,6 +88,17 @@ if [[ ! "$EXPECTED_SHA256" =~ ^[0-9a-fA-F]{64}$ ]]; then
 fi
 
 EXPECTED_SHA256="$(printf '%s' "$EXPECTED_SHA256" | tr '[:upper:]' '[:lower:]')"
+case "$EXPECTED_SHA256" in
+    01b039ca675e9d1cf58135d70ced18a853eafda521b9c3cbb230779a6043fb5f|\
+    691dab58a180b0e52b96566b3f1463f7d7678a92340b99e71e14ce8bed95ad18|\
+    fa3c6c20270ad32880347082d4abe242e306e96605c7a94c09798aff7eede4f1|\
+    319cc1472d8e7bd35d140b8b31038d05460eb8876c7079b5739dd4f4284ea174)
+        printf 'Candidate SHA-256 is quarantined and must not be published: %s.\n' \
+            "$EXPECTED_SHA256" >&2
+        exit 1
+        ;;
+esac
+
 ACTUAL_SHA256="$(shasum -a 256 "$CANDIDATE" | awk '{print $1}')"
 if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
     printf 'Candidate SHA-256 mismatch: expected %s, got %s.\n' \

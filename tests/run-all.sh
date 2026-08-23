@@ -72,3 +72,5 @@ if find scripts -path '*/__pycache__/*' -type f | grep -q .; then
     printf 'Generated Python bytecode found under scripts/; remove __pycache__ before shipping.\n' >&2
     exit 1
 fi
+
+printf '=== VisualHUD full suite: PASS ===\n'

@@ -250,11 +250,52 @@ The default Pokemon theme preserves the original progression:
 Codex maps `PermissionRequest` to a correlated `permission_prompt` because Codex exposes no later prompt-shown event. Stable content-derived keys survive Codex's changing event identifier shape, and a lock-protected pending set retains overlapping requests. Matching tool lifecycle events clear only their request without allowing unrelated concurrent tools to hide the remaining HITL state. The adapter also maps
 `SessionStart` to an idle rendering so a new Codex session does not look like active work, and maps
 object-shaped `PostToolUse` responses with an explicit failure status to the
-engine's `PostToolUseFailure` event. Codex unified shell responses expose raw
-output without an exit status, so VisualHUD forwards completion without guessing
-failure from shell text. A foreground review-shaped `PostToolUse` with explicit object-shaped
-success evidence is normalized to the engine's `TaskCompleted` event so the
-review marker clears; unknown/raw results and commands with an asynchronous
+engine's `PostToolUseFailure` event. Codex 0.147 unified shell responses expose
+output as a raw string without an exit status, so VisualHUD advances a
+test gate only when the final line is a clean framework summary or VisualHUD's
+full-suite success marker and the raw response belongs to a single foreground
+shell segment. Terminal summaries are scoped to the runner the journey
+classifier recognizes: package and `run-all` wrappers require VisualHUD's
+top-level suite marker, repo-owned shell suites are allowlisted by their exact
+`tests/` path and require their own count, pass, or context-overlay terminal
+summary; ordinary shell options before that path are skipped without treating
+`-c` command strings or `-s` standard-input mode as owned scripts. Direct pytest
+(`pytest` or `py.test`), Cargo, and Go commands
+require their own framework footers. Node TAP receipts belong only to
+`node --test`; the custom lifecycle `PASS:` receipt belongs only to the exact
+shipped lifecycle script.
+Shell receipts are anchored to the exact formats shipped by this repository
+rather than accepting qualified or failure-prefixed pass variants.
+Recognized terminal test summaries and proof receipts are authoritative over
+earlier diagnostic-looking fixture output; without a recognized terminal receipt,
+the outcome remains unknown. A complete terminal Node TAP footer scopes its own
+cancellation count, while an explicit pytest coverage-threshold failure remains
+authoritative only for pytest receipts even when pytest later prints a passing
+test-count summary. Other runners may safely capture that diagnostic as fixture
+text when their own terminal receipt is valid. Shell
+count receipts require equal passed/total
+counts, and assertion-level `PASS:` output is not a suite receipt. Proof advances
+only when the exact repo-relative `.codex/hooks/git-guard.cjs prove --reviewed`
+invocation is the single direct foreground command and emits its terminal
+receipt, including proof-output paths with spaces. Review-shaped output is parsed through the
+completed clean/finding grammar:
+failure words on a finding line remain part of that finding, while a later
+standalone failure diagnostic or an explicit structured process error rejects
+both finding and clean completion. A shell comment may end the final command,
+but non-whitespace content on a later line makes raw completion non-authoritative.
+Structured review JSON bypasses text failure scanning and can certify an empty
+findings array only when the entire raw response is valid JSON containing that
+array and the structured envelope has no negative correctness verdict, failed
+status, or explicit error. Explanatory review prose is then content rather than
+a process diagnostic. Mixed prose with embedded empty-findings JSON must still satisfy the
+standalone clean-text grammar. Clean review text must be an affirmative
+standalone result line, and its grammar must be
+unqualified or cover the complete `P0-P3` range; partial priority clearance is
+not clean evidence. Other raw strings are terminal but
+outcome-unknown; they are not reinterpreted as structured failures. A foreground
+review-shaped `PostToolUse` with explicit structured or accepted string evidence is
+normalized to the engine's `TaskCompleted` event so the review marker clears;
+ambiguous results and commands with an asynchronous
 review shell segment remain in review, and failed review/plan calls do
 not decrement unrelated activity telemetry. Codex does not register
 Claude-only lifecycle names such as `TaskCompleted`, `CwdChanged`, or

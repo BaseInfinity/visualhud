@@ -1,0 +1,527 @@
+{
+  "captured_from": "codex-cli 0.147.0",
+  "note": "Sanitized from a live authenticated PostToolUse payload; current Codex emits successful tool_response as a string.",
+  "successful_full_test": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-full-test",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "node --test"
+    },
+    "tool_response": "TAP version 13\n# pass 4\n# fail 0\n",
+    "tool_use_id": "exec-full-test"
+  },
+  "successful_visualhud_full_test": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-visualhud-full-test",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "npm test"
+    },
+    "tool_response": "=== Results: 4/4 passed, 0 failed ===\n=== VisualHUD full suite: PASS ===\n",
+    "tool_use_id": "exec-visualhud-full-test"
+  },
+  "failed_wrapper_child_test": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-wrapper-child-test",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "npm test"
+    },
+    "tool_response": "TAP version 13\n# pass 4\n# fail 0\n",
+    "tool_use_id": "exec-wrapper-child-test"
+  },
+  "failed_shell_wrapper_child_test": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-shell-wrapper-child-test",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash tests/test-wrapper.sh"
+    },
+    "tool_response": "=== Results: PASS ===\n",
+    "tool_use_id": "exec-shell-wrapper-child-test"
+  },
+  "failed_compound_full_test": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-compound-full-test",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "npm test && false"
+    },
+    "tool_response": "=== VisualHUD full suite: PASS ===\n",
+    "tool_use_id": "exec-compound-full-test"
+  },
+  "failed_comment_hidden_full_test": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-comment-hidden-full-test",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "npm test # suite receipt above\nfalse"
+    },
+    "tool_response": "=== VisualHUD full suite: PASS ===\n",
+    "tool_use_id": "exec-comment-hidden-full-test"
+  },
+  "failed_full_test_after_green_subsuite": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-failed-full-test",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "npm test"
+    },
+    "tool_response": "=== Results: 4/4 passed, 0 failed ===\nscripts/check.sh:42 SC2086: Double quote to prevent globbing and word splitting.\n",
+    "tool_use_id": "exec-failed-full-test"
+  },
+  "successful_node_test": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "node --test"
+    },
+    "tool_response": "TAP version 13\n# tests 4\n# pass 4\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 42.5\n"
+  },
+  "failed_node_wrapper_child_test": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "node tests/test-wrapper.js"
+    },
+    "tool_response": "TAP version 13\n# tests 1\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 10.5\n"
+  },
+  "successful_node_test_with_error_fixture": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "node --test"
+    },
+    "tool_response": "TAP version 13\n# Error: invalid input\n# tests 1\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 10.5\n"
+  },
+  "successful_node_test_with_pytest_coverage_fixture": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "node --test"
+    },
+    "tool_response": "TAP version 13\nFAIL Required test coverage of 100% not reached. Total coverage: 95.00%\n# tests 1\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 10.5\n"
+  },
+  "cancelled_node_test": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "node --test"
+    },
+    "tool_response": "TAP version 13\n# tests 1\n# pass 0\n# fail 0\n# cancelled 1\n# skipped 0\n# todo 0\n# duration_ms 42.5\n"
+  },
+  "successful_node_test_after_cancelled_fixture": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "node --test"
+    },
+    "tool_response": "# fixture output\n# cancelled 1\n# tests 1\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 42.5\n"
+  },
+  "successful_pytest": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "pytest"
+    },
+    "tool_response": "collected 4 items\n....\n============================== 4 passed in 0.12s ==============================\n"
+  },
+  "successful_pytest_quiet": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "pytest -q"
+    },
+    "tool_response": "....                                                                     [100%]\n4 passed in 0.12s\n"
+  },
+  "successful_py_test_alias": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "py.test"
+    },
+    "tool_response": "....                                                                     [100%]\n4 passed in 0.12s\n"
+  },
+  "failed_pytest_mixed_summary": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "pytest"
+    },
+    "tool_response": "...F\n========================= 1 failed, 3 passed in 0.12s =========================\n"
+  },
+  "failed_pytest_coverage_gate": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "pytest --cov --cov-fail-under=100"
+    },
+    "tool_response": "....\nFAIL Required test coverage of 100% not reached. Total coverage: 95.00%\n============================== 4 passed in 0.12s ==============================\n"
+  },
+  "successful_cargo_test": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "cargo test"
+    },
+    "tool_response": "running 4 tests\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n"
+  },
+  "successful_go_test": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "go test ./..."
+    },
+    "tool_response": "ok  example.com/visualhud/engine  0.123s\n"
+  },
+  "successful_cached_go_test": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "go test ./..."
+    },
+    "tool_response": "ok  example.com/visualhud/engine  (cached)\n"
+  },
+  "successful_shell_results_pass": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash tests/test-wezterm-renderer.sh"
+    },
+    "tool_response": "PASS: renderer state is valid\n=== Results: PASS ===\n"
+  },
+  "successful_shell_equal_count": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash tests/test-visualhud-install-global.sh"
+    },
+    "tool_response": "PASS: global install is isolated\n=== Results: 21/21 passed ===\n"
+  },
+  "successful_shell_count_with_zero_failures": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash tests/test-codex-visualhud.sh"
+    },
+    "tool_response": "PASS: adapter state is valid\n=== Results: 209/209 passed, 0 failed ===\n"
+  },
+  "successful_shell_count_with_options": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash -e tests/test-codex-visualhud.sh"
+    },
+    "tool_response": "PASS: adapter state is valid\n=== Results: 217/217 passed, 0 failed ===\n"
+  },
+  "failed_shell_stdin_option_impersonation": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash -s tests/test-codex-visualhud.sh"
+    },
+    "tool_response": "=== Results: 217/217 passed, 0 failed ===\n"
+  },
+  "failed_shell_mixed_summary": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash tests/test-example.sh"
+    },
+    "tool_response": "=== Results: 4/5 passed, 1 failed ===\n"
+  },
+  "failed_shell_prefixed_failure_summary": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash tests/test-example.sh"
+    },
+    "tool_response": "=== Results: 1 failed; 4/4 passed, 0 failed ===\n"
+  },
+  "failed_shell_word_prefixed_failure_summary": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash tests/test-example.sh"
+    },
+    "tool_response": "=== Results: command failed; 4/4 passed, 0 failed ===\n"
+  },
+  "failed_shell_qualified_all_passed": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash tests/test-example.sh"
+    },
+    "tool_response": "All but 1 tests passed.\n"
+  },
+  "failed_shell_partial_all_passed": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash tests/test-example.sh"
+    },
+    "tool_response": "All 4 of 5 tests passed.\n"
+  },
+  "failed_shell_unequal_count": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash tests/test-visualhud-install-global.sh"
+    },
+    "tool_response": "=== Results: 20/21 passed ===\n"
+  },
+  "aborted_shell_after_assertion_pass": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash tests/test-example.sh"
+    },
+    "tool_response": "PASS: first assertion completed\n"
+  },
+  "successful_shell_all_tests_passed": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "bash tests/test-context-overlay.sh"
+    },
+    "tool_response": "PASS: context is isolated\nAll context character overlay tests passed.\n"
+  },
+  "successful_node_pass_line": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "node tests/test-pokemon-theme-lifecycle.js"
+    },
+    "tool_response": "PASS: Pokemon theme lifecycle and engine states are complete and distinct\n"
+  },
+  "successful_review": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-review",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "codex review 'Review only the current diff. Do not rerun tests.'"
+    },
+    "tool_response": "No P0-P3 findings in the current diff.\n",
+    "tool_use_id": "exec-review"
+  },
+  "review_finding_with_failure_words": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-review-finding",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "codex review 'Review only the current diff. Do not rerun tests.'"
+    },
+    "tool_response": "[P2] Preserve command failed output when the review completes.\n",
+    "tool_use_id": "exec-review-finding"
+  },
+  "clean_structured_review_with_failure_words": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-clean-structured-review",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "codex review 'Review only the current diff. Do not rerun tests.'"
+    },
+    "tool_response": "{\"findings\":[],\"overall_correctness\":\"patch is correct\",\"overall_explanation\":\"The command failed wording is handled safely.\"}\n",
+    "tool_use_id": "exec-clean-structured-review"
+  },
+  "negative_structured_review_with_empty_findings": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-negative-structured-review",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "codex review 'Review only the current diff. Do not rerun tests.'"
+    },
+    "tool_response": "{\"findings\":[],\"overall_correctness\":\"patch is incorrect\"}\n",
+    "tool_use_id": "exec-negative-structured-review"
+  },
+  "errored_structured_review_with_empty_findings": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-errored-structured-review",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "codex review 'Review only the current diff. Do not rerun tests.'"
+    },
+    "tool_response": "{\"findings\":[],\"error\":\"review interrupted\"}\n",
+    "tool_use_id": "exec-errored-structured-review"
+  },
+  "mixed_prose_with_empty_findings": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-mixed-empty-findings",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "codex review 'Review only the current diff. Do not rerun tests.'"
+    },
+    "tool_response": "Schema:\n{\"findings\":[]}\nReview interrupted\n",
+    "tool_use_id": "exec-mixed-empty-findings"
+  },
+  "review_finding_followed_by_failure": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-review-finding-failed",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "codex review 'Review only the current diff. Do not rerun tests.'"
+    },
+    "tool_response": "[P2] Fix bug\nreview failed with exit code 1\n",
+    "tool_use_id": "exec-review-finding-failed"
+  },
+  "errored_structured_review_with_finding": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-errored-structured-finding",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "codex review 'Review only the current diff. Do not rerun tests.'"
+    },
+    "tool_response": "{\"findings\":[{\"title\":\"[P2] Fix bug\"}],\"error\":\"review interrupted\"}\n",
+    "tool_use_id": "exec-errored-structured-finding"
+  },
+  "serialized_review_finding_followed_by_failure": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-serialized-review-finding-failed",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "codex review 'Review only the current diff. Do not rerun tests.'"
+    },
+    "tool_response": "{\"findings\":[{\"title\":\"[P2] Fix bug\"}]}\nreview failed with exit code 1\n",
+    "tool_use_id": "exec-serialized-review-finding-failed"
+  },
+  "clean_review_followed_by_failure": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-review-failed-after-clean-text",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "codex review 'Review only the current diff. Do not rerun tests.'"
+    },
+    "tool_response": "No P0-P3 findings.\nreview failed with exit code 1\n",
+    "tool_use_id": "exec-review-failed-after-clean-text"
+  },
+  "inconclusive_review_with_clean_substring": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-review-inconclusive",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "codex review 'Review only the current diff. Do not rerun tests.'"
+    },
+    "tool_response": "Review incomplete; I cannot confirm no P0-P3 findings.\n",
+    "tool_use_id": "exec-review-inconclusive"
+  },
+  "partial_priority_review_clearance": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "codex review 'Review only the current diff. Do not rerun tests.'"
+    },
+    "tool_response": "No P0 findings.\n"
+  },
+  "partial_priority_range_review_clearance": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "codex review 'Review only the current diff. Do not rerun tests.'"
+    },
+    "tool_response": "No P2-P3 issues.\n"
+  },
+  "successful_proof": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-proof",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "node .codex/hooks/git-guard.cjs prove --reviewed"
+    },
+    "tool_response": "=== VisualHUD full suite: PASS ===\nWrote SDLC proof: /tmp/VisualHUD Proof/proof.json\n",
+    "tool_use_id": "exec-proof"
+  },
+  "unowned_proof_script": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-unowned-proof",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "node /tmp/git-guard.cjs prove --reviewed"
+    },
+    "tool_response": "Wrote SDLC proof: /tmp/proof.json\n",
+    "tool_use_id": "exec-unowned-proof"
+  },
+  "unreviewed_proof": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-unreviewed-proof",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "node .codex/hooks/git-guard.cjs prove"
+    },
+    "tool_response": "Wrote SDLC proof: /tmp/proof.json\n",
+    "tool_use_id": "exec-unreviewed-proof"
+  },
+  "failed_compound_proof": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-compound-proof",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "node .codex/hooks/git-guard.cjs prove --reviewed && false"
+    },
+    "tool_response": "=== VisualHUD full suite: PASS ===\nWrote SDLC proof: /tmp/VisualHUD Proof/proof.json\n",
+    "tool_use_id": "exec-compound-proof"
+  },
+  "failed_comment_hidden_proof": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "codex-0147-fixture",
+    "turn_id": "turn-comment-hidden-proof",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "node .codex/hooks/git-guard.cjs prove --reviewed # proof receipt above\nfalse"
+    },
+    "tool_response": "Wrote SDLC proof: /tmp/proof.json\n",
+    "tool_use_id": "exec-comment-hidden-proof"
+  }
+}

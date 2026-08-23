@@ -283,6 +283,7 @@ assert_contains "Roadmap records the accepted replacement candidate SHA" "fa3c6c
 assert_contains "Roadmap records the npm-authenticated dry-run blocker" "npm auth is currently unavailable" "$ROADMAP_DOC"
 assert_contains "Roadmap records Nurse Joy pixel acceptance" "e767ad8bf8c8e504d4957ff1fcef922746a8acf889d0a602385ff71b53fecb37" "$ROADMAP_DOC"
 assert_not_contains "Roadmap removes the completed rejected-candidate canary handoff" "Resume by opening iTerm2 with its Python API enabled" "$ROADMAP_DOC"
+assert_contains "Roadmap records the Codex 0.147 live success-shape blocker" "Codex 0.147 emits successful PostToolUse responses" "$ROADMAP_DOC"
 assert_contains "Roadmap keeps npm milestones open until publication" "A release milestone is not complete until the npm registry" "$ROADMAP_DOC"
 assert_contains "Roadmap publishes release artifacts before milestone closure" "Release artifacts are published and verified before the milestone closes" "$ROADMAP_DOC"
 assert_not_contains "Roadmap does not delegate active scope to GOALS.md" "GOALS.md" "$ROADMAP_DOC"

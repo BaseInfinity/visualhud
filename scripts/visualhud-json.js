@@ -712,7 +712,125 @@ function hasFailedToolResponse(value) {
   return false;
 }
 
-function hasSuccessfulToolResponse(value) {
+function hasExplicitRawFailure(value) {
+  return /\b(?:process|command|review)\s+failed\b/i.test(value)
+    || /\bexited with (?:code|status)\s+[1-9][0-9]*\b/i.test(value)
+    || /(?:^|\n)\s*(?:error|fatal):/i.test(value)
+    || /(?:^|\n)\s*#\s*fail\s+[1-9][0-9]*(?:\s|$)/i.test(value)
+    || /\b[1-9][0-9]*\s+(?:failed|errors?)\b/i.test(value);
+}
+
+function hasRawReviewFailureOutsideFindings(value) {
+  const text = value.trim();
+  if (/^[\[{]/.test(text)) {
+    try {
+      const parsed = JSON.parse(text);
+      if (reviewFindingArrays(parsed).length > 0) return hasStructuredReviewProcessFailure(parsed);
+    } catch {
+      // Mixed prose/JSON is handled as text so later failure diagnostics remain visible.
+    }
+  }
+  const nonFindingText = value
+    .split("\n")
+    .filter((line) => !/^\s*(?:[-*]\s*)?\[P[0-3]\]/i.test(line))
+    .join("\n");
+  return hasExplicitRawFailure(nonFindingText);
+}
+
+function rawTestReceiptKind(payload) {
+  const words = foregroundShellWords(payload);
+  if (!words) return "";
+  const executable = String(words[0] || "").split(/[\\/]/).pop().toLowerCase();
+  if (packageTestCheckpoint(words) && packageTestCheckpoint(words) !== "non_test") return "package";
+  if (isRunAllCommand(words)) return "visualhud";
+  if (executable === "node") {
+    const nodeTarget = String(words[1] || "").replace(/\\/g, "/").replace(/^\.\//, "");
+    if (nodeTarget === "--test") return "node:test";
+    if (nodeTarget === "tests/test-pokemon-theme-lifecycle.js") return "node:lifecycle";
+    return "";
+  }
+  if (executable === "pytest" || executable === "py.test") return "pytest";
+  if (executable === "cargo" && words[1] === "test") return "cargo";
+  if (executable === "go" && words[1] === "test") return "go";
+  if (/^(?:bash|sh|zsh)$/.test(executable)) {
+    let scriptIndex = 1;
+    while (String(words[scriptIndex] || "").startsWith("-")) {
+      const option = String(words[scriptIndex] || "");
+      if (option === "--") {
+        scriptIndex += 1;
+        break;
+      }
+      if (option === "-c" || /^-[^-]*c/.test(option)
+        || option === "-s" || /^-[^-]*s/.test(option)
+        || /^(?:-o|-O|--init-file|--rcfile)$/.test(option)) return "";
+      scriptIndex += 1;
+    }
+    const script = String(words[scriptIndex] || "").replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
+    const countedScripts = new Set([
+      "tests/test-claude-visualhud.sh",
+      "tests/test-codex-git-guard.sh",
+      "tests/test-codex-visualhud.sh",
+      "tests/test-cooking-status.sh",
+      "tests/test-host-renderer-matrix.sh",
+      "tests/test-iterm-canary.sh",
+      "tests/test-journey-state.sh",
+      "tests/test-npm-package.sh",
+      "tests/test-npm-release.sh",
+      "tests/test-review-workflow.sh",
+      "tests/test-state-dir-portability.sh",
+      "tests/test-theme-calibration.sh",
+      "tests/test-theme-system.sh",
+      "tests/test-visualhud-cli.sh",
+      "tests/test-visualhud-install.sh",
+      "tests/test-visualhud-skills.sh",
+    ]);
+    if (countedScripts.has(script)) return "shell:count-zero";
+    if (script === "tests/test-wezterm-renderer.sh" || script === "tests/test-windows-runtime-no-jq.sh") return "shell:results-pass";
+    if (script === "tests/test-visualhud-install-global.sh") return "shell:equal-count";
+    if (script === "tests/test-context-overlay.sh") return "shell:context-overlay";
+  }
+  return "";
+}
+
+function hasSuccessfulToolResponse(value, checkpoint = "", payload = {}) {
+  if (typeof value === "string") {
+    // Codex 0.147 emits PostToolUse output without an exit-status envelope.
+    // Reviews carry their own completed finding/clean grammar, while test and
+    // proof gates require an unambiguous terminal success line.
+    if (checkpoint === "final_review") {
+      const reviewOutcome = reviewOutcomeFromResponse(value);
+      return Boolean(reviewOutcome) && !hasRawReviewFailureOutsideFindings(value);
+    }
+    const terminal = value.trimEnd();
+    if (checkpoint === "proof") return /(?:^|\n)Wrote SDLC proof:\s+.+$/i.test(terminal);
+    if (checkpoint === "full_test" || checkpoint === "targeted_test") {
+      const hasCoverageFailure = /(?:^|\n)(?:FAIL Required test coverage of [^\n]+ not reached|ERROR: Coverage failure:)[^\n]*$/im.test(terminal);
+      const hasCancelledTap = /(?:^|\n)\s*#\s*cancelled\s+[1-9][0-9]*(?:\s|$)/i.test(terminal);
+      const completeTapFooter = /(?:^|\n)\s*#\s*fail\s+0\s*\n(?:\s*#\s*(?:cancelled\s+0|(?:skipped|todo)\s+\d+)\s*\n)*\s*#\s*duration_ms\s+[\d.]+$/i.test(terminal);
+      const kind = rawTestReceiptKind(payload);
+      if (kind === "pytest" && hasCoverageFailure) return false;
+      if (kind === "package" || kind === "visualhud") {
+        return /(?:^|\n)=== VisualHUD full suite: PASS ===$/i.test(terminal);
+      }
+      if (kind === "node:test") {
+        return (/(?:^|\n)\s*#\s*fail\s+0$/i.test(terminal) && !hasCancelledTap)
+          || completeTapFooter;
+      }
+      if (kind === "node:lifecycle") return /(?:^|\n)PASS: Pokemon theme lifecycle and engine states are complete and distinct$/i.test(terminal);
+      if (kind === "pytest") {
+        return /(?:^|\n)={2,}(?![^\n]*\b[1-9][0-9]*\s+(?:failed|errors?)\b)(?![^\n]*\d+\/\d+\s+passed)[^\n]*\b\d+\s+passed\b[^\n]*={2,}$/i.test(terminal)
+          || /(?:^|\n)\d+\s+passed(?:,\s+\d+\s+(?:skipped|xfailed|xpassed|deselected|warnings?))*\s+in\s+[\d.]+s$/i.test(terminal);
+      }
+      if (kind === "cargo") return /(?:^|\n)test result:\s+ok\.[^\n]*$/i.test(terminal);
+      if (kind === "go") return /(?:^|\n)(?:ok|\?)\s+\S+(?:\s+(?:[\d.]+s|\(cached\)|\[no test files\]))?$/i.test(terminal);
+      if (kind === "shell:count-zero") return /(?:^|\n)=== Results:\s+(\d+)\/\1\s+passed,\s*0\s+failed ===$/i.test(terminal);
+      if (kind === "shell:results-pass") return /(?:^|\n)=== Results: PASS ===$/i.test(terminal);
+      if (kind === "shell:equal-count") return /(?:^|\n)=== Results:\s+(\d+)\/\1\s+passed ===$/i.test(terminal);
+      if (kind === "shell:context-overlay") return /(?:^|\n)All context character overlay tests passed\.$/i.test(terminal);
+      return false;
+    }
+    return false;
+  }
   if (value == null || typeof value !== "object") return false;
   if (typeof value.exit_code === "number") return value.exit_code === 0;
   if (value.isError === false || value.is_error === false) return true;
@@ -756,14 +874,55 @@ function reviewFindingArrays(value, output = []) {
   return output;
 }
 
+function structuredReviewDocuments(value, output = []) {
+  if (typeof value === "string") {
+    try {
+      structuredReviewDocuments(JSON.parse(value.trim()), output);
+    } catch {
+      // Only whole-string JSON documents can provide clean structured evidence.
+    }
+    return output;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => structuredReviewDocuments(item, output));
+    return output;
+  }
+  if (value == null || typeof value !== "object") return output;
+  if (Array.isArray(value.findings)) output.push(value);
+  Object.values(value).forEach((item) => structuredReviewDocuments(item, output));
+  return output;
+}
+
+function hasNegativeStructuredReviewEnvelope(value) {
+  if (Array.isArray(value)) return value.some(hasNegativeStructuredReviewEnvelope);
+  if (value == null || typeof value !== "object") return false;
+  const correctness = String(value.overall_correctness ?? value.correctness ?? "");
+  if (hasStructuredReviewProcessFailure(value) || /(?:^|\b)(?:patch\s+is\s+)?incorrect(?:\b|$)/i.test(correctness)) return true;
+  return Object.values(value).some(hasNegativeStructuredReviewEnvelope);
+}
+
+function hasStructuredReviewProcessFailure(value) {
+  if (Array.isArray(value)) return value.some(hasStructuredReviewProcessFailure);
+  if (value == null || typeof value !== "object") return false;
+  const explicitError = value.error != null && value.error !== false && value.error !== ""
+    || Array.isArray(value.errors) && value.errors.length > 0;
+  if (hasFailedToolResponse(value) || explicitError) return true;
+  return Object.values(value).some(hasStructuredReviewProcessFailure);
+}
+
 function reviewOutcomeFromResponse(value) {
   const text = toolResponseText(value);
+  const structuredDocuments = structuredReviewDocuments(value);
+  if (hasStructuredReviewProcessFailure(value)
+    || structuredDocuments.some(hasStructuredReviewProcessFailure)) return "";
   if (/(?:^|\n)\s*(?:[-*]\s*)?\[P[0-3]\]/im.test(text)) return "finding";
 
   const findings = reviewFindingArrays(value);
   if (findings.some((items) => items.length > 0)) return "finding";
-  if (findings.length > 0) return "passed";
-  if (/\b(?:no|zero|0)\s+(?:actionable\s+)?(?:review\s+)?(?:findings|issues)(?:\s+(?:found|identified))?\b/i.test(text)) {
+  if (structuredDocuments.some((document) => document.findings.length === 0)
+    && structuredDocuments.every((document) => !hasNegativeStructuredReviewEnvelope(document))
+    && !hasNegativeStructuredReviewEnvelope(value)) return "passed";
+  if (/(?:^|\n)[ \t]*(?:no|zero|0)\s+(?:P0-P3\s+)?(?:actionable\s+)?(?:review\s+)?(?:findings|issues)(?:\s+(?:found|identified))?(?:\s+in\s+(?:the\s+)?current\s+diff)?[.!]?[ \t]*(?=$|\n)/i.test(text)) {
     return "passed";
   }
   return "";
@@ -838,6 +997,8 @@ function foregroundShellSegments(command) {
       continue;
     }
     if (char === "#" && (index === 0 || /\s/.test(command[index - 1]))) {
+      const lineEnd = command.indexOf("\n", index);
+      if (lineEnd >= 0 && command.slice(lineEnd + 1).trim() !== "") return null;
       break;
     }
     if (char === "&" && command[index + 1] === "&") {
@@ -880,6 +1041,26 @@ function foregroundShellWords(payload) {
   const command = getPath(payload, "tool_input.command") ?? getPath(payload, "tool_input.cmd");
   const segments = foregroundShellSegments(command);
   return segments && segments.length === 1 ? commandWords(segments[0]) : null;
+}
+
+function isDirectForegroundProofPayload(payload) {
+  const words = foregroundShellWords(payload);
+  if (!words) return false;
+  const guardPath = String(words[1] || "").replace(/\\/g, "/").replace(/^\.\//, "");
+  return guardPath === ".codex/hooks/git-guard.cjs"
+    && String(words[0] || "").split(/[\\/]/).pop().toLowerCase() === "node"
+    && words.length === 4
+    && words[2] === "prove"
+    && words[3] === "--reviewed";
+}
+
+function hasAuthoritativeRawCompletionPayload(payload, checkpoint) {
+  if (typeof payload.tool_response !== "string") return true;
+  if (checkpoint === "proof") return isDirectForegroundProofPayload(payload);
+  if (checkpoint === "full_test" || checkpoint === "targeted_test") {
+    return !isShellCommandPayload(payload) || foregroundShellWords(payload) !== null;
+  }
+  return true;
 }
 
 function commandWords(words) {
@@ -1184,7 +1365,9 @@ function withJourneySignal(result, original) {
       outcome = "started";
     } else if (eventName === "PostToolUse" && hasFailedToolResponse(original.tool_response)) {
       outcome = "failed";
-    } else if (eventName === "PostToolUse" && hasSuccessfulToolResponse(original.tool_response)) {
+    } else if (eventName === "PostToolUse"
+      && hasAuthoritativeRawCompletionPayload(original, checkpoint)
+      && hasSuccessfulToolResponse(original.tool_response, checkpoint, original)) {
       if (isTestOnlyPatchPayload(original)) {
         outcome = "active";
       } else if (checkpoint === "final_review" && isReviewPayload(original)) {
@@ -1237,7 +1420,7 @@ function codexPayload(payload) {
         };
         break;
       }
-      result = hasSuccessfulToolResponse(payload.tool_response) && isReviewPayload(payload) && isDirectForegroundReviewPayload(payload)
+      result = hasSuccessfulToolResponse(payload.tool_response, "final_review") && isReviewPayload(payload) && isDirectForegroundReviewPayload(payload)
         ? { ...payload, hook_event_name: "TaskCompleted", source_event: "PostToolUse", permission_key: permissionKey(payload) }
         : { ...payload, permission_key: permissionKey(payload) };
       break;

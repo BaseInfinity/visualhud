@@ -11,6 +11,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ADAPTER="$ROOT_DIR/.codex/hooks/visualhud-codex.sh"
 HOOKS_JSON="$ROOT_DIR/.codex/hooks.json"
 CONFIG_TOML="$ROOT_DIR/.codex/config.toml"
+CODEX_0147_FIXTURE="$ROOT_DIR/tests/fixtures/compatibility/codex-0.147-post-tool-use.json"
+RUN_ALL="$ROOT_DIR/tests/run-all.sh"
 TMP_DIR="$(mktemp -d)"
 ENGINE="$TMP_DIR/cooking-status.sh"
 LOG_FILE="$TMP_DIR/events.jsonl"
@@ -207,6 +209,103 @@ assert_eq "SessionStart keeps Codex default theme" "tmnt" "$(last_event_field '.
 echo ""
 
 echo "--- Test 6b: Codex evidence is normalized into task-journey signals ---"
+run_adapter "$(jq -c '.successful_full_test' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "Codex 0.147 string completion advances a successful full suite" "full_test:passed" \
+    "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
+run_adapter "$(jq -c '.successful_visualhud_full_test' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "VisualHUD's terminal suite marker advances the full-suite gate" "full_test:passed" \
+    "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
+run_adapter "$(jq -c '.failed_wrapper_child_test' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "A package wrapper cannot inherit a child runner's raw success receipt" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+run_adapter "$(jq -c '.failed_node_wrapper_child_test' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "A Node wrapper cannot inherit a child runner's raw success receipt" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+run_adapter "$(jq -c '.failed_shell_wrapper_child_test' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "A shell wrapper cannot inherit a child script's raw success receipt" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+run_adapter "$(jq -c '.failed_compound_full_test' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "A test receipt from a non-final shell segment cannot advance verification" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+run_adapter "$(jq -c '.failed_comment_hidden_full_test' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "A test command hidden after a shell comment cannot inherit an earlier receipt" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+run_adapter "$(jq -c '.failed_full_test_after_green_subsuite' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "An early green sub-suite cannot manufacture passing evidence for a later diagnostic" "absent" \
+    "$(last_event_field 'if has("journey_outcome") then .journey_outcome else "absent" end')"
+for fixture in \
+    successful_node_test \
+    successful_node_test_with_error_fixture \
+    successful_node_test_with_pytest_coverage_fixture \
+    successful_node_test_after_cancelled_fixture \
+    successful_pytest \
+    successful_pytest_quiet \
+    successful_py_test_alias \
+    successful_cargo_test \
+    successful_go_test \
+    successful_cached_go_test \
+    successful_shell_results_pass \
+    successful_shell_equal_count \
+    successful_shell_count_with_zero_failures \
+    successful_shell_count_with_options \
+    successful_shell_all_tests_passed \
+    successful_node_pass_line; do
+    run_adapter "$(jq -c --arg fixture "$fixture" '.[$fixture]' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+    assert_eq "Codex 0.147 accepts terminal success from supported runner: $fixture" "passed" \
+        "$(last_event_field '.journey_outcome // "absent"')"
+done
+for fixture in cancelled_node_test failed_pytest_mixed_summary failed_pytest_coverage_gate failed_shell_stdin_option_impersonation failed_shell_mixed_summary failed_shell_prefixed_failure_summary failed_shell_word_prefixed_failure_summary failed_shell_qualified_all_passed failed_shell_partial_all_passed failed_shell_unequal_count aborted_shell_after_assertion_pass; do
+    run_adapter "$(jq -c --arg fixture "$fixture" '.[$fixture]' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+    assert_eq "A mixed failed terminal summary cannot certify verification: $fixture" "absent" \
+        "$(last_event_field '.journey_outcome // "absent"')"
+done
+assert_eq "The VisualHUD full suite emits an unambiguous terminal success marker" "1" \
+    "$(grep -c '^printf '\''=== VisualHUD full suite: PASS ===' "$RUN_ALL" || true)"
+run_adapter "$(jq -c '.successful_review' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "Codex 0.147 string review completion clears the review lifecycle" "TaskCompleted" \
+    "$(last_event_field '.hook_event_name')"
+assert_eq "Codex 0.147 clean string review advances final review" "final_review:passed" \
+    "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
+run_adapter "$(jq -c '.review_finding_with_failure_words' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "Failure wording inside a completed review finding still clears review lifecycle" "TaskCompleted" \
+    "$(last_event_field '.hook_event_name')"
+assert_eq "Failure wording inside a completed review finding remains a finding" "final_review:finding" \
+    "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
+run_adapter "$(jq -c '.clean_structured_review_with_failure_words' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "Failure wording inside a clean structured review clears review lifecycle" "TaskCompleted" \
+    "$(last_event_field '.hook_event_name')"
+assert_eq "Failure wording inside a clean structured review remains clean" "final_review:passed" \
+    "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
+for fixture in negative_structured_review_with_empty_findings errored_structured_review_with_empty_findings; do
+    run_adapter "$(jq -c --arg fixture "$fixture" '.[$fixture]' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+    assert_eq "A contradictory structured review cannot certify clean: $fixture" "absent" \
+        "$(last_event_field '.journey_outcome // "absent"')"
+done
+run_adapter "$(jq -c '.mixed_prose_with_empty_findings' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "An empty findings line inside mixed prose cannot certify a clean review" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+run_adapter "$(jq -c '.review_finding_followed_by_failure' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "A later review failure prevents a prior finding from clearing review" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+run_adapter "$(jq -c '.errored_structured_review_with_finding' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "An errored structured finding cannot clear the review lifecycle" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+run_adapter "$(jq -c '.serialized_review_finding_followed_by_failure' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "A later review failure prevents serialized findings from clearing review" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+run_adapter "$(jq -c '.clean_review_followed_by_failure' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "A later review failure prevents clean text from clearing the review lifecycle" "PostToolUse" \
+    "$(last_event_field '.hook_event_name')"
+assert_eq "A later review failure prevents clean text from certifying final review" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+run_adapter "$(jq -c '.inconclusive_review_with_clean_substring' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "Inconclusive review prose cannot certify a clean review" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+for fixture in partial_priority_review_clearance partial_priority_range_review_clearance; do
+    run_adapter "$(jq -c --arg fixture "$fixture" '.[$fixture]' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+    assert_eq "Partial priority clearance cannot certify final review: $fixture" "absent" \
+        "$(last_event_field '.journey_outcome // "absent"')"
+done
 run_adapter '{"hook_event_name":"PreToolUse","session_id":"codex-session","tool_name":"update_plan","tool_input":{"plan":[{"step":"Implement feature","status":"in_progress"}]}}' >"$OUT_FILE"
 assert_eq "Structured plan starts the plan checkpoint" "plan:started" "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
 run_adapter '{"hook_event_name":"PreToolUse","session_id":"codex-session","tool_name":"apply_patch","tool_input":{"patch":"*** Begin Patch"}}' >"$OUT_FILE"
@@ -361,6 +460,21 @@ assert_eq "Ambiguous terminal review retires its operation marker" "true" \
     "$(last_event_field '.journey_terminal')"
 run_adapter '{"hook_event_name":"PreToolUse","session_id":"codex-session","tool_name":"Bash","tool_input":{"command":"node .codex/hooks/git-guard.cjs prove --reviewed"}}' >"$OUT_FILE"
 assert_eq "Proof command starts the proof checkpoint" "proof:started" "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
+run_adapter "$(jq -c '.successful_proof' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "Codex 0.147 terminal proof receipt with a spaced path advances the proof gate" "proof:passed" \
+    "$(last_event_field '[.journey_checkpoint,.journey_outcome] | join(":")')"
+run_adapter "$(jq -c '.unowned_proof_script' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "An unrelated git-guard basename cannot manufacture proof evidence" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+run_adapter "$(jq -c '.unreviewed_proof' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "A proof without the reviewed gate cannot manufacture proof evidence" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+run_adapter "$(jq -c '.failed_compound_proof' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "A proof receipt from a non-final shell segment cannot advance the proof gate" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
+run_adapter "$(jq -c '.failed_comment_hidden_proof' "$CODEX_0147_FIXTURE")" >"$OUT_FILE"
+assert_eq "A proof command hidden after a shell comment cannot inherit an earlier receipt" "absent" \
+    "$(last_event_field '.journey_outcome // "absent"')"
 run_adapter '{"hook_event_name":"PostToolUse","session_id":"codex-session","tool_name":"Bash","tool_input":{"command":"./visualhud journey set proof failed --profile sdlc"},"tool_response":{"exit_code":0}}' >"$OUT_FILE"
 assert_eq "Explicit journey CLI evidence is not reinterpreted by its shell hook" "absent" \
     "$(last_event_field 'if has("journey_checkpoint") then "present" else "absent" end')"

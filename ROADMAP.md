@@ -407,24 +407,31 @@ De-escalation removed the overlay and restored packaged `mew.png`; the disposabl
 window was closed and the maintainer session was reprobed successfully. Issue
 #16 is complete. No npm package, tag, or GitHub Release was published.
 
-A subsequent publication-rights completion audit rejected that retained
-artifact as a distribution input. It contains 55 packaged branded PNGs:
-specifically, 53 theme sprites plus two contact sheets. The repository has no
-Pokémon asset manifest or written redistribution permission, and the TMNT
-manifest records
-crop provenance rather than a redistribution license. Official Pokémon and
-Paramount owner guidance does not clear those files for npm redistribution.
+A subsequent asset-provenance completion audit rejected that retained artifact
+as a distribution input. It contains 55 packaged branded PNGs: specifically,
+53 theme sprites plus two contact sheets. All 18 packaged Pokemon sprites
+byte-for-byte match PokeAPI HOME files at their corresponding 512x512 numbered
+sources.
+PokeAPI invites application use and labels the repository CC0, but its license
+also states that the image contents are copyrighted by The Pokémon Company,
+limits its waiver to rights held by the affirmer, and disclaims third-party
+clearance. The TMNT manifest proves crop provenance and one source is labeled
+CC-BY-SA, while most entries still lack asset-specific license and notice
+fields. Exact provenance is therefore stronger than the first audit recorded,
+but the historical package still lacks a complete distribution/notice ledger.
 Candidate SHA-256
 `319cc1472d8e7bd35d140b8b31038d05460eb8876c7079b5739dd4f4284ea174` is
 therefore QUARANTINED and must not be published. Its successful canary remains
 valid historical evidence about VisualHUD behavior, not publication authority.
 
-A bounded first-party Fable High consultation recommends preserving the generic
-theme system while producing a branded-asset-free replacement candidate. That
-implementation is gated on the maintainer choosing between safe current-tree
-and package removal for v1.2, or holding the release while seeking written
-licenses. Attribution or a disclaimer alone does not resolve redistribution
-rights.
+Preserve all current assets while completing exact source/hash and notice
+verification. Add a package-visible Pokemon manifest, audit each TMNT source at
+asset level, satisfy applicable attribution or share-alike conditions, and
+exclude or replace only files that remain unsupported. Branded subject matter
+alone is not a removal criterion, while public availability or open-source
+hosting alone is not a public-domain receipt. The replacement candidate is
+required because the historical tarball does not contain the finalized
+manifests and notices.
 
 The local release helper and manual GitHub publish workflow now reject that
 quarantined SHA, along with the three earlier rejected candidates, before npm
@@ -449,10 +456,11 @@ The supervised canary is complete. One open release slice remains:
 
 1. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
 
-Issue #17 first requires a maintainer decision on the branded assets. The
-recommended path removes them from the current tree and package, preserves the
-generic theme engine, builds a new candidate, and repeats exact-artifact proof.
-The alternative is to hold v1.2 while seeking written redistribution licenses.
+Issue #17 now begins with an evidence-preserving asset audit: bind every
+packaged PNG to its exact hash, source, license or permission record, and
+required notice; retain files whose conditions can be satisfied; and exclude
+or replace only files that remain unsupported. Then build a new candidate with
+the finalized manifests/notices and repeat exact-artifact proof.
 No published Git history rewrite is inferred; that would be a separate
 destructive decision requiring explicit authorization. The immediate gate is
 not registry access: npm authentication is secondary. It becomes actionable

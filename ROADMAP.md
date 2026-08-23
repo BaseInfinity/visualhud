@@ -61,21 +61,15 @@ It was packed from `cd2f0868ac4d34e3e9362815e6306e691a096640`, has SHA-256
 44,673,700 bytes, 90 entries, and 45,057,392 unpacked bytes. Exact-tarball
 inspection and its CLI smoke passed. Issue #20 is closed after confirming that
 the packaged helper writes top-tab `TabViewType=0` and reset deletes the explicit
-preference. Issues #25 and #19 remain open only for continuity through #16's real
-iTerm2 canary.
+preference. That candidate was later rejected by the publication correction
+described below.
 
-A bounded Fable High consultation confirmed that pane identity and actual screen
-pixels are the two non-negotiable live gates. Computer Use could not attach, and
-the iTerm2 API disconnected while creating the disposable window; iTerm2 was not
-running and the canary repository remained empty, so no candidate install or pane
-mutation occurred. Resume by opening iTerm2 with its Python API enabled, record
-the maintainer session ID, create and verify a distinct disposable pane, install
-the exact retained tarball there, then capture two converged semantic samples and
-a real cropped screenshot containing the Nurse Joy/Blissey pixels. Stop on any
-identity or visual mismatch. No npm package was published. If Fable is genuinely
-unavailable for a future required review, the single fallback reviewer is Opus
-4.8 at `xhigh`; reconcile that adapter policy in a later wizard slice rather than
-expanding this release candidate.
+An earlier bounded Fable High consultation identified pane identity and actual
+screen pixels as the two non-negotiable live gates. Those gates are now complete
+against the accepted replacement candidate as recorded below; no npm package was
+published. If Fable is genuinely unavailable for a future required review, the
+single fallback reviewer is Opus 4.8 at `xhigh`; reconcile that adapter policy in
+a later wizard slice rather than expanding this release candidate.
 
 The contributor-readiness audit is current across all open issues: every issue
 has a milestone and a concrete next action, and suitable v1.3/v1.4 tasks are
@@ -85,34 +79,44 @@ labelled for outside help. While auditing final release issue #17, the local-onl
 exists, and npm still reports `0.1.4` as latest. Do not move or push that tag in
 this slice.
 
-A corrective release-automation slice is now in progress because the old
-`Publish` workflow let any `v*` tag push publish a fresh source repack. The RED
-regression is `bash tests/test-npm-release.sh`: it requires both local and OIDC
-paths to accept the retained tarball plus its reviewed SHA-256, forbids tag-push
-publication, disables npm lifecycle scripts, and forbids a second broad source
-proof inside publication. Focused GREEN is 59/59 and managed hashes are
-refreshed. The first guarded proof correctly stopped on the release audit's stale
-unpacked-size receipt after packaged documentation changed. Focused package
-inspection now records 90 entries and 45,061,423 unpacked bytes, and the audit is
-corrected. A later replacement proof passed every functional suite and stopped
-only at the final ShellCheck gate on SC2016 diagnostics for two intentional
-literal `"$candidate"` test assertions. Those assertions now use escaped-dollar
-double quotes; focused release automation and ShellCheck must be green before a
-fresh replacement proof. Neither failed broad proof was rerun in its session.
-The retained tarball contains
-the old `scripts/release-npm.sh`, README, TESTING, and ARCHITECTURE, so SHA-256
-`691dab58a180b0e52b96566b3f1463f7d7678a92340b99e71e14ce8bed95ad18` is now
-rejected and must never be published. Fable authenticated but returned no output
-on two bounded consultation attempts; no Fable conclusion is claimed. A fresh
-session must re-read this checkpoint, confirm the focused quoting fix,
-self-review, and freeze the staged diff from base
-`63db845fb1d01436703b66f4cce8484cda1b1e59`, run one replacement guarded proof,
-then one bounded Sol High findings-only review with `Do not rerun tests`.
-If both are clean, commit and push the correction and watch CI.
-After its CI is green, pack and inspect one replacement tarball, update #25/#19/
-#16 to that exact SHA, and run the still-pending real iTerm2 canary against it.
-This automation correction does not authorize npm publication, tag mutation, or
-GitHub Release creation.
+The exact-artifact publication correction is committed and pushed as
+`785a801281e57527eb00c5acf8883ca0c966b510`. Both local and OIDC paths now accept
+one retained tarball plus its reviewed SHA-256, tag pushes have no publication
+authority, npm lifecycle scripts are disabled during dry-run and publication,
+and publication does not rerun the broad source proof. The replacement guarded
+proof passed. Sol High was unavailable because its account limit was exhausted;
+Fable failed closed on model substitution, so the single policy fallback ran as
+exact `claude-opus-4-8` at `xhigh` and certified the frozen candidate with no
+P0/P1 findings. Ubuntu/Node 24 run
+[`32609262351`](https://github.com/BaseInfinity/visualhud/actions/runs/32609262351)
+passed in 5m56s.
+
+One replacement candidate was packed from that commit at
+`/Users/stefanayala/visualhud-release-candidates/v1.2.0/20260822-180700/visualhud-1.2.0.tgz`.
+Its SHA-256 is
+`fa3c6c20270ad32880347082d4abe242e306e96605c7a94c09798aff7eede4f1`; it is
+44,674,846 bytes with 90 entries and 45,061,423 unpacked bytes. Static package
+inspection, embedded-helper equality, the compatibility report, and a disposable
+consumer install passed. The authenticated exact-artifact helper dry-run stopped
+safely because npm auth is currently unavailable; nothing was published. The
+previous candidate SHA-256
+`691dab58a180b0e52b96566b3f1463f7d7678a92340b99e71e14ce8bed95ad18` remains
+rejected and must never be published.
+
+The replacement tarball was installed from inside disposable iTerm2 session
+`A3438E22-7342-4097-BBE3-0E0CE05D0B40`, positively disjoint from maintainer
+session `137009C7-6396-4672-83AA-CCBEA585AF8D`. The real install emitted no false
+settings blocker. Two semantic samples converged on `Nurse Joy CTX 85%` and the
+same generated context composite; two real-window PNG captures were byte-identical
+with SHA-256
+`e767ad8bf8c8e504d4957ff1fcef922746a8acf889d0a602385ff71b53fecb37`, and visual
+inspection confirmed the Blissey overlay pixels beside the journey character.
+De-escalation removed the overlay and restored packaged `charmander.png`. The
+overlay and installer issues are closed. Issue #16 remains open because the Sol
+Medium/High model journey could not run after the Codex account limit was
+exhausted. Separately restore npm authentication and run the exact helper dry-run
+before requesting explicit publication approval. This state does not authorize
+npm publication, tag mutation, or GitHub Release creation.
 
 ### Unattended Overnight Scope
 
@@ -130,17 +134,14 @@ acceptance criteria remain materially ambiguous.
 
 These slices begin only after the unattended release candidate is green:
 
-1. [#25 - Render Nurse Joy/Blissey as an honest critical-context overlay](https://github.com/BaseInfinity/visualhud/issues/25)
-2. [#19 - Prevent expected iTerm2 process probes from emitting false setup blockers](https://github.com/BaseInfinity/visualhud/issues/19)
-3. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
-4. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
+1. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
+2. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
 
-Issue #25's deterministic gates are complete; replacement packing is pending
-the current publication-automation correction and green CI. Issue #19 must be
-verified through that exact artifact during #16. Issue #16 requires the
-maintainer to inspect the real installed Codex/iTerm2 pixels. Issue #17 remains
-last and requires explicit approval because npm versions and release tags are
-immutable distribution actions. The rejected candidate with SHA-256
+The retained-tarball installer and Nurse Joy/Blissey real-pixel gates passed and
+their issues are closed. Issue #16 still requires the bounded Sol High journey
+and Sol Medium compatibility smoke when Codex capacity is available. Issue #17
+remains last and requires explicit approval because npm versions and release
+tags are immutable distribution actions. The rejected candidate with SHA-256
 `01b039ca675e9d1cf58135d70ced18a853eafda521b9c3cbb230779a6043fb5f`
 must never be published.
 

@@ -235,11 +235,10 @@ adapter suite passes at 194/194; the finalized package receipt is 91 files and
 committing, then continue the same replacement-candidate and supervised
 acceptance sequence above.
 
-Live maintainer feedback after that earlier overlay evidence reports that the
-theme colors change but no Nurse Joy/Blissey character is visible. Treat this as
-an unresolved acceptance discrepancy: the replacement exact-artifact iTerm2
-journey must explicitly inspect the context character, and a reproduction must
-be captured as RED regression coverage before issue or milestone closure.
+Live maintainer feedback after that earlier overlay evidence reported that the
+theme colors changed but no Nurse Joy/Blissey character was visible. That
+acceptance discrepancy required the replacement exact-artifact iTerm2 journey
+to inspect the context character explicitly before issue or milestone closure.
 
 The proof for tree `cf0a823a4a996c5029c1988e50a144580f0684d4` passed, but
 its Sol High review found a P1 pytest-cov false positive and a P2 over-broad TAP
@@ -378,8 +377,35 @@ named file, so it could impersonate an allowlisted script receipt. Its exact RED
 failed at 221/222. Shell standard-input mode is now rejected for raw receipt
 ownership while ordinary executable shell options remain supported; the focused
 adapter suite passes at 222/222. The finalized managed-file hash is refreshed,
-and the package receipt is 91 files and 45,092,775 unpacked bytes. Freeze one
-replacement proof and bounded Sol High review before commit.
+and the package receipt is 91 files and 45,092,775 unpacked bytes.
+
+That final receipt correction is committed and pushed as
+`dac5d4a62b8a978d5c3787c032f0aa1b7575d7f4`. Frozen tree
+`5361348c07e4ad85bea8c3258bcf4c6384a2a3fd` passed its one guarded proof, its
+one bounded Sol High review returned no P0-P3 findings, and
+[Ubuntu/Node 24 run 32637312548](https://github.com/BaseInfinity/visualhud/actions/runs/32637312548)
+passed in 6m14s.
+
+The one retained replacement candidate is
+`/Users/stefanayala/visualhud-release-candidates/v1.2.0/20260823-044944/visualhud-1.2.0.tgz`.
+Its SHA-256 is
+`319cc1472d8e7bd35d140b8b31038d05460eb8876c7079b5739dd4f4284ea174`;
+it is 44,679,940 bytes with 91 entries and 45,092,775 unpacked bytes. Static
+inspection, embedded-helper equality, the packed compatibility report, a
+disposable install, and packaged doctor all passed.
+
+The exact tarball then completed the bounded Sol High journey in disposable
+iTerm2 session `82B1157B-A11E-4AF8-B029-D379249122F2`, distinct from maintainer
+session `137009C7-6396-4672-83AA-CCBEA585AF8D`. Forward progress, expected RED,
+rollback, authoritative full-suite advancement, the single review, guarded
+proof, HITL preservation, and stable `12/12 DONE` all rendered coherently. Two
+consecutive critical-context samples agreed on `Nurse Joy CTX 85%` and the same
+live iTerm2 background target. The exact generated Mew-plus-Blissey composite
+was visually inspected and preserved with SHA-256
+`e72f565423a40cc5d35393ebaac0886cf04a363237400079c837456278bcb26d`.
+De-escalation removed the overlay and restored packaged `mew.png`; the disposable
+window was closed and the maintainer session was reprobed successfully. Issue
+#16 is complete. No npm package, tag, or GitHub Release was published.
 
 ### Unattended Overnight Scope
 
@@ -395,18 +421,17 @@ acceptance criteria remain materially ambiguous.
 
 ### Supervised Release Scope
 
-These slices begin only after the unattended release candidate is green:
+The supervised canary is complete. One open release slice remains:
 
-1. [#16 - Run a supervised Codex/iTerm2 release-candidate canary](https://github.com/BaseInfinity/visualhud/issues/16)
-2. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
+1. [#17 - Publish and verify VisualHUD v1.2.0](https://github.com/BaseInfinity/visualhud/issues/17)
 
-The retained-tarball installer and Nurse Joy/Blissey real-pixel gates passed and
-their issues are closed. The Sol Medium compatibility smoke passed. Issue #16
-still requires the corrected replacement candidate to complete the bounded Sol
-High journey through DONE. Issue #17 remains last and requires explicit approval
-because npm versions and release tags are immutable distribution actions. The
-rejected candidate with SHA-256
-`01b039ca675e9d1cf58135d70ced18a853eafda521b9c3cbb230779a6043fb5f`
+Issue #17 first requires restored npm authentication and the exact retained-
+tarball helper dry-run. Publication, tag work, and GitHub Release creation remain
+behind explicit maintainer approval because those distribution actions are
+immutable. Rejected candidate SHA-256 values
+`01b039ca675e9d1cf58135d70ced18a853eafda521b9c3cbb230779a6043fb5f`,
+`691dab58a180b0e52b96566b3f1463f7d7678a92340b99e71e14ce8bed95ad18`, and
+`fa3c6c20270ad32880347082d4abe242e306e96605c7a94c09798aff7eede4f1`
 must never be published.
 
 ## Completion Criteria

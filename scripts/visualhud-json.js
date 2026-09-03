@@ -1341,6 +1341,11 @@ function journeyCheckpointForPayload(payload) {
     if (isJourneyNeutralPatchPayload(payload)) return "";
     return isTestOnlyPatchPayload(payload) ? "tdd_red" : "implement";
   }
+  if (toolName === "edit" || toolName === "write" || toolName === "notebook_edit") {
+    const filePath = String(getPath(payload, "tool_input.file_path") || "");
+    if (isJourneyNeutralPath(filePath)) return "";
+    return isTestFilePath(filePath) ? "tdd_red" : "implement";
+  }
   if (shellCommand && /git-guard\.cjs\s+prove\b/i.test(text)) return "proof";
   if (isReviewPayload(payload) && (!shellCommand || isDirectForegroundReviewPayload(payload))) return "final_review";
   if (shellCommand) {
@@ -1487,7 +1492,8 @@ function claudePayload(payload) {
     "SubagentStart",
     "SubagentStop",
   ]);
-  return allowed.has(payload.hook_event_name || "") ? payload : null;
+  if (!allowed.has(payload.hook_event_name || "")) return null;
+  return withJourneySignal(payload, payload);
 }
 
 function calibrationPayload(step) {

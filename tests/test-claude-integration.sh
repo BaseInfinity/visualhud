@@ -205,7 +205,7 @@ echo ""
 # TEST 5: Multiple PreToolUse events don't corrupt state
 # ============================================================
 echo "--- Test 5: Rapid sequential events maintain consistent state ---"
-for i in 1 2 3 4 5; do
+for _ in 1 2 3 4 5; do
     fire_event '{"hook_event_name":"PreToolUse","tool_name":"Read","session_id":"test-session"}'
 done
 assert_file_nonempty "5th PreToolUse still produces output" "$CAPTURE"

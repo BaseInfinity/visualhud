@@ -57,6 +57,8 @@ run_isolated bash tests/test-codex-visualhud.sh
 run_isolated bash tests/test-journey-state.sh
 run_isolated bash tests/test-cooking-status.sh
 run_isolated bash tests/test-claude-visualhud.sh
+run_isolated bash tests/test-claude-install-regression.sh
+run_isolated bash tests/test-claude-integration.sh
 run_isolated bash tests/test-codex-git-guard.sh
 run_isolated bash tests/test-review-workflow.sh
 

@@ -1,12 +1,12 @@
 #!/bin/bash
-# Integration tests for Claude Code VisualHUD: full pipeline verification.
+# Integration tests for Claude Code VisualHUD: escape-sequence verification.
 #
 # Fires real hook events through the Claude adapter + engine and captures
-# the terminal escape sequences. Verifies that correct colors, badges,
-# sprites, and titles are emitted for each lifecycle state.
+# the terminal escape sequences via VISUALHUD_TTY. Verifies that correct
+# colors, badges, and titles are emitted for each lifecycle state.
 #
 # Unlike test-claude-visualhud.sh (which mocks the engine), these tests
-# run the real engine with VISUALHUD_TTY capture mode.
+# run the real engine. Coverage is escape-sequence level, not live terminal.
 
 set -euo pipefail
 
@@ -176,7 +176,7 @@ fi
 badge=$(extract_badge "$CAPTURE")
 tab_color=$(extract_tab_color "$CAPTURE")
 assert_not_empty "Working state has badge" "$badge"
-assert_match "Tab color is Pokemon blue family" '^[0-9a-f]{6}$' "$tab_color"
+assert_match "Tab color is valid hex" '^[0-9a-f]{6}$' "$tab_color"
 echo ""
 
 # ============================================================
@@ -262,10 +262,14 @@ assert_eq "SessionStart exits cleanly" "0" "$?"
 echo ""
 
 # ============================================================
-# TEST 10: All 5 themes produce valid output
+# TEST 10: All installed themes produce valid output
 # ============================================================
 echo "--- Test 10: All themes produce valid output ---"
-for theme in pokemon tmnt power-rangers otter-pop minimal; do
+THEME_COUNT=0
+for theme_dir in "$ROOT_DIR/themes"/*/; do
+    theme=$(basename "$theme_dir")
+    [ -f "$ROOT_DIR/themes/$theme/theme.json" ] || continue
+    THEME_COUNT=$((THEME_COUNT + 1))
     VISUALHUD_THEME="$theme" fire_event '{"hook_event_name":"PreToolUse","tool_name":"Read","session_id":"test-session"}'
     assert_file_nonempty "$theme theme produces output" "$CAPTURE"
 
@@ -275,6 +279,14 @@ for theme in pokemon tmnt power-rangers otter-pop minimal; do
     tab_color=$(extract_tab_color "$CAPTURE")
     assert_not_empty "$theme tab color is non-empty" "$tab_color"
 done
+TOTAL=$((TOTAL + 1))
+if [ "$THEME_COUNT" -ge 1 ]; then
+    PASS=$((PASS + 1))
+    printf "  PASS: Tested %d themes (discovered from themes/ dir)\n" "$THEME_COUNT"
+else
+    FAIL=$((FAIL + 1))
+    printf "  FAIL: No themes found in themes/ dir\n"
+fi
 echo ""
 
 # ============================================================

@@ -3,14 +3,16 @@
 #
 # A global install from the home directory replaced all hooks in
 # ~/.claude/settings.json with 13 visualhud hooks, breaking every
-# Claude Code session. These tests verify the safety invariants that
-# prevent a recurrence:
+# Claude Code session. These tests verify 8 safety invariants:
 #
-#   1. `install claude --target <dir>` never modifies ~/.claude/settings.json
-#   2. Hook paths in --target installs use $CLAUDE_PROJECT_DIR, never absolute paths
-#   3. `install claude` without --target from a non-repo dir errors cleanly
-#   4. Merge preserves all pre-existing hooks (never replaces the hooks object)
-#   5. Idempotent: running twice never duplicates hooks
+#   1. --target install never modifies ~/.claude/settings.json
+#   2. --target install from HOME dir still scopes to target
+#   3. Hook paths use $CLAUDE_PROJECT_DIR, never absolute paths
+#   4. install without --target from non-repo dir errors cleanly
+#   5. Merge preserves all pre-existing hooks
+#   6. Idempotent: running 3x never duplicates hooks
+#   7. Non-hook settings keys (allowedTools, etc.) preserved
+#   8. --global install merges, does not replace existing hooks
 
 set -euo pipefail
 
@@ -142,6 +144,16 @@ while IFS= read -r cmd; do
     [ -z "$cmd" ] && continue
     assert_contains "Hook uses CLAUDE_PROJECT_DIR" 'CLAUDE_PROJECT_DIR' "$cmd"
     assert_not_contains "Hook does not contain absolute target path" "$target" "$cmd"
+    # Reject any absolute path (starts with /) that isn't inside a $CLAUDE_PROJECT_DIR reference
+    stripped=$(printf '%s' "$cmd" | sed "s/\\\$CLAUDE_PROJECT_DIR//g; s/\\\${CLAUDE_PROJECT_DIR[^}]*}//g")
+    TOTAL=$((TOTAL + 1))
+    if printf '%s' "$stripped" | grep -qE '(^|[[:space:]"])/[a-zA-Z]'; then
+        FAIL=$((FAIL + 1))
+        printf "  FAIL: Hook contains absolute path outside CLAUDE_PROJECT_DIR: %s\n" "$cmd"
+    else
+        PASS=$((PASS + 1))
+        printf "  PASS: Hook has no stray absolute paths\n"
+    fi
 done <<< "$all_commands"
 
 wrapper_content="$(cat "$target/.claude/hooks/visualhud-claude.sh")"

@@ -552,7 +552,7 @@ python3 "$ROOT_DIR/scripts/render-theme-contact-sheet.py" \
 assert_file_exists "Pokemon visual smoke writes contact sheet" "$POKEMON_CONTACT_SHEET"
 assert_file_exists "Pokemon visual smoke writes report" "$POKEMON_CONTACT_REPORT"
 assert_eq "Pokemon visual smoke covers stages/lifecycle/context" \
-    "18" \
+    "37" \
     "$(jq -r '.entries | length' "$POKEMON_CONTACT_REPORT")"
 assert_eq "Pokemon visual smoke has no missing sprite-backed states" \
     "" \

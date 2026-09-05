@@ -1,0 +1,9 @@
+{
+  "timestamp": 1788567511,
+  "status": "pass",
+  "must_fix_count": 0,
+  "should_fix_count": 1,
+  "nit_count": 0,
+  "reviewer": "gpt-5.5",
+  "marker_sha": "c60fcded264c5e4bce46ba26f3733ae1e192c6be"
+}

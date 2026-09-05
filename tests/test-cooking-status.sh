@@ -212,7 +212,7 @@ run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "
 assert_eq "Stage file is charmander at count 1" "charmander" "$(cat "$STAGE_FILE" 2>/dev/null)"
 
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
-assert_eq "Stage file is charmander at count 2" "charmander" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Stage file is charmander-fire-2 (shade) at count 2" "charmander-fire-2" "$(cat "$STAGE_FILE" 2>/dev/null)"
 
 # Stage 2: Charmeleon at count 3-5
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
@@ -264,14 +264,14 @@ printf '400' > "$COUNTER_FILE"
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
 assert_eq "Stage file is blastoise at count 401" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
 
-# Past 520: Blastoise remains the shipped Pokemon overflow until ghost art exists.
+# Past 520: Blastoise advances through shade sprites as count increases.
 printf '520' > "$COUNTER_FILE"
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
-assert_eq "Stage file is blastoise at count 521" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Stage file is blastoise-water-2 (shade) at count 521" "blastoise-water-2" "$(cat "$STAGE_FILE" 2>/dev/null)"
 
 printf '900' > "$COUNTER_FILE"
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
-assert_eq "Stage file is blastoise at count 901 (overflow)" "blastoise" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Stage file is blastoise-water-3 (shade) at count 901" "blastoise-water-3" "$(cat "$STAGE_FILE" 2>/dev/null)"
 echo ""
 
 # --- TEST 3: Stop event sets done state and clears counter ---
@@ -543,7 +543,7 @@ for _ in 1 2 3 4 5; do
     run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
 done
 assert_eq "Counter is 5 after 5 PreToolUse calls" "5" "$(cat "$COUNTER_FILE")"
-assert_eq "Stage is charmeleon at count 5" "charmeleon" "$(cat "$STAGE_FILE" 2>/dev/null)"
+assert_eq "Stage file is charmeleon-fire-3 (shade) at count 5" "charmeleon-fire-3" "$(cat "$STAGE_FILE" 2>/dev/null)"
 
 # Claude gets blocked on permission
 run_hook '{"hook_event_name": "Notification", "notification_type": "permission_prompt", "message": "need bash", "session_id": "test"}'

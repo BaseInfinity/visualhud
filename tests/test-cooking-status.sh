@@ -691,6 +691,10 @@ export VISUALHUD_THEME="tmnt"
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
 assert_eq "TMNT count 1 uses Leonardo sprite" "tmnt-leonardo" "$(cat "$STAGE_FILE" 2>/dev/null)"
 
+printf '1' > "$COUNTER_FILE"
+run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
+assert_eq "TMNT count 2 uses Leonardo shade-2 sprite" "tmnt-leonardo-blue-2" "$(cat "$STAGE_FILE" 2>/dev/null)"
+
 printf '2' > "$COUNTER_FILE"
 run_hook '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}'
 assert_eq "TMNT count 3 uses Michelangelo sprite" "tmnt-michelangelo" "$(cat "$STAGE_FILE" 2>/dev/null)"

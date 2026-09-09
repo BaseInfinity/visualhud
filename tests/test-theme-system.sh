@@ -709,6 +709,37 @@ assert_contains "Third theme visual smoke covers review lifecycle" \
     "$(jq -r '[.entries[] | "\(.kind):\(.name):\(.sprite // ""):\(.color | join("-"))"] | join(",")' "$CONTACT_REPORT")"
 echo ""
 
+# --- Pixel-level shade sprite conformance ---
+echo "--- Shade sprite pixel conformance (brightness-darkened, not zoom crops) ---"
+SHADE_THEME_DIRS=()
+while IFS= read -r theme_file; do
+    theme_dir=$(dirname "$theme_file")
+    has_shade_sprites=$(jq -r '[.stages[].shade_sprites? // [] | length > 1] | any' "$theme_file")
+    if [ "$has_shade_sprites" = "true" ] && [ -d "$theme_dir/sprites" ]; then
+        SHADE_THEME_DIRS+=("$theme_dir")
+    fi
+done < <(find "$ROOT_DIR/themes" -mindepth 2 -maxdepth 2 -name theme.json | sort)
+
+if [ "${#SHADE_THEME_DIRS[@]}" -gt 0 ]; then
+    SHADE_OUTPUT=$(python3 "$ROOT_DIR/tests/shade-conformance.py" "${SHADE_THEME_DIRS[@]}" 2>&1)
+    SHADE_EXIT=$?
+    SHADE_PASSED=$(printf '%s' "$SHADE_OUTPUT" | grep -c "^  PASS:" || true)
+    SHADE_FAILED=$(printf '%s' "$SHADE_OUTPUT" | grep -c "^  FAIL:" || true)
+    if [ "$SHADE_EXIT" -ne 0 ] && [ "$SHADE_FAILED" -eq 0 ]; then
+        SHADE_FAILED=1
+        printf "  FAIL: Shade conformance script crashed (exit %d)\n" "$SHADE_EXIT"
+    fi
+    TOTAL=$((TOTAL + SHADE_PASSED + SHADE_FAILED))
+    PASS=$((PASS + SHADE_PASSED))
+    FAIL=$((FAIL + SHADE_FAILED))
+    printf '%s\n' "$SHADE_OUTPUT"
+else
+    TOTAL=$((TOTAL + 1))
+    PASS=$((PASS + 1))
+    printf "  PASS: No themes with shade sprites found (nothing to verify)\n"
+fi
+echo ""
+
 cleanup
 
 echo "=== Results: $PASS/$TOTAL passed, $FAIL failed ==="

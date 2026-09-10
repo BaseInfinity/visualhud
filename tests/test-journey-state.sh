@@ -515,6 +515,35 @@ assert_eq "Journey signal fields are not parsed through separate Node calls" "0"
     "$(grep -Ec '^field (journey_checkpoint|journey_outcome|permission_key|generation|current)$' "$JSON_LOG" || true)"
 echo ""
 
+echo "--- Test 13: Auto-derived checkpoints classify real tool patterns ---"
+assert_eq "bash run-all.sh with 2>&1 derives full_test checkpoint" "full_test" \
+    "$(printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"bash tests/run-all.sh 2>&1"}}' | node "$JSON_HELPER" journey-checkpoint)"
+assert_eq "bash test with 2>&1 and run_in_background derives full_test" "full_test" \
+    "$(printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"bash tests/run-all.sh 2>&1","run_in_background":true}}' | node "$JSON_HELPER" journey-checkpoint)"
+assert_eq "bash specific test with 2>&1 derives targeted_test" "targeted_test" \
+    "$(printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"bash tests/test-journey-state.sh 2>&1"}}' | node "$JSON_HELPER" journey-checkpoint)"
+assert_eq "python3 tests/ path derives targeted_test checkpoint" "targeted_test" \
+    "$(printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"python3 tests/shade-conformance.py themes/pokemon"}}' | node "$JSON_HELPER" journey-checkpoint)"
+assert_eq "python tests/ path derives targeted_test checkpoint" "targeted_test" \
+    "$(printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"python tests/test-something.py"}}' | node "$JSON_HELPER" journey-checkpoint)"
+assert_eq "gpt5-advise.sh review derives final_review checkpoint" "final_review" \
+    "$(printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"bash gpt5-advise.sh review --uncommitted"}}' | node "$JSON_HELPER" journey-checkpoint)"
+assert_eq "cross-model review derives final_review checkpoint" "final_review" \
+    "$(printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"bash scripts/cross-model review"}}' | node "$JSON_HELPER" journey-checkpoint)"
+REVIEW_GPT=$(printf '{"tool_name":"Bash","tool_input":{"command":"bash gpt5-advise.sh review --uncommitted"}}' | node "$JSON_HELPER" review-payload && echo yes || echo no)
+assert_eq "gpt review command detected by isReviewPayload" "yes" "$REVIEW_GPT"
+REVIEW_CROSS=$(printf '{"tool_name":"Bash","tool_input":{"command":"bash scripts/cross-model review"}}' | node "$JSON_HELPER" review-payload && echo yes || echo no)
+assert_eq "cross-model review command detected by isReviewPayload" "yes" "$REVIEW_CROSS"
+assert_eq "bash tests/run-all.sh without 2>&1 still derives full_test (regression)" "full_test" \
+    "$(printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"bash tests/run-all.sh"}}' | node "$JSON_HELPER" journey-checkpoint)"
+assert_eq "bash tests/some-test.sh derives targeted_test (regression)" "targeted_test" \
+    "$(printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"bash tests/some-test.sh"}}' | node "$JSON_HELPER" journey-checkpoint)"
+assert_eq "pytest still derives targeted_test (regression)" "targeted_test" \
+    "$(printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"pytest tests/"}}' | node "$JSON_HELPER" journey-checkpoint)"
+assert_eq "python3 redirect to tests/ dir is not a false positive" "" \
+    "$(printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"python3 app.py > tests/output.log"}}' | node "$JSON_HELPER" journey-checkpoint)"
+echo ""
+
 echo "=== Results: $PASS/$TOTAL passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then
     exit 1

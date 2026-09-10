@@ -485,7 +485,7 @@ function isReviewPayload(payload) {
   return (
     /(code[- ]?review|coder[- ]?review|\/code-review|reviewing[ +]+shipping|review[ +]+ship|codex review|claude review|cross-model review|pull request review|pr review|review deliverables|review round|ship review|reviewer|review v[0-9])/i.test(text) ||
     (toolName === "task" && /review/i.test(text)) ||
-    (toolName === "bash" && /((codex|claude)[\s\S]{0,240}review|review[\s\S]{0,240}(codex|claude))/i.test(text))
+    (toolName === "bash" && /((codex|claude|gpt)[\s\S]{0,240}review|review[\s\S]{0,240}(codex|claude|gpt))/i.test(text))
   );
 }
 
@@ -1018,6 +1018,9 @@ function foregroundShellSegments(command) {
       const redirect = command[index + 1] === ">" ? ">>" : ">";
       words.push(redirect);
       if (redirect === ">>") index += 1;
+      if (command[index + 1] === "&" && /[0-9]/.test(command[index + 2])) {
+        index += 2;
+      }
       continue;
     }
     if (/[&|;()<`\r\n]/.test(char)) return null;
@@ -1101,7 +1104,8 @@ function isDirectForegroundReviewPayload(payload) {
   const directCodexExecReview = executable === "codex"
     && codexSubcommand(words) === "exec"
     && isReviewPayload(payload);
-  return (executable === "codex" || executable === "claude") && (directReviewSubcommand || directCodexExecReview);
+  if ((executable === "codex" || executable === "claude") && (directReviewSubcommand || directCodexExecReview)) return true;
+  return /^(?:bash|sh|zsh)$/.test(executable) && directReviewSubcommand;
 }
 
 function toolInputText(payload) {
@@ -1220,6 +1224,15 @@ function directTestCheckpoint(words) {
       /^--test-(?:reporter|reporter-destination|concurrency|timeout)$/i,
     );
     return !selected && positional.length === 0 ? "full_test" : "targeted_test";
+  }
+  if (/^python3?$/.test(executable)) {
+    const hasTestPath = words.slice(1).some((w, i, arr) => {
+      const arg = String(w);
+      if (arg === ">" || arg === ">>") return false;
+      if (i > 0 && /^>>?$/.test(String(arr[i - 1]))) return false;
+      return !arg.startsWith("-") && /(?:^|[\\/])tests?[\\/]|(?:^|[\\/])test[-_]/.test(arg);
+    });
+    return hasTestPath ? "targeted_test" : "";
   }
   return "";
 }
@@ -1760,6 +1773,11 @@ try {
         state.progress_bar || "",
         state.journey_total ?? "",
       ].join("\x1f"));
+      break;
+    }
+    case "journey-checkpoint": {
+      const cp = journeyCheckpointForPayload(parseJson(readStdin(), {}));
+      line(cp || "");
       break;
     }
     case "review-payload": {

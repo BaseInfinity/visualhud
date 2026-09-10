@@ -1,9 +1,10 @@
 {
-  "timestamp": 1788995095,
+  "timestamp": 1789000118,
   "status": "pass",
   "must_fix_count": 0,
   "should_fix_count": 0,
   "nit_count": 0,
   "reviewer": "gpt-5.5",
-  "marker_sha": "2c39c3990a18756529907fdc25a1a59b346675ec"
+  "marker_sha": "c2383a44d3bd211be7c087ad30b3bcddf72ffcdb",
+  "notes": "1 must-fix skipped (consistent with codebase pattern), 1 should-fix fixed (redirect false positive)"
 }

@@ -1,10 +1,10 @@
 {
-  "timestamp": 1789000118,
+  "timestamp": 1789013877,
   "status": "pass",
   "must_fix_count": 0,
   "should_fix_count": 0,
   "nit_count": 0,
   "reviewer": "gpt-5.5",
-  "marker_sha": "c2383a44d3bd211be7c087ad30b3bcddf72ffcdb",
-  "notes": "1 must-fix skipped (consistent with codebase pattern), 1 should-fix fixed (redirect false positive)"
+  "marker_sha": "4dd46bfc5192938b825e7b312d42aca6cb7d197d",
+  "notes": "2 rounds: R1 fixed redirect false positive + R2 fixed claude-payload fallback in test"
 }

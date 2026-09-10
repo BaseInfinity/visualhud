@@ -544,6 +544,46 @@ assert_eq "python3 redirect to tests/ dir is not a false positive" "" \
     "$(printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"python3 app.py > tests/output.log"}}' | node "$JSON_HELPER" journey-checkpoint)"
 echo ""
 
+echo "--- Test 14: Enriched payloads advance journey through full pipeline ---"
+PIPELINE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/visualhud-pipeline.XXXXXX")"
+PIPELINE_JOURNEY="$PIPELINE_DIR/journey.json"
+PIPELINE_HISTORY="$PIPELINE_DIR/history.jsonl"
+mkdir -p "$PIPELINE_DIR/ops"
+
+pipeline_apply() {
+    local raw="$1" enriched
+    enriched=$(printf '%s' "$raw" | node "$JSON_HELPER" claude-payload 2>/dev/null)
+    if [ -z "$enriched" ]; then
+        echo "ENRICHMENT_FAILED"
+        return 1
+    fi
+    printf '%s' "$enriched" | node "$JSON_HELPER" journey-apply \
+        codex-default "$PIPELINE_JOURNEY" "$PIPELINE_HISTORY" \
+        "$PIPELINE_DIR/ops" "$ROOT_DIR/themes/pokemon/theme.json" > /dev/null
+    jq -r '.current' "$PIPELINE_JOURNEY"
+}
+
+assert_eq "Pipeline: prompt initializes understand" "understand" \
+    "$(pipeline_apply '{"hook_event_name":"UserPromptSubmit","session_id":"pipe","prompt":"fix it"}')"
+assert_eq "Pipeline: read stays at understand" "understand" \
+    "$(pipeline_apply '{"hook_event_name":"PreToolUse","session_id":"pipe","tool_name":"read","tool_input":{"file_path":"src/main.js"}}')"
+assert_eq "Pipeline: edit advances to implement" "implement" \
+    "$(pipeline_apply '{"hook_event_name":"PreToolUse","session_id":"pipe","tool_name":"edit","tool_input":{"file_path":"src/main.js"}}')"
+assert_eq "Pipeline: successful edit advances to verify" "verify" \
+    "$(pipeline_apply '{"hook_event_name":"PostToolUse","session_id":"pipe","tool_name":"edit","tool_input":{"file_path":"src/main.js"},"tool_response":{"is_error":false}}')"
+assert_eq "Pipeline: bash test 2>&1 stays at verify" "verify" \
+    "$(pipeline_apply '{"hook_event_name":"PreToolUse","session_id":"pipe","tool_name":"Bash","tool_input":{"command":"bash tests/run-all.sh 2>&1"}}')"
+assert_eq "Pipeline: passed test 2>&1 advances to review" "review" \
+    "$(pipeline_apply '{"hook_event_name":"PostToolUse","session_id":"pipe","tool_name":"Bash","tool_input":{"command":"bash tests/run-all.sh 2>&1"},"tool_response":{"stdout":"119 passed","is_error":false}}')"
+assert_eq "Pipeline: python3 test stays at review" "review" \
+    "$(pipeline_apply '{"hook_event_name":"PreToolUse","session_id":"pipe","tool_name":"Bash","tool_input":{"command":"python3 tests/shade-conformance.py themes/pokemon"}}')"
+assert_eq "Pipeline: gpt review stays at review" "review" \
+    "$(pipeline_apply '{"hook_event_name":"PreToolUse","session_id":"pipe","tool_name":"Bash","tool_input":{"command":"bash gpt5-advise.sh review --uncommitted"}}')"
+assert_eq "Pipeline: full progression reached review (8 transitions)" "8" \
+    "$(wc -l < "$PIPELINE_HISTORY" | tr -d ' ')"
+rm -rf "$PIPELINE_DIR"
+echo ""
+
 echo "=== Results: $PASS/$TOTAL passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then
     exit 1

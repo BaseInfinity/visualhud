@@ -210,10 +210,21 @@ with open(os.environ["VISUALHUD_SET_BG_LOG"], "a", encoding="utf-8") as handle:
         import time
         time.sleep(0.3)
     handle.write((sys.argv[1] if len(sys.argv) > 1 else "") + "\n")
+# Hold the engine's background lock after logging, as a slow runner does.
+if os.environ.get("VISUALHUD_TEST_SLOW_EXIT"):
+    import time
+    time.sleep(float(os.environ["VISUALHUD_TEST_SLOW_EXIT"]))
 PY
 export VISUALHUD_SET_BG="$MOCK_SET_BG"
 export VISUALHUD_SET_BG_LOG="$SET_BG_LOG"
 export VISUALHUD_BG=on
+BG_APPLY_LOCK_PATH="$STATE_ROOT/claude-cooking-bg-apply_${SESSION_KEY}.lock"
+# A background apply can still hold its lock after set_bg logs. Plant a fake
+# orphan only once the live worker has released it.
+wait_for_bg_lock_release() {
+    for _ in $(seq 1 50); do [ -e "$BG_APPLY_LOCK_PATH" ] || break; sleep 0.1; done
+    assert_eq "$1" "absent" "$([ -e "$BG_APPLY_LOCK_PATH" ] && printf present || printf absent)"
+}
 touch "$STATE_ROOT/claude-cooking-bg-clear_${SESSION_KEY}"
 VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"implement","journey_outcome":"started"}'
 for _ in 1 2 3 4 5; do [ -s "$SET_BG_LOG" ] && break; sleep 0.1; done
@@ -251,10 +262,11 @@ assert_eq "Fresh colors-only state explicitly clears unknown background art" "1"
 VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"implement","journey_outcome":"started"}'
 for _ in 1 2 3 4 5; do [ -s "$SET_BG_LOG" ] && break; sleep 0.1; done
 : > "$SET_BG_LOG"
-VISUALHUD_TEST_REAPPLY_DELAY=0.05 VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","tool_name":"read"}'
+VISUALHUD_TEST_SLOW_EXIT=0.5 VISUALHUD_TEST_REAPPLY_DELAY=0.05 VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","tool_name":"read"}'
 for _ in 1 2 3 4 5; do [ -s "$SET_BG_LOG" ] && break; sleep 0.1; done
 assert_contains "Delayed ordinary hook restores an unchanged journey sprite" "/pokemon/sprites/" "$(cat "$SET_BG_LOG" 2>/dev/null)"
 : > "$SET_BG_LOG"
+wait_for_bg_lock_release "Delayed background apply releases its lock"
 mkdir "$STATE_ROOT/claude-cooking-bg-apply_${SESSION_KEY}.lock"
 VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"proof","journey_outcome":"started"}'
 for _ in 1 2 3 4 5; do
@@ -266,6 +278,7 @@ assert_contains "Orphaned background lock cannot suppress the current journey sp
 assert_eq "Orphaned background lock is removed after recovery" "absent" \
     "$([ -e "$STATE_ROOT/claude-cooking-bg-apply_${SESSION_KEY}.lock" ] && printf present || printf absent)"
 : > "$SET_BG_LOG"
+wait_for_bg_lock_release "Orphan recovery releases its lock"
 printf '999999:1' > "$STATE_ROOT/claude-cooking-bg-apply_${SESSION_KEY}.lock"
 VISUALHUD_TEST_TTY=/dev/null VISUALHUD_TEST_THEME=pokemon run_engine '{"hook_event_name":"PreToolUse","session_id":"journey:test","journey_checkpoint":"tdd_red","journey_outcome":"started"}'
 for _ in 1 2 3 4 5; do

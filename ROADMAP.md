@@ -504,6 +504,10 @@ both expose the verified release version.
 5. [#14 - Add a Stardew Valley-inspired farm journey theme pack](https://github.com/BaseInfinity/visualhud/issues/14)
 6. [#13 - Add stable theme demos after theme-pack UX is complete](https://github.com/BaseInfinity/visualhud/issues/13)
 
+- wip/asset-provenance-2026-08-23: preserved asset-ledger WIP (THIRD_PARTY_ASSETS.json, provenance test, re-sourced sprites); Stefan to decide merge or drop.
+- Railway Conductor theme shipped with generated art, a whistle on done, and the optional per-state `sound` contract. Its assets join `THIRD_PARTY_ASSETS.json` if that ledger lands.
+- Follow-up: controller tab health (green moving, yellow idle or stalled, red waiting, shell, blocked or failing). VisualHUD consumes the one fleet reader, `fleet-read.cjs --json` in sdlc-wizard's conduct skill, when present and shows no health color when absent. It does not ship a second reader.
+
 Authoritative issue and milestone context comes first, followed by reconnect
 semantics, because delivery and status clarity are core Codex UX. Demos remain
 last so they capture stable picker, sound, lifecycle, and theme-pack behavior

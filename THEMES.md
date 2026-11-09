@@ -99,6 +99,15 @@ because the current background-image bridge uses the iTerm2 Python API.
   accidental overlap with an unrelated progress band. For example, TMNT can use
   Pizza Party art for `done` while using Turtle Power green as the done surface
   color instead of April/yellow.
+- A lifecycle state may set `"sound": "<name>"`. When the engine enters that
+  state it plays `themes/<theme>/sounds/<name>.wav` with `afplay` in the
+  background. It plays once per state change in a pane, and only from a
+  render that owns the repaint: a repeated `done` stays silent until the next
+  prompt or a different state. A missing file or a host without `afplay` stays silent.
+  `VISUALHUD_SOUND=off` turns every theme sound off. Under
+  `VISUALHUD_TEST_CAPTURE_DIR` the engine appends the file path to
+  `sound.log` there instead of playing it. Railway uses this for its whistle
+  on `done`.
 - RGB channel values must be integers from `0` through `255`.
 - `context_alerts.warning` starts at a lower `min_percent` than `critical`.
 - Context alerts are ambient: warning and critical update badge/title/user-var text while preserving the selected theme stage color and primary sprite.
@@ -120,6 +129,26 @@ into the terminal. Importers should strip those mattes and render the sprite ove
 the theme stage/shade color. TMNT records that derived color as
 `backdrop_color` in `manifest.json`, so regenerated assets keep matching the
 JSON color ramp instead of drifting to gray.
+
+Original themes may be generated instead of imported. Railway's art and
+whistle come from `scripts/generate-railway-assets.py`, which draws them from
+primitives. `themes/railway/sprites/manifest.json` binds every PNG and WAV to
+its SHA-256, the generator and the MIT license. `tests/test-railway-theme.sh`
+regenerates the assets and compares their pixels and samples to the shipped
+files.
+
+### Personal Images Stay Local
+
+Railway is an original design. It is not Thomas the Tank Engine, and it must
+not borrow that franchise's names, faces, characters, art, music or look. That
+property belongs to Mattel, and this package is public. The railway test fails
+if a franchise name appears in the theme or its generator.
+
+If you want your own Thomas pictures, or any other franchise images, on your
+terminal, keep them local. Copy a theme inside your installed runtime, for
+example `<repo>/.visualhud/themes/my-railway/`, and put your images in its
+`sprites/` folder. You supply those images. They are never committed to this
+repository and never shipped in the npm package.
 
 Use `scripts/render-theme-contact-sheet.py` to create a visual smoke sheet for a
 theme. The report must have no `missing_sprites` for sprite-backed states.

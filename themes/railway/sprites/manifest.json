@@ -1,0 +1,90 @@
+{
+  "schema": "visualhud-railway-assets-v1",
+  "note": "Drawn and synthesized from primitives by the generator; no third-party art or audio.",
+  "assets": {
+    "sounds/whistle.wav": {
+      "sha256": "09319c7db017d42ce780560babd7e3c915cc6ca13d202072f733787548b65014",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    },
+    "sprites/railway-arrival.png": {
+      "sha256": "d4ca3fba9b639b7d205458f711bde43cf1b870648af59e884e453e559bf9d1b9",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    },
+    "sprites/railway-departing.png": {
+      "sha256": "73dfbc794fecde82bec16b3deffc8126d4a6c86d0909e6b96d495d84a025a6c7",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    },
+    "sprites/railway-express.png": {
+      "sha256": "7d0ab877974b72c1cf8d2332f0e66f36883184af176e8f55e33708470e7cb5f4",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    },
+    "sprites/railway-grade.png": {
+      "sha256": "7e57b5af6dfeaba82d521a05236f8652375a09b8b9137e2bda0e6d6a351e60c5",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    },
+    "sprites/railway-idle.png": {
+      "sha256": "ccb2c60e867e482d82f52b6793d46bf68ea90255e4a3252b828ae57b0734d380",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    },
+    "sprites/railway-open-line.png": {
+      "sha256": "b2117fffaf503cff1ce722ad7c9a9501c2213ed49c591a3f65b40107b57e40b2",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    },
+    "sprites/railway-platform.png": {
+      "sha256": "ecd4c460486b30833d5ed3d025e825f5f510ccccf242efaaa87208e14ec00baf",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    },
+    "sprites/railway-signal-amber.png": {
+      "sha256": "d23ab3538e789d15489dd648692b269e8d45a76a679e7735df6b03b590725db9",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    },
+    "sprites/railway-signal-green.png": {
+      "sha256": "003e304c3a998d38b83fae160781ebc48832a8e8518d1278626f44c768105f97",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    },
+    "sprites/railway-signal-red.png": {
+      "sha256": "7ab1ebb21683f2a013a9a250e9f28bfbe7ee7f3e1bb30fe921aec80743c2fbd9",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    },
+    "sprites/railway-steam.png": {
+      "sha256": "6ce42a6d01315cbd3ce6b7000cdba1fdede91a363cf15bd19de3efd42c744def",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    },
+    "sprites/railway-tunnel.png": {
+      "sha256": "63b729b183f6add2072e18b4261975751df31bec6962649991a5243a2ff657c6",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    },
+    "sprites/railway-viaduct.png": {
+      "sha256": "d1d197772563814bed4cd535d2e4d851bfed4116b861a095ee6d75875b506fe5",
+      "generator": "scripts/generate-railway-assets.py",
+      "origin": "original",
+      "license": "MIT"
+    }
+  }
+}

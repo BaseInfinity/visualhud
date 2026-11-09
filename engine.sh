@@ -409,6 +409,7 @@ VISUALHUD_STATE_ROOT="${VISUALHUD_STATE_DIR:-${TMPDIR:-/tmp}}"
 mkdir -p "$VISUALHUD_STATE_ROOT" 2>/dev/null || true
 COUNTER_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-counter_${SESSION_KEY}"
 STAGE_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-stage_${SESSION_KEY}"
+SOUND_STATE_FILE="$VISUALHUD_STATE_ROOT/visualhud-sound-state_${SESSION_KEY}"
 ATTENTION_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-attention_${SESSION_KEY}"
 CONTEXT_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-context_${SESSION_KEY}"
 REVIEW_FILE="$VISUALHUD_STATE_ROOT/claude-cooking-review_${SESSION_KEY}"
@@ -466,6 +467,7 @@ if [ -n "$JOURNEY_PROFILE" ] && [ "$JOURNEY_PROFILE" != "off" ] && [ "${VISUALHU
     JOURNEY_ENABLED=true
 fi
 JOURNEY_RENDER_JSON=""
+JOURNEY_SOUND_STATE=""
 AGGREGATE_STATUS=""
 case "$INPUT" in
     *'"journey_aggregate"'*) AGGREGATE_STATUS=$(printf '%s' "$INPUT" | json_helper field journey_aggregate 2>/dev/null || true) ;;
@@ -912,13 +914,16 @@ set_status_from_json() {
     local state_json="$1" fallback_stage_num="${2:-}" state_kind="${3:-progress}"
     local r g b sprite badge_emoji stage_name stage_num rh gh bh tr tg tb badge_text title sprite_path
     local context_alert context_level context_percent context_badge context_name context_title context_sprite context_sprite_path context_color reapply_delay reapply_delays
-    local state_fields state_progress_bar state_journey_total background_should_apply last_background_spec background_spec
+    local state_fields state_progress_bar state_journey_total state_sound background_should_apply last_background_spec background_spec
     local journey_overlay=false overlay_label journey_state_json journey_fields
     local journey_name journey_num journey_progress journey_total
 
     state_fields=$(printf '%s' "$state_json" | json_helper state-fields)
-    IFS=$'\037' read -r r g b sprite badge_emoji stage_name stage_num state_progress_bar state_journey_total <<< "$state_fields"
+    IFS=$'\037' read -r r g b sprite badge_emoji stage_name stage_num state_progress_bar state_journey_total state_sound <<< "$state_fields"
     stage_num="${stage_num:-$fallback_stage_num}"
+    case "$state_kind" in
+        progress|journey) state_sound="" ;;
+    esac
 
     rh=$(to_hex "$r")
     gh=$(to_hex "$g")
@@ -952,7 +957,7 @@ set_status_from_json() {
         fi
         if [ -n "$journey_state_json" ] && [ "$journey_state_json" != "null" ]; then
             journey_fields=$(printf '%s' "$journey_state_json" | json_helper state-fields)
-            IFS=$'\037' read -r _ _ _ _ _ journey_name journey_num journey_progress journey_total <<< "$journey_fields"
+            IFS=$'\037' read -r _ _ _ _ _ journey_name journey_num journey_progress journey_total _ <<< "$journey_fields"
             if [ -n "$journey_num" ] && [ -n "$journey_total" ]; then
                 overlay_label=$(journey_overlay_label "$state_kind")
                 title=$(journey_title "$journey_progress" "" "$journey_name" "$journey_num" "$journey_total" "" "$overlay_label")
@@ -992,6 +997,11 @@ set_status_from_json() {
     fi
     acquire_current_repaint || return 0
     printf '%s' "$sprite" > "$STAGE_FILE" 2>/dev/null || true
+    if [ "$state_kind" = "journey" ] && [ -n "$JOURNEY_SOUND_STATE" ]; then
+        play_transition_sound "$JOURNEY_SOUND_STATE" "$(theme_state_json "$JOURNEY_SOUND_STATE" | json_helper field sound 2>/dev/null || true)"
+    else
+        play_transition_sound "$state_kind" "$state_sound"
+    fi
     background_should_apply=false
     last_background_spec=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
     if [ ! -f "$BG_TARGET_FILE" ] || [ "$last_background_spec" != "$background_spec" ] || [ "${BACKGROUND_RESTORE_REQUESTED:-false}" = "true" ]; then
@@ -1042,6 +1052,30 @@ set_status_from_json() {
             done
         ) >/dev/null 2>&1 &
     fi
+}
+
+play_state_sound() {
+    local sound="$1" sound_path
+    [ -n "$sound" ] || return 0
+    [ "${VISUALHUD_SOUND:-on}" != "off" ] || return 0
+    sound_path="$THEMES_DIR/$THEME/sounds/$sound.wav"
+    [ -f "$sound_path" ] || return 0
+    if [ -n "${VISUALHUD_TEST_CAPTURE_DIR:-}" ]; then
+        printf '%s\n' "$sound_path" >> "$VISUALHUD_TEST_CAPTURE_DIR/sound.log"
+        return 0
+    fi
+    command -v afplay >/dev/null 2>&1 || return 0
+    (afplay "$sound_path" </dev/null >/dev/null 2>&1 &)
+}
+
+# Sounds play once per state change in this pane, and only from a render that
+# owns the repaint, so a superseded event or a repeated done stays silent.
+play_transition_sound() {
+    local state_kind="$1" sound="$2" last_kind
+    last_kind=$(cat "$SOUND_STATE_FILE" 2>/dev/null || true)
+    printf '%s' "$state_kind" > "$SOUND_STATE_FILE" 2>/dev/null || true
+    [ "$last_kind" != "$state_kind" ] || return 0
+    play_state_sound "$sound"
 }
 
 set_named_state() {
@@ -1114,6 +1148,13 @@ render_journey() {
     fi
     state_json="$JOURNEY_RENDER_JSON"
     set_status_from_json "$state_json" "" journey
+}
+
+# In journey mode a journey render stands in for the done state, so it carries
+# done's sound.
+render_journey_done() {
+    JOURNEY_SOUND_STATE=done
+    render_journey
 }
 
 emit_hitl_notification() {
@@ -1371,6 +1412,10 @@ case "$EVENT" in
         # running) must not flip the state to 'done' on the next Stop.
         # A user message also breaks any /goal Stop loop in progress — clear loop state.
         rm -f "$COUNTER_FILE" "$ATTENTION_FILE" "$TURN_FAILURE_FILE" "$STOP_HISTORY_FILE" "$LOOP_FILE" 2>/dev/null
+        if acquire_current_repaint; then
+            rm -f "$SOUND_STATE_FILE" 2>/dev/null
+            release_current_repaint
+        fi
         clear_permissions
         if [ "$JOURNEY_ENABLED" = "true" ]; then
             journey_reset_if_done || true
@@ -1593,7 +1638,7 @@ case "$EVENT" in
                 render_pending_permission
             elif [ "$JOURNEY_ENABLED" = "true" ]; then
                 rm -f "$ATTENTION_FILE" 2>/dev/null
-                render_journey
+                render_journey_done
             else
                 rm -f "$ATTENTION_FILE" 2>/dev/null
                 set_named_state "done"
@@ -1643,7 +1688,7 @@ case "$EVENT" in
             if [ "$STOP_HAD_ERROR" != "true" ]; then
                 journey_complete_read_only || true
             fi
-            render_journey
+            render_journey_done
         else
             rm -f "$REVIEW_FILE" 2>/dev/null
             set_named_state "done"

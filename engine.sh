@@ -467,6 +467,7 @@ if [ -n "$JOURNEY_PROFILE" ] && [ "$JOURNEY_PROFILE" != "off" ] && [ "${VISUALHU
     JOURNEY_ENABLED=true
 fi
 JOURNEY_RENDER_JSON=""
+JOURNEY_SOUND_STATE=""
 AGGREGATE_STATUS=""
 case "$INPUT" in
     *'"journey_aggregate"'*) AGGREGATE_STATUS=$(printf '%s' "$INPUT" | json_helper field journey_aggregate 2>/dev/null || true) ;;
@@ -996,7 +997,11 @@ set_status_from_json() {
     fi
     acquire_current_repaint || return 0
     printf '%s' "$sprite" > "$STAGE_FILE" 2>/dev/null || true
-    play_transition_sound "$state_kind" "$state_sound"
+    if [ "$state_kind" = "journey" ] && [ -n "$JOURNEY_SOUND_STATE" ]; then
+        play_transition_sound "$JOURNEY_SOUND_STATE" "$(theme_state_json "$JOURNEY_SOUND_STATE" | json_helper field sound 2>/dev/null || true)"
+    else
+        play_transition_sound "$state_kind" "$state_sound"
+    fi
     background_should_apply=false
     last_background_spec=$(cat "$BG_TARGET_FILE" 2>/dev/null || true)
     if [ ! -f "$BG_TARGET_FILE" ] || [ "$last_background_spec" != "$background_spec" ] || [ "${BACKGROUND_RESTORE_REQUESTED:-false}" = "true" ]; then
@@ -1143,6 +1148,13 @@ render_journey() {
     fi
     state_json="$JOURNEY_RENDER_JSON"
     set_status_from_json "$state_json" "" journey
+}
+
+# In journey mode a journey render stands in for the done state, so it carries
+# done's sound.
+render_journey_done() {
+    JOURNEY_SOUND_STATE=done
+    render_journey
 }
 
 emit_hitl_notification() {
@@ -1626,7 +1638,7 @@ case "$EVENT" in
                 render_pending_permission
             elif [ "$JOURNEY_ENABLED" = "true" ]; then
                 rm -f "$ATTENTION_FILE" 2>/dev/null
-                render_journey
+                render_journey_done
             else
                 rm -f "$ATTENTION_FILE" 2>/dev/null
                 set_named_state "done"
@@ -1676,7 +1688,7 @@ case "$EVENT" in
             if [ "$STOP_HAD_ERROR" != "true" ]; then
                 journey_complete_read_only || true
             fi
-            render_journey
+            render_journey_done
         else
             rm -f "$REVIEW_FILE" 2>/dev/null
             set_named_state "done"

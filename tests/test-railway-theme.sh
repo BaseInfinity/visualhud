@@ -236,6 +236,32 @@ run_engine pokemon '{"hook_event_name":"Stop","session_id":"railway:test"}' "$CA
 check "Stop on pokemon still paints the terminal" test -s "$CAP/terminal.log"
 check_not "a theme without sound stays silent on done" test -e "$CAP/sound.log"
 
+# Journey mode, the Claude default since #28: done renders through the journey.
+JOURNEY=VISUALHUD_JOURNEY_PROFILE=codex-default
+TOOL='{"hook_event_name":"PreToolUse","session_id":"railway:test","tool_name":"Read"}'
+CAP="$TMP_ROOT/cap-journey-done"
+run_engine railway "$TOOL" "$CAP" "$JOURNEY"
+check "journey mode is active for the journey cases" grep -q '"profile":"codex-default"' "$CAP"/state/visualhud-journey_w0t0p0_RAILWAY_TEST_*.json
+check_not "a journey tool call stays silent" test -e "$CAP/sound.log"
+run_engine railway "$STOP" "$CAP" "$JOURNEY"
+check "a journey Stop whistles" test "$(whistles "$CAP")" = 1
+run_engine railway "$STOP" "$CAP" "$JOURNEY"
+check "a repeated journey Stop whistles once" test "$(whistles "$CAP")" = 1
+run_engine railway "$TOOL" "$CAP" "$JOURNEY"
+run_engine railway "$STOP" "$CAP" "$JOURNEY"
+check "a journey Stop after more work whistles again" test "$(whistles "$CAP")" = 2
+
+CAP="$TMP_ROOT/cap-journey-review"
+run_engine railway "$TOOL" "$CAP" "$JOURNEY"
+run_engine railway '{"hook_event_name":"TaskCompleted","session_id":"railway:test","task":"code review completed"}' "$CAP" "$JOURNEY"
+run_engine railway "$STOP" "$CAP" "$JOURNEY"
+check "a journey review TaskCompleted then Stop whistles once" test "$(whistles "$CAP")" = 1
+
+CAP="$TMP_ROOT/cap-journey-off"
+run_engine railway "$TOOL" "$CAP" "$JOURNEY" VISUALHUD_SOUND=off
+run_engine railway "$STOP" "$CAP" "$JOURNEY" VISUALHUD_SOUND=off
+check_not "VISUALHUD_SOUND=off silences a journey Stop" test -e "$CAP/sound.log"
+
 # CLI and docs.
 check "theme list includes railway" bash -c "'$ROOT_DIR/visualhud' theme list | grep -q railway"
 check "theme calibrate railway succeeds" bash -c "'$ROOT_DIR/visualhud' theme calibrate railway --json | jq empty"

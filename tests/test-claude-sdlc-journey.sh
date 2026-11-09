@@ -45,6 +45,8 @@ check_not() {
 # Set up isolated demo repo with VisualHUD installed
 mkdir -p "$DEMO"
 git -C "$DEMO" init -q
+git -C "$DEMO" config user.name "VisualHUD Test"
+git -C "$DEMO" config user.email "visualhud@example.invalid"
 printf '{"name":"sdlc-demo"}\n' > "$DEMO/package.json"
 git -C "$DEMO" add . && git -C "$DEMO" commit -q -m "init"
 

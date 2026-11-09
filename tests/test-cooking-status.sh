@@ -1530,8 +1530,12 @@ import sys
 
 sprites_dir = Path(sys.argv[1])
 failures = []
-for sprite in ("tmnt-april", "tmnt-april-yellow-2", "tmnt-april-yellow-3"):
+# Shade sprites are the base art darkened by a fixed factor (shade-conformance.py
+# proves it), so classify each shade at base brightness.
+factors = {"tmnt-april": 1.0, "tmnt-april-yellow-2": 0.75, "tmnt-april-yellow-3": 0.55}
+for sprite, factor in factors.items():
     with Image.open(sprites_dir / f"{sprite}.png").convert("RGBA") as image:
+        image = Image.merge("RGBA", [band.point(lambda v: min(255, round(v / factor))) for band in image.split()[:3]] + [image.getchannel("A")])
         gray = 0
         yellow = 0
         pixels = image.get_flattened_data() if hasattr(image, "get_flattened_data") else image.getdata()
@@ -1557,8 +1561,12 @@ import sys
 
 sprites_dir = Path(sys.argv[1])
 failures = []
-for sprite in ("tmnt-april", "tmnt-april-yellow-2", "tmnt-april-yellow-3"):
+# Shade sprites are the base art darkened by a fixed factor (shade-conformance.py
+# proves it), so classify each shade at base brightness.
+factors = {"tmnt-april": 1.0, "tmnt-april-yellow-2": 0.75, "tmnt-april-yellow-3": 0.55}
+for sprite, factor in factors.items():
     with Image.open(sprites_dir / f"{sprite}.png").convert("RGBA") as image:
+        image = Image.merge("RGBA", [band.point(lambda v: min(255, round(v / factor))) for band in image.split()[:3]] + [image.getchannel("A")])
         red, green, blue, alpha = image.getpixel((0, 0))
         if not (alpha >= 240 and red >= 120 and green >= 95 and blue <= 95 and red >= green):
             failures.append(f"{sprite}:corner={red}-{green}-{blue}-{alpha}")

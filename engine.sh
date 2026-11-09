@@ -371,6 +371,11 @@ json_helper() {
     node "$JSON_HELPER" "$@"
 }
 
+# OSC payloads must be one line. GNU base64 wraps at 76 columns; BSD does not.
+osc_base64() {
+    base64 | tr -d '\n'
+}
+
 EVENT=$(printf '%s' "$INPUT" | json_helper event-name 2>/dev/null || true)
 SOURCE_EVENT=$(printf '%s' "$INPUT" | json_helper field source_event 2>/dev/null || true)
 START_SOURCE=$(printf '%s' "$INPUT" | json_helper field start_source 2>/dev/null || true)
@@ -768,7 +773,7 @@ emit_iterm_status() {
     local g="$1" b="$2" title="$3" context_title="$4"
 
     {
-        printf '\033]1337;SetBadgeFormat=%s\a' "$(printf '%s' "$badge_text" | base64)"
+        printf '\033]1337;SetBadgeFormat=%s\a' "$(printf '%s' "$badge_text" | osc_base64)"
         printf '\033]1337;SetColors=bg=%s%s%s\a' "$tr" "$tg" "$tb"
         printf '\033]1337;SetColors=black=%s%s%s\a' "$tr" "$tg" "$tb"
         printf '\033]1337;SetColors=selbg=%s%s%s\a' "$tr" "$tg" "$tb"
@@ -779,11 +784,11 @@ emit_iterm_status() {
         printf '\033]6;1;bg;blue;brightness;%d\a' "$b"
         printf '\033]1337;SetColors=curbg=%s%s%s\a' "$rh" "$gh" "$bh"
         printf '\033]0;%s\a' "$title"
-        printf '\033]1337;SetUserVar=%s=%s\007' "hudProgress" "$(printf '%s' "$title" | base64)"
-        printf '\033]1337;SetUserVar=%s=%s\007' "hudContext" "$(printf '%s' "$context_title" | base64)"
-        printf '\033]1337;SetUserVar=%s=%s\007' "hudEffort" "$(printf '%s' "${EFFORT_LEVEL:-}" | base64)"
-        printf '\033]1337;SetUserVar=%s=%s\007' "hudCost" "$(printf '%s' "${TOKEN_TOTAL:-}" | base64)"
-        printf '\033]1337;SetUserVar=%s=%s\007' "hudAggregate" "$(printf '%s' "${AGGREGATE_STATUS:-}" | base64)"
+        printf '\033]1337;SetUserVar=%s=%s\007' "hudProgress" "$(printf '%s' "$title" | osc_base64)"
+        printf '\033]1337;SetUserVar=%s=%s\007' "hudContext" "$(printf '%s' "$context_title" | osc_base64)"
+        printf '\033]1337;SetUserVar=%s=%s\007' "hudEffort" "$(printf '%s' "${EFFORT_LEVEL:-}" | osc_base64)"
+        printf '\033]1337;SetUserVar=%s=%s\007' "hudCost" "$(printf '%s' "${TOKEN_TOTAL:-}" | osc_base64)"
+        printf '\033]1337;SetUserVar=%s=%s\007' "hudAggregate" "$(printf '%s' "${AGGREGATE_STATUS:-}" | osc_base64)"
     } >> "$tty_target" 2>/dev/null || true
 }
 

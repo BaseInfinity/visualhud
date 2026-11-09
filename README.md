@@ -483,6 +483,7 @@ themes/
   tmnt/             11-stage character select (Leo → Turtle Power) — sprite art
   power-rangers/    11-stage MMPR team (Red Ranger → Ultrazord) — colors only
   otter-pop/        6-stage popsicle flavors (Strawberry → Poncho Punch) — colors only
+  railway/          8-stage original steam railway (All aboard → Night express) — generated art, whistle on done
   minimal/          5-stage color gradient — no sprites
 ```
 
@@ -563,7 +564,7 @@ VisualHUD is repo-local and functional for Codex, Claude Code, and iTerm2:
 - Repo-local adapters map each host's supported lifecycle events into the engine. Codex maps explicit object-shaped `PostToolUse` failures but does not guess from raw unified-shell output, which omits exit status; Claude can emit `PostToolUseFailure` directly.
 - Codex verification evidence requires an actual foreground test invocation. Correlated journey generations prevent a test or review started before a later edit from advancing the changed task.
 - Theme stages use `color_family` plus `shades`, so a character can keep the same sprite while the terminal chrome advances through multiple color steps.
-- Pokemon, TMNT, Power Rangers, Otter Pop, and Minimal all ship as theme packs. Pokemon and TMNT include source-backed sprite art; Power Rangers, Otter Pop, and Minimal are colors-only.
+- Pokemon, TMNT, Power Rangers, Otter Pop, Railway, and Minimal all ship as theme packs. Pokemon and TMNT include source-backed sprite art; Railway ships original generated art and a whistle on done; Power Rangers, Otter Pop, and Minimal are colors-only.
 - Context/token pressure is an ambient overlay: warning and critical label the state while preserving the active stage color and primary sprite. Source-backed alert art is visible beside it in iTerm2 and as a separate WezTerm layer.
 
 **Current hooks:**

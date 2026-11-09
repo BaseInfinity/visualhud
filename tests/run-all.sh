@@ -51,6 +51,7 @@ run_isolated bash tests/test-npm-package.sh
 run_isolated bash tests/test-npm-release.sh
 run_isolated node tests/test-pokemon-theme-lifecycle.js
 run_isolated bash tests/test-theme-system.sh
+run_isolated bash tests/test-railway-theme.sh
 run_isolated bash tests/test-context-overlay.sh
 run_isolated bash tests/test-theme-calibration.sh
 run_isolated bash tests/test-codex-visualhud.sh
@@ -61,10 +62,11 @@ run_isolated bash tests/test-codex-git-guard.sh
 run_isolated bash tests/test-review-workflow.sh
 
 shellcheck_normalized visualhud ./*.sh scripts/*.sh tests/*.sh .codex/hooks/*.sh .claude/hooks/*.sh engine.sh
-jq empty .codex/hooks.json .claude/settings.json themes/pokemon/theme.json themes/tmnt/theme.json themes/tmnt/sprites/manifest.json package.json
+jq empty .codex/hooks.json .claude/settings.json themes/pokemon/theme.json themes/tmnt/theme.json themes/tmnt/sprites/manifest.json themes/railway/theme.json themes/railway/sprites/manifest.json package.json
 PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-/tmp/visualhud-pycache}" \
     python3 -m py_compile set_bg.py scripts/import-tmnt-sprites.py \
         scripts/render-theme-contact-sheet.py scripts/theme-calibration-steps.py \
+        scripts/generate-railway-assets.py \
         scripts/visualhud-iterm-canary.py scripts/visualhud_context_overlay.py
 git diff --check
 

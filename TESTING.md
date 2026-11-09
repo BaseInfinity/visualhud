@@ -110,6 +110,30 @@ golden screenshot:
 Lossless PNG/state artifacts are the regression evidence. A GIF may be derived
 from accepted frames for documentation, but is not itself the test oracle.
 
+### Visual E2E via iTerm2
+
+Planned, not built yet. This tier extends the supervised canary above: drive
+a fake agent through the real hook entry point (start, busy, permission, done,
+error) in a disposable iTerm2 tab, and assert per state the tab color, badge,
+title, screen text and `sound.log`. It stays opt-in behind
+`VISUALHUD_ITERM_E2E=1`, skips cleanly where iTerm2 is absent (CI), and never
+uses one of the fleet's live tabs.
+
+Lessons from the conduct worker-tab work (claude-sdlc-wizard `skills/conduct`,
+commit 3d1a752), as reported by that work and not yet re-run here:
+
+- `it2api create-tab --window <id>` prints the new session id.
+- A fresh tab's shell is not ready at once. Poll `it2api get-buffer <sid>`
+  until a prompt shows, then send. Send the text and `$'\r'` as two calls.
+- `it2api list-sessions` shows the live session name, for title assertions.
+- `set-profile-property tab_color` fails silently. Read tab color back through
+  the Python API; never trust the set call's exit code.
+- Close the tab in a trap so a failed run still cleans up.
+- Record `lsappinfo front` before and after; fail if the frontmost app changed.
+- Pixel checks with `screencapture -l <CGWindowID>` likely need the Screen
+  Recording permission. That is an OS permission for the owner to grant, so
+  this tier skips pixels without it.
+
 ## Testing Diamond
 
 ```

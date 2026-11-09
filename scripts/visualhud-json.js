@@ -1753,6 +1753,7 @@ try {
         state.stage ?? "",
         state.progress_bar || "",
         state.journey_total ?? "",
+        state.sound || "",
       ].join("\x1f"));
       break;
     }

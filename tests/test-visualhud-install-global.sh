@@ -192,6 +192,7 @@ raise SystemExit(1)
 PY
 
 echo '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}' | \
+    env -u VISUALHUD_JOURNEY_PROFILE \
     CLAUDE_PROJECT_DIR="$NO_PROJECT_DIR" \
     ITERM_SESSION_ID="$RUN_SESSION" \
     VISUALHUD_STATE_DIR="$RUN_STATE_DIR" \
@@ -199,7 +200,24 @@ echo '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test
     bash "$GLOBAL_ROOT3/.claude/hooks/visualhud-claude.sh" > /dev/null 2>&1 || true
 
 assert_file_exists "Global wrapper runs engine.sh: state file written" "$RUN_STAGE_FILE"
-assert_eq "Global wrapper renders stable Pokemon WORKING sprite" "pikachu" "$(cat "$RUN_STAGE_FILE" 2>/dev/null)"
+# Since #28 the Claude adapter defaults to the codex-default journey, so the
+# first tool call lands on the "understand" checkpoint and its stage-1 sprite.
+assert_eq "Global wrapper renders the journey's first checkpoint sprite by default" "charmander" "$(cat "$RUN_STAGE_FILE" 2>/dev/null)"
+assert_eq "Global wrapper starts the codex-default journey at understand" "understand" \
+    "$(jq -r .current "$RUN_STATE_DIR"/visualhud-journey_*.json 2>/dev/null)"
+
+OFF_STATE_DIR="$TMP_ROOT/run-state-journey-off"
+mkdir -p "$OFF_STATE_DIR"
+OFF_SESSION="w0t0p0:RUN_TEST_OFF"
+OFF_STAGE_FILE="$OFF_STATE_DIR/claude-cooking-stage_$(printf '%s' "$OFF_SESSION" | tr ':/' '__')"
+echo '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "test"}' | \
+    CLAUDE_PROJECT_DIR="$NO_PROJECT_DIR" \
+    ITERM_SESSION_ID="$OFF_SESSION" \
+    VISUALHUD_STATE_DIR="$OFF_STATE_DIR" \
+    VISUALHUD_TTY=/dev/null \
+    VISUALHUD_JOURNEY_PROFILE=off \
+    bash "$GLOBAL_ROOT3/.claude/hooks/visualhud-claude.sh" > /dev/null 2>&1 || true
+assert_eq "Global wrapper with the journey off renders the stable WORKING sprite" "pikachu" "$(cat "$OFF_STAGE_FILE" 2>/dev/null)"
 echo ""
 
 # --- TEST 6: Global wrapper does not yield to itself when CLAUDE_PROJECT_DIR is the global root ---

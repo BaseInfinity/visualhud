@@ -269,8 +269,11 @@ assert_eq "Critical iTerm frame supplies Pokemon Center pink-white" \
 run_hook 20
 wait_for_lines "$SET_BG_LOG" 2
 normal_call=$(sed -n '2p' "$SET_BG_LOG")
-assert_eq "De-escalation restores the same primary image" \
-    "charmander.png" "$(printf '%s' "$normal_call" | jq -r '.[0] | split("/") | last')"
+# Shade sprites darken the stage image as tool calls accumulate, so the second
+# call may sit on a later shade. The primary must still be the stage's sprite.
+assert_eq "De-escalation restores the current stage sprite as the primary image" \
+    "$(cat "$STATE_DIR/claude-cooking-stage_w0t0p0_CONTEXT_OVERLAY").png" \
+    "$(printf '%s' "$normal_call" | jq -r '.[0] | split("/") | last')"
 assert_eq "De-escalation removes the context image" "" "$(printf '%s' "$normal_call" | jq -r '.[2]')"
 assert_eq "De-escalation removes the context color" "" "$(printf '%s' "$normal_call" | jq -r '.[3]')"
 

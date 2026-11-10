@@ -59,6 +59,8 @@ chmod +x "$FAKE_BIN/defaults" "$FAKE_BIN/pgrep"
 
 mkdir -p "$DEMO" "$STATE"
 git -C "$DEMO" init -q
+git -C "$DEMO" config user.name "VisualHUD Test"
+git -C "$DEMO" config user.email "visualhud@example.invalid"
 printf '{"name":"e2e-demo"}\n' > "$DEMO/package.json"
 git -C "$DEMO" add . && git -C "$DEMO" commit -q -m "init"
 
